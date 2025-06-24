@@ -1,3 +1,4 @@
+// internal/output/fasta.go
 package output
 
 import (
@@ -5,8 +6,24 @@ import (
 	"io"
 	"text/tabwriter"
 
-	"ipcress-go/internal/engine"
+	"ipcr/internal/engine"
 )
+
+func StreamFASTA(w io.Writer, in <-chan engine.Product) error {
+	idx := 1
+	for p := range in {
+		if p.Seq == "" {
+			continue
+		}
+		if _, err := fmt.Fprintf(w,
+			">%s_%d start=%d end=%d len=%d\n%s\n",
+			p.ExperimentID, idx, p.Start, p.End, p.Length, p.Seq); err != nil {
+			return err
+		}
+		idx++
+	}
+	return nil
+}
 
 func WriteFASTA(w io.Writer, list []engine.Product) error {
 	for i, p := range list {

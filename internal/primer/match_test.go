@@ -65,7 +65,7 @@ func TestFindMatches(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		hits := FindMatches(seq, []byte(tc.primer), tc.maxMM, tc.disallow3MM)
+		hits := FindMatches(seq, []byte(tc.primer), tc.maxMM, 0, tc.disallow3MM)
 		if len(hits) != tc.wantCount {
 			t.Errorf("%s: got %d hits, want %d", tc.name, len(hits), tc.wantCount)
 		}

@@ -7,7 +7,7 @@ import (
 	"os"
 	"testing"
 
-	"ipcress-go/internal/app"
+	"ipcr/internal/app"
 )
 
 func write(t *testing.T, fn, data string) string {

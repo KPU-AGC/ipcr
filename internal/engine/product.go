@@ -1,6 +1,7 @@
+// internal/engine/product.go
 package engine
 
-import "ipcress-go/internal/primer"
+import "ipcr/internal/primer"
 
 type Product struct {
 	ExperimentID string `json:"experiment_id"`

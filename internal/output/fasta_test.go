@@ -1,8 +1,9 @@
+// internal/output/fasta_test.go
 package output
 
 import (
 	"bytes"
-	"ipcress-go/internal/engine"
+	"ipcr/internal/engine"
 	"strings"
 	"testing"
 )

@@ -3,7 +3,7 @@ package engine
 
 import (
 	"bytes"
-	"ipcress-go/internal/primer"
+	"ipcr/internal/primer"
 	"testing"
 )
 

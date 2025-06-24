@@ -1,3 +1,4 @@
+// cmd/ipcr/main.go
 package main
 
 import (
@@ -5,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"ipcress-go/internal/app"
+	"ipcr/internal/app"
 )
 
 func main() {

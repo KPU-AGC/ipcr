@@ -1,10 +1,11 @@
+// internal/output/json.go
 package output
 
 import (
 	"encoding/json"
 	"io"
 
-	"ipcress-go/internal/engine"
+	"ipcr/internal/engine"
 )
 
 func WriteJSON(w io.Writer, list []engine.Product) error {

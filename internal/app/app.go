@@ -5,40 +5,33 @@ import (
 	"bytes"
 	"fmt"
 	"runtime"
+	"sync"
 
-	"ipcress-go/internal/cli"
-	"ipcress-go/internal/engine"
-	"ipcress-go/internal/fasta"
-	"ipcress-go/internal/output"
-	"ipcress-go/internal/primer"
+	"ipcr/internal/cli"
+	"ipcr/internal/engine"
+	"ipcr/internal/fasta"
+	"ipcr/internal/output"
+	"ipcr/internal/primer"
 )
 
 /* -------------------------------------------------------------------------- */
-/*                                 data types                                 */
+/*                                 job model                                  */
 /* -------------------------------------------------------------------------- */
 
 type job struct {
 	rec  fasta.Record
 	pair primer.Pair
 }
-
 type result struct {
-	products []engine.Product
-	err      error
+	prods []engine.Product
+	err   error
 }
 
 /* -------------------------------------------------------------------------- */
 /*                                     Run                                    */
 /* -------------------------------------------------------------------------- */
 
-// Run executes the full in‑silico PCR pipeline.
-//
-// * argv    – command‑line arguments **without** argv[0]
-// * stdout  – where normal output is written (capturable in tests)
-// * stderr  – where diagnostics / errors are written
-//
-// It returns the process exit‑code described in the specification:
-//   0 = ≥1 product, 1 = no product, 2 = bad CLI/config, 3 = runtime/I‑O error
+// Run executes the full pipeline and returns the intended process exit code.
 func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 	/* --------------------------- parse CLI options -------------------------- */
 
@@ -49,7 +42,7 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 		return 2
 	}
 
-	/* ----------------------------- load primers ----------------------------- */
+	/* --------------------------- load primer pairs -------------------------- */
 
 	var pairs []primer.Pair
 	if opts.PrimerFile != "" {
@@ -68,92 +61,140 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 		}}
 	}
 
+	/* ------------------------ calculate chunk overlap ----------------------- */
+
+	maxPLen := 0
+	for _, pr := range pairs {
+		if l := len(pr.Forward); l > maxPLen {
+			maxPLen = l
+		}
+		if l := len(pr.Reverse); l > maxPLen {
+			maxPLen = l
+		}
+	}
+	overlap := maxPLen - 1
+	if opts.ChunkSize == 0 {
+		overlap = 0
+	}
+
 	/* ------------------------------ PCR engine ------------------------------ */
 
-	cfg := engine.Config{
+	eng := engine.New(engine.Config{
 		MaxMM:       opts.Mismatches,
 		Disallow3MM: opts.Mode == cli.ModeRealistic,
 		MinLen:      opts.MinLen,
 		MaxLen:      opts.MaxLen,
+	})
+	eng.SetHitCap(opts.HitCap)
+
+	/* ---------------------------- worker set‑up ----------------------------- */
+
+	thr := opts.Threads
+	if thr <= 0 {
+		thr = runtime.NumCPU()
 	}
-	eng := engine.New(cfg)
 
-	/* --------------------------- concurrency setup -------------------------- */
+	jobs    := make(chan job, thr*2)
+	results := make(chan result, thr*2)
+	prodCh  := make(chan engine.Product, thr*4) // to writer
 
-	threads := opts.Threads
-	if threads <= 0 {
-		threads = runtime.NumCPU()
-	}
+	/* ------------------------------ writer goroutine ------------------------ */
 
-	jobs := make(chan job, threads*2)
-	results := make(chan result, threads*2)
+	writeErr := make(chan error, 1)
+	go func() {
+		var err error
+		switch opts.Output {
+		case "text":
+			err = output.StreamText(stdout, prodCh)
+		case "fasta":
+			err = output.StreamFASTA(stdout, prodCh)
+		case "json":
+			// JSON requires whole slice to close array
+			var buf []engine.Product
+			for p := range prodCh {
+				buf = append(buf, p)
+			}
+			err = output.WriteJSON(stdout, buf)
+		default:
+			err = fmt.Errorf("unsupported output %q", opts.Output)
+		}
+		writeErr <- err
+	}()
 
-	// worker goroutines
-	for w := 0; w < threads; w++ {
+	/* ------------------------------ worker pool ----------------------------- */
+
+	var wg sync.WaitGroup
+	wg.Add(thr)
+	for w := 0; w < thr; w++ {
 		go func() {
+			defer wg.Done()
 			for j := range jobs {
 				hits := eng.Simulate(j.rec.ID, j.rec.Seq, j.pair)
-
 				if opts.Products {
 					for i := range hits {
-						hits[i].Seq = string(j.rec.Seq[hits[i].Start:hits[i].End])
+						hits[i].Seq =
+							string(j.rec.Seq[hits[i].Start:hits[i].End])
 					}
 				}
-				results <- result{products: hits}
+				results <- result{prods: hits}
 			}
 		}()
 	}
 
-	/* --------------------------- dispatch FASTA ----------------------------- */
+	/* --------------------------- forwarder goroutine ------------------------ */
 
-	pending := 0
+	var (
+		colErr     error
+		totalHits  int
+		collectWg  sync.WaitGroup
+	)
+	collectWg.Add(1)
+	go func() {
+		defer collectWg.Done()
+		for r := range results {
+			if r.err != nil && colErr == nil {
+				colErr = r.err
+			}
+			for _, p := range r.prods {
+				prodCh <- p
+				totalHits++
+			}
+		}
+	}()
+
+	/* ------------------------------- feed jobs ------------------------------ */
+
 	for _, fa := range opts.SeqFiles {
-		recCh, err := fasta.Stream(fa)
+		rch, err := fasta.StreamChunks(fa, opts.ChunkSize, overlap)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
 			return 3
 		}
-		for rec := range recCh {
+		for rec := range rch {
 			for _, pr := range pairs {
-				pending++
 				jobs <- job{rec: rec, pair: pr}
 			}
 		}
 	}
-	close(jobs)
 
-	/* ---------------------------- aggregate hits ---------------------------- */
+	/* ------------------------------ graceful close -------------------------- */
 
-	var products []engine.Product
-	for pending > 0 {
-		r := <-results
-		if r.err != nil {
-			fmt.Fprintln(stderr, r.err)
-			return 3
-		}
-		products = append(products, r.products...)
-		pending--
-	}
+	close(jobs)      // no more jobs
+	wg.Wait()        // wait workers
+	close(results)   // stop collector
+	collectWg.Wait() // wait collector
+	close(prodCh)    // signal writer
 
-	if len(products) == 0 {
-		return 1 // no hits
-	}
-
-	/* ------------------------------- output --------------------------------- */
-
-	switch opts.Output {
-	case "text":
-		err = output.WriteText(stdout, products)
-	case "json":
-		err = output.WriteJSON(stdout, products)
-	case "fasta":
-		err = output.WriteFASTA(stdout, products)
-	default:
-		err = fmt.Errorf("unsupported output %q", opts.Output)
-	}
-	if err != nil {
+	if err := <-writeErr; err != nil {
 		fmt.Fprintln(stderr, err)
 		return 3
+	}
+	if colErr != nil {
+		fmt.Fprintln(stderr, colErr)
+		return 3
+	}
+	if totalHits == 0 {
+		return 1 // no amplicons found
 	}
 	return 0
 }

@@ -1,9 +1,10 @@
+// internal/output/json_test.go
 package output
 
 import (
 	"bytes"
 	"encoding/json"
-	"ipcress-go/internal/engine"
+	"ipcr/internal/engine"
 	"testing"
 )
 

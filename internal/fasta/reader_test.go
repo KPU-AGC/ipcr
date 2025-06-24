@@ -27,7 +27,7 @@ func TestStreamGzip(t *testing.T) {
 	gzPath := writeGz(t, "test.fa.gz", plain)
 	defer os.Remove(gzPath)
 
-	ch, err := Stream(gzPath)
+	ch, err := StreamChunks(gzPath, 0, 0)
 	if err != nil { t.Fatalf("stream gz: %v", err) }
 
 	var ids []string
@@ -48,7 +48,7 @@ func TestStreamStdin(t *testing.T) {
 	// write sample then close writer to signal EOF
 	go func() { io.WriteString(w, plain); w.Close() }()
 
-	ch, err := Stream("-")
+	ch, err := StreamChunks("-", 0, 0)
 	if err != nil { t.Fatalf("stream stdin: %v", err) }
 	count := 0
 	for range ch { count++ }

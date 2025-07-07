@@ -1,3 +1,4 @@
+// internal/primer/match.go
 package primer
 
 /* ----------------------- existing types (unchanged) --------------------- */
@@ -40,3 +41,4 @@ window:
 	}
 	return out
 }
+// ===

@@ -27,3 +27,4 @@ func RevComp(seq []byte) []byte {
 	}
 	return out
 }
+// ===

@@ -13,3 +13,4 @@ func MismatchCount(g, p []byte) int {
 	}
 	return mm
 }
+// ===

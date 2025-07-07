@@ -8,3 +8,4 @@ type Pair struct {
 	MinProduct        int
 	MaxProduct        int
 }
+// ===

@@ -37,3 +37,4 @@ func BaseMatch(g, p byte) bool {
 	}
 	return iupacMask[p]&iupacMask[g] != 0
 }
+// ===

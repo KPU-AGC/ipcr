@@ -21,3 +21,4 @@ func TestWriteJSON(t *testing.T) {
 		t.Fatalf("json round-trip failed: %v %v", err, got)
 	}
 }
+// ===

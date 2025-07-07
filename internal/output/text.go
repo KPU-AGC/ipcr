@@ -19,3 +19,4 @@ func StreamText(w io.Writer, in <-chan engine.Product) error {
 	}
 	return nil
 }
+// ===

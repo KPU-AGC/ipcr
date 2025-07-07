@@ -39,12 +39,12 @@ func TestFindMatches(t *testing.T) {
 			wantFirstPos: -1,
 		},
 		{
-		    name:         "3prime mismatch disallowed",
-		    primer:       "ACA", // 3' A mismatches genome G in every window
-		    maxMM:        1,
-		    disallow3MM:  true,
-		    wantCount:    0,
-		    wantFirstPos: -1,
+			name:         "3prime mismatch disallowed",
+			primer:       "ACA", // 3' A mismatches genome G in every window
+			maxMM:        1,
+			disallow3MM:  true,
+			wantCount:    0,
+			wantFirstPos: -1,
 		},
 		{
 			name:         "3prime mismatch allowed in debug",
@@ -70,7 +70,8 @@ func TestFindMatches(t *testing.T) {
 			t.Errorf("%s: got %d hits, want %d", tc.name, len(hits), tc.wantCount)
 		}
 		if tc.wantCount > 0 && tc.wantFirstPos != -1 && hits[0].Pos != tc.wantFirstPos {
-			t.Errorf("%s: first pos %d, want %d", tc.name, hits[0].Pos, tc.wantFirstPos)
+			t.Errorf("%s: first match pos %d, want %d", tc.name, hits[0].Pos, tc.wantFirstPos)
 		}
 	}
 }
+// ===

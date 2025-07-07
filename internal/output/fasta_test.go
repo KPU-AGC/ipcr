@@ -21,3 +21,4 @@ func TestWriteFASTA(t *testing.T) {
 		t.Fatalf("unexpected FASTA output: %s", buf.String())
 	}
 }
+// ===

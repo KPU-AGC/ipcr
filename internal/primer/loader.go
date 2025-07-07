@@ -43,3 +43,4 @@ func LoadTSV(path string) ([]Pair, error) {
 	if err := sc.Err(); err != nil { return nil, err }
 	return list, nil
 }
+// ===

@@ -14,3 +14,4 @@ type Product struct {
 	RevMatch     primer.Match `json:"-"`
 	Seq          string `json:"seq,omitempty"`
 }
+// ===

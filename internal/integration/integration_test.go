@@ -63,3 +63,4 @@ func TestParallelMatchesEqualSerial(t *testing.T) {
 		t.Fatalf("parallel output differs from serial\nserial: %s\nparallel:%s", serial, parallel)
 	}
 }
+// ===

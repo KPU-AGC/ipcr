@@ -31,3 +31,4 @@ func TestMismatchCount(t *testing.T) {
 	}()
 	MismatchCount([]byte("AAA"), []byte("AA"))
 }
+// ===

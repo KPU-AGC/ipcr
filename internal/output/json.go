@@ -13,3 +13,4 @@ func WriteJSON(w io.Writer, list []engine.Product) error {
 	enc.SetIndent("", "  ")
 	return enc.Encode(list)
 }
+// ===

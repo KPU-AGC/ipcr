@@ -12,12 +12,10 @@ import (
 	"ipcr/internal/fasta"
 	"ipcr/internal/output"
 	"ipcr/internal/primer"
+	"ipcr/internal/version"
 )
 
-/* -------------------------------------------------------------------------- */
-/*                                 job model                                  */
-/* -------------------------------------------------------------------------- */
-
+// job and result are used for parallel PCR simulation.
 type job struct {
 	rec  fasta.Record
 	pair primer.Pair
@@ -27,23 +25,21 @@ type result struct {
 	err   error
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                     Run                                    */
-/* -------------------------------------------------------------------------- */
-
-// Run executes the full pipeline and returns the intended process exit code.
+// Run executes the full pipeline and returns the process exit code.
 func Run(argv []string, stdout, stderr *bytes.Buffer) int {
-	/* --------------------------- parse CLI options -------------------------- */
-
-	fs := cli.NewFlagSet("ipcress")
+	// Parse CLI options
+	fs := cli.NewFlagSet("ipcr")
 	opts, err := cli.ParseArgs(fs, argv)
 	if err != nil {
 		fmt.Fprintln(stderr, err)
 		return 2
 	}
+	if opts.Version {
+		fmt.Fprintf(stdout, "ipcr version %s\n", version.Version)
+		return 0
+	}
 
-	/* --------------------------- load primer pairs -------------------------- */
-
+	// Load primer pairs
 	var pairs []primer.Pair
 	if opts.PrimerFile != "" {
 		pairs, err = primer.LoadTSV(opts.PrimerFile)
@@ -61,8 +57,7 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 		}}
 	}
 
-	/* ------------------------ calculate chunk overlap ----------------------- */
-
+	// Calculate chunk overlap for windowed reading
 	maxPLen := 0
 	for _, pr := range pairs {
 		if l := len(pr.Forward); l > maxPLen {
@@ -77,8 +72,7 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 		overlap = 0
 	}
 
-	/* ------------------------------ PCR engine ------------------------------ */
-
+	// Set up PCR engine
 	eng := engine.New(engine.Config{
 		MaxMM:       opts.Mismatches,
 		Disallow3MM: opts.Mode == cli.ModeRealistic,
@@ -87,8 +81,7 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 	})
 	eng.SetHitCap(opts.HitCap)
 
-	/* ---------------------------- worker set‑up ----------------------------- */
-
+	// Set up worker pool
 	thr := opts.Threads
 	if thr <= 0 {
 		thr = runtime.NumCPU()
@@ -98,8 +91,7 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 	results := make(chan result, thr*2)
 	prodCh  := make(chan engine.Product, thr*4) // to writer
 
-	/* ------------------------------ writer goroutine ------------------------ */
-
+	// Writer goroutine
 	writeErr := make(chan error, 1)
 	go func() {
 		var err error
@@ -109,7 +101,6 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 		case "fasta":
 			err = output.StreamFASTA(stdout, prodCh)
 		case "json":
-			// JSON requires whole slice to close array
 			var buf []engine.Product
 			for p := range prodCh {
 				buf = append(buf, p)
@@ -121,8 +112,7 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 		writeErr <- err
 	}()
 
-	/* ------------------------------ worker pool ----------------------------- */
-
+	// Worker goroutines
 	var wg sync.WaitGroup
 	wg.Add(thr)
 	for w := 0; w < thr; w++ {
@@ -132,8 +122,7 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 				hits := eng.Simulate(j.rec.ID, j.rec.Seq, j.pair)
 				if opts.Products {
 					for i := range hits {
-						hits[i].Seq =
-							string(j.rec.Seq[hits[i].Start:hits[i].End])
+						hits[i].Seq = string(j.rec.Seq[hits[i].Start:hits[i].End])
 					}
 				}
 				results <- result{prods: hits}
@@ -141,12 +130,11 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 		}()
 	}
 
-	/* --------------------------- forwarder goroutine ------------------------ */
-
+	// Forwarder/collector goroutine
 	var (
-		colErr     error
-		totalHits  int
-		collectWg  sync.WaitGroup
+		colErr    error
+		totalHits int
+		collectWg sync.WaitGroup
 	)
 	collectWg.Add(1)
 	go func() {
@@ -162,8 +150,7 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 		}
 	}()
 
-	/* ------------------------------- feed jobs ------------------------------ */
-
+	// Feed jobs to workers
 	for _, fa := range opts.SeqFiles {
 		rch, err := fasta.StreamChunks(fa, opts.ChunkSize, overlap)
 		if err != nil {
@@ -177,13 +164,12 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 		}
 	}
 
-	/* ------------------------------ graceful close -------------------------- */
-
-	close(jobs)      // no more jobs
-	wg.Wait()        // wait workers
-	close(results)   // stop collector
-	collectWg.Wait() // wait collector
-	close(prodCh)    // signal writer
+	// Graceful close and shutdown
+	close(jobs)
+	wg.Wait()
+	close(results)
+	collectWg.Wait()
+	close(prodCh)
 
 	if err := <-writeErr; err != nil {
 		fmt.Fprintln(stderr, err)
@@ -194,7 +180,8 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 		return 3
 	}
 	if totalHits == 0 {
-		return 1 // no amplicons found
+		return 1 // No amplicons found
 	}
 	return 0
 }
+// ===

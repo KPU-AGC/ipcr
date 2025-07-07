@@ -31,3 +31,4 @@ func TestRevCompEmpty(t *testing.T) {
 		t.Errorf("RevComp(\"\") length = %d, want 0", len(out))
 	}
 }
+// ===

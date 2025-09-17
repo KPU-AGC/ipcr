@@ -4,7 +4,6 @@ package output
 import (
 	"fmt"
 	"io"
-	"text/tabwriter"
 
 	"ipcr/internal/engine"
 )
@@ -45,16 +44,23 @@ func WriteFASTA(w io.Writer, list []engine.Product) error {
 	return nil
 }
 
-// WriteTSV writes products as a tab-delimited table.
-func WriteTSV(w io.Writer, list []engine.Product) error {
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
+// WriteTSV writes products as a tab-delimited table (parity with text output).
+func WriteTSV(w io.Writer, list []engine.Product, header bool) error {
+	if header {
+		if _, err := fmt.Fprintln(w, "sequence_id\texperiment_id\tstart\tend\tlength\ttype\tfwd_mm\trev_mm\tfwd_mismatch_idx\trev_mismatch_idx"); err != nil {
+			return err
+		}
+	}
 	for _, p := range list {
-		fmt.Fprintf(
-			tw, "%s\t%s\t%d\t%d\t%d\t%s\n",
+		if _, err := fmt.Fprintf(
+			w, "%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%s\t%s\n",
 			p.SequenceID, p.ExperimentID,
 			p.Start, p.End, p.Length, p.Type,
-		)
+			p.FwdMM, p.RevMM,
+			intsCSV(p.FwdMismatchIdx), intsCSV(p.RevMismatchIdx),
+		); err != nil {
+			return err
+		}
 	}
-	return tw.Flush()
+	return nil
 }
-// ===

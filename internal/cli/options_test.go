@@ -76,4 +76,16 @@ func TestErrorNoSequences(t *testing.T) {
 		t.Fatal("expected error when sequences missing")
 	}
 }
-// ===
+
+func TestNewFlags(t *testing.T) {
+	o := mustParse(t, "--forward", "AAA", "--reverse", "TTT", "--sequences", "ref.fa", "--sort", "--no-header", "--terminal-window", "2")
+	if !o.Sort {
+		t.Errorf("expected --sort = true")
+	}
+	if o.Header {
+		t.Errorf("expected header=false due to --no-header")
+	}
+	if o.TerminalWindow != 2 {
+		t.Errorf("terminal window parse failed, got %d", o.TerminalWindow)
+	}
+}

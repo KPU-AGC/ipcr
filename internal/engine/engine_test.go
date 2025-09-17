@@ -17,7 +17,7 @@ func TestSimulateMinimal(t *testing.T) {
 		Reverse: "ACG",
 	}
 
-	eng := New(Config{MaxMM: 0, Disallow3MM: false})
+	eng := New(Config{MaxMM: 0, TerminalWindow: 0})
 	got := eng.Simulate("dummySeq", seq, pair)
 
 	if len(got) == 0 {
@@ -46,7 +46,7 @@ func TestLengthFilteringAndType(t *testing.T) {
 		MaxProduct: 12,
 	}
 
-	eng := New(Config{MaxMM: 0, Disallow3MM: false})
+	eng := New(Config{MaxMM: 0, TerminalWindow: 0})
 	hits := eng.Simulate("seq", seq, pair)
 
 	if len(hits) == 0 {
@@ -70,7 +70,7 @@ func TestLengthOutOfRange(t *testing.T) {
 		MaxProduct: 7,
 	}
 
-	eng := New(Config{MaxMM: 0, Disallow3MM: false})
+	eng := New(Config{MaxMM: 0, TerminalWindow: 0})
 	hits := eng.Simulate("seq", seq, pair)
 
 	if len(hits) != 0 {
@@ -100,4 +100,3 @@ func TestRevcompProduct(t *testing.T) {
 		t.Fatalf("expected at least one revcomp product, got %+v", hits)
 	}
 }
-// ===

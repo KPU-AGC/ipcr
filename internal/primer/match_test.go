@@ -10,7 +10,7 @@ func TestFindMatches(t *testing.T) {
 		name         string
 		primer       string
 		maxMM        int
-		disallow3MM  bool
+		termWin      int
 		wantCount    int
 		wantFirstPos int
 	}{
@@ -18,7 +18,7 @@ func TestFindMatches(t *testing.T) {
 			name:         "perfect match",
 			primer:       "ACG",
 			maxMM:        0,
-			disallow3MM:  false,
+			termWin:      0,
 			wantCount:    3,
 			wantFirstPos: 0,
 		},
@@ -26,7 +26,7 @@ func TestFindMatches(t *testing.T) {
 			name:         "one mismatch allowed",
 			primer:       "AGG",
 			maxMM:        1,
-			disallow3MM:  false,
+			termWin:      0,
 			wantCount:    3,
 			wantFirstPos: 0,
 		},
@@ -34,23 +34,23 @@ func TestFindMatches(t *testing.T) {
 			name:         "exceed mismatch threshold",
 			primer:       "AGG",
 			maxMM:        0,
-			disallow3MM:  false,
+			termWin:      0,
 			wantCount:    0,
 			wantFirstPos: -1,
 		},
 		{
-			name:         "3prime mismatch disallowed",
+			name:         "3prime mismatch disallowed (window=1)",
 			primer:       "ACA", // 3' A mismatches genome G in every window
 			maxMM:        1,
-			disallow3MM:  true,
+			termWin:      1,
 			wantCount:    0,
 			wantFirstPos: -1,
 		},
 		{
-			name:         "3prime mismatch allowed in debug",
+			name:         "3prime mismatch allowed (window=0)",
 			primer:       "ACG",
 			maxMM:        1,
-			disallow3MM:  false,
+			termWin:      0,
 			wantCount:    3,
 			wantFirstPos: 0,
 		},
@@ -58,14 +58,14 @@ func TestFindMatches(t *testing.T) {
 			name:         "IUPAC degeneracy",
 			primer:       "ACN",
 			maxMM:        0,
-			disallow3MM:  false,
+			termWin:      0,
 			wantCount:    3,
 			wantFirstPos: 0,
 		},
 	}
 
 	for _, tc := range tests {
-		hits := FindMatches(seq, []byte(tc.primer), tc.maxMM, 0, tc.disallow3MM)
+		hits := FindMatches(seq, []byte(tc.primer), tc.maxMM, 0, tc.termWin)
 		if len(hits) != tc.wantCount {
 			t.Errorf("%s: got %d hits, want %d", tc.name, len(hits), tc.wantCount)
 		}
@@ -74,4 +74,3 @@ func TestFindMatches(t *testing.T) {
 		}
 	}
 }
-// ===

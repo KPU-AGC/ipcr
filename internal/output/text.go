@@ -69,7 +69,7 @@ func diagramPretty(w io.Writer, p engine.Product) {
 	fmt.Fprintf(w, "   %s\n", p.FwdPrimer)
 	fmt.Fprintf(w, "   %s%s\n", matchLine(aLen, p.FwdMismatchIdx), arrowRight)
 
-	fmt.Fprintf(w, "5'-%s%s-3' # (+)\n", p.FwdSite, strings.Repeat(".", inner-1))
+	fmt.Fprintf(w, "5'-%s%s-3' # (+)\n", p.FwdSite, strings.Repeat(".", inner))
 	fmt.Fprintf(w, "3'-%s%s-5' # (-)\n", strings.Repeat(".", inner), p.RevSite)
 
 	siteStart := 3 + inner

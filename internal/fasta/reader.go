@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime"
 	"strings"
 )
 
@@ -25,7 +26,8 @@ func StreamChunks(path string, win, overlap int) (<-chan Record, error) {
 		return nil, err
 	}
 
-	out := make(chan Record, 4)
+	// Bigger buffer to reduce goroutine ping‑pong (was 4).
+	out := make(chan Record, 2*runtime.NumCPU())
 	go func() {
 		defer rc.Close()
 		defer close(out)
@@ -87,7 +89,9 @@ func StreamChunks(path string, win, overlap int) (<-chan Record, error) {
 						slide = win // avoid infinite loop
 					}
 					startCoord += slide
-					buf = append([]byte(nil), buf[slide:]...) // copy tail
+					// Allocation‑free slide: move tail in place and shrink.
+					copy(buf, buf[slide:])
+					buf = buf[:win-slide]
 				}
 			}
 			if eof {
@@ -140,4 +144,3 @@ func openReader(path string) (io.ReadCloser, error) {
 	}
 	return fh, nil
 }
-// ===

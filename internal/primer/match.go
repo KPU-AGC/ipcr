@@ -1,6 +1,8 @@
 // internal/primer/match.go
 package primer
 
+import "bytes"
+
 /* ----------------------- types --------------------- */
 
 type Match struct {
@@ -8,6 +10,17 @@ type Match struct {
 	Mismatches  int
 	Length      int
 	MismatchIdx []int // 0‑based positions in primer (5'→3') that mismatched
+}
+
+/* ---------------------- helpers -------------------- */
+
+func isUnambiguous(p []byte) bool {
+	for _, c := range p {
+		if c != 'A' && c != 'C' && c != 'G' && c != 'T' {
+			return false
+		}
+	}
+	return true
 }
 
 /* --------------------------- FindMatches (cap) -------------------------- */
@@ -19,6 +32,26 @@ func FindMatches(seq, primer []byte, maxMM, capHits int, terminalWindow int) []M
 	if pl == 0 || len(seq) < pl {
 		return nil
 	}
+
+	// Exact‑match fast path: SIMD'd bytes.Index jump scanning.
+	// Safe with any terminalWindow because mismatches=0.
+	if maxMM == 0 && isUnambiguous(primer) {
+		out := make([]Match, 0, 8)
+		for i := 0; ; {
+			j := bytes.Index(seq[i:], primer)
+			if j < 0 {
+				break
+			}
+			pos := i + j
+			out = append(out, Match{Pos: pos, Mismatches: 0, Length: pl})
+			if capHits > 0 && len(out) >= capHits {
+				break
+			}
+			i = pos + 1
+		}
+		return out
+	}
+
 	end := len(seq) - pl
 	out := make([]Match, 0, 8)
 

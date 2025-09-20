@@ -32,8 +32,9 @@ type Options struct {
 	TerminalWindow int // -1=auto by --mode; 0=allow; N>0=no-mismatch 3' window
 
 	// Performance
-	Threads   int
-	ChunkSize int
+	Threads    int
+	ChunkSize  int
+	SeedLength int // NEW: seed length for multi-pattern scan (0=auto)
 
 	// Output
 	Output          string
@@ -92,6 +93,7 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	// Performance
 	fs.IntVar(&opt.Threads, "threads", 0, "number of worker threads (0 = all CPUs) [0]")
 	fs.IntVar(&opt.ChunkSize, "chunk-size", 0, "split sequences into N-bp windows (0 = no chunking) [0]")
+	fs.IntVar(&opt.SeedLength, "seed-length", 12, "seed length for multi-pattern scan (0=auto: min(12, primer length)) [12]") // NEW
 
 	// Output
 	fs.StringVar(&opt.Output, "output", "text", "output format: text | json | fasta [text]")
@@ -151,11 +153,6 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	}
 	if opt.Output != "text" && opt.Output != "json" && opt.Output != "fasta" {
 		return opt, fmt.Errorf("invalid --output %q", opt.Output)
-	}
-	switch opt.Mode {
-	case ModeRealistic, ModeDebug:
-	default:
-		return opt, fmt.Errorf("invalid --mode %q (want %s|%s)", opt.Mode, ModeRealistic, ModeDebug)
 	}
 	if opt.TerminalWindow < -1 {
 		return opt, errors.New("--terminal-window must be ≥ -1")

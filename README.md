@@ -1,5 +1,6 @@
 # ipcr
 
+[![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/ipcr/README.html)
 [![Go](https://img.shields.io/badge/go-%3E=1.19-blue)](https://golang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 

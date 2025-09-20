@@ -47,7 +47,7 @@ func WriteFASTA(w io.Writer, list []engine.Product) error {
 // WriteTSV writes products as a tab-delimited table (parity with text output).
 func WriteTSV(w io.Writer, list []engine.Product, header bool) error {
 	if header {
-		if _, err := fmt.Fprintln(w, "sequence_id\texperiment_id\tstart\tend\tlength\ttype\tfwd_mm\trev_mm\tfwd_mismatch_idx\trev_mismatch_idx"); err != nil {
+		if _, err := fmt.Fprintln(w, TSVHeader); err != nil {
 			return err
 		}
 	}

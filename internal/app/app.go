@@ -2,6 +2,8 @@
 package app
 
 import (
+	"errors"
+	"flag"
 	"bytes"
 	"fmt"
 	"runtime"
@@ -72,9 +74,10 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 	// Parse CLI options
 	fs := cli.NewFlagSet("ipcr")
 	opts, err := cli.ParseArgs(fs, argv)
-	if err != nil {
-		fmt.Fprintln(stderr, err)
-		return 2
+    if err != nil {
+        if errors.Is(err, flag.ErrHelp) {
+            return 0
+        }
 	}
 	if opts.Version {
 		fmt.Fprintf(stdout, "ipcr version %s\n", version.Version)
@@ -338,7 +341,7 @@ func Run(argv []string, stdout, stderr *bytes.Buffer) int {
 		return 3
 	}
 	if totalHits == 0 {
-		return 1 // No amplicons found
+		return opts.NoMatchExitCode // user-configurable (grep-style default = 1)
 	}
 	return 0
 }

@@ -10,8 +10,6 @@ import (
 	"ipcr/internal/engine"
 )
 
-const textHeader = "sequence_id\texperiment_id\tstart\tend\tlength\ttype\tfwd_mm\trev_mm\tfwd_mismatch_idx\trev_mismatch_idx"
-
 // Arbitrary interior gap ('.' count between left/right primer pictures in pretty diagram).
 // Tweak this to change spacing; it does not depend on amplicon size.
 const diagramInner = 24
@@ -103,7 +101,7 @@ func StreamText(w io.Writer, in <-chan engine.Product, header bool, pretty bool)
 	wroteHeader := false
 	for p := range in {
 		if header && !wroteHeader {
-			if _, err := fmt.Fprintln(w, textHeader); err != nil {
+			if _, err := fmt.Fprintln(w, TSVHeader); err != nil {
 				return err
 			}
 			wroteHeader = true
@@ -118,7 +116,7 @@ func StreamText(w io.Writer, in <-chan engine.Product, header bool, pretty bool)
 // WriteText writes a slice of products (used for sorted output).
 func WriteText(w io.Writer, list []engine.Product, header bool, pretty bool) error {
 	if header {
-		if _, err := fmt.Fprintln(w, textHeader); err != nil {
+		if _, err := fmt.Fprintln(w, TSVHeader); err != nil {
 			return err
 		}
 	}

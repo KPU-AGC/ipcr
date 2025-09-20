@@ -36,12 +36,13 @@ type Options struct {
 	ChunkSize int
 
 	// Output
-	Output   string
-	Products bool
-	Pretty   bool
-	Mode     string
-	Sort     bool
-	Header   bool // true unless --no-header
+	Output          string
+	Products        bool
+	Pretty          bool
+	Mode            string
+	Sort            bool
+	Header          bool
+	NoMatchExitCode int
 
 	Version bool
 }
@@ -99,6 +100,7 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.BoolVar(&opt.Sort, "sort", false, "sort outputs for determinism (SequenceID,Start,End,Type,ExperimentID) [false]")
 	noHeader := false
 	fs.BoolVar(&noHeader, "no-header", false, "suppress header line in text/TSV [false]")
+	fs.IntVar(&opt.NoMatchExitCode, "no-match-exit-code", 1, "exit code to use when no amplicons are found (set 0 to treat as success) [1]")
 
 	fs.BoolVar(&opt.Version, "v", false, "print version and exit (shorthand) [false]")
 	fs.BoolVar(&opt.Version, "version", false, "print version and exit [false]")
@@ -116,6 +118,10 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	}
 	opt.SeqFiles = seq
 	opt.Header = !noHeader
+
+	if opt.NoMatchExitCode < 0 || opt.NoMatchExitCode > 255 {
+		return opt, errors.New("--no-match-exit-code must be between 0 and 255")
+	}
 
 	// Validation
 	usingFile := opt.PrimerFile != ""

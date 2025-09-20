@@ -2,22 +2,20 @@
 package main
 
 import (
-	"bytes"
-	"fmt"
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"ipcr/internal/app"
 )
 
 func main() {
-	var out, errBuf bytes.Buffer
-	code := app.Run(os.Args[1:], &out, &errBuf)
+	// Derive cancellation from signals (Ctrl‑C / SIGTERM).
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
-	if out.Len() > 0 {
-		fmt.Print(out.String())
-	}
-	if errBuf.Len() > 0 {
-		fmt.Fprint(os.Stderr, errBuf.String())
-	}
+	// Stream directly to the process writers.
+	code := app.RunContext(ctx, os.Args[1:], os.Stdout, os.Stderr)
 	os.Exit(code)
 }

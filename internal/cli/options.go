@@ -44,6 +44,8 @@ type Options struct {
 	Header          bool
 	NoMatchExitCode int
 
+	// Misc
+	Quiet   bool
 	Version bool
 }
 
@@ -83,12 +85,11 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	// PCR parameters
 	fs.IntVar(&opt.Mismatches, "mismatches", 0, "max mismatches per primer [0]")
 	fs.IntVar(&opt.MinLen, "min-length", 0, "minimum product length [0]")
-	fs.IntVar(&opt.MaxLen, "max-length", 0, "maximum product length [0]")
+	fs.IntVar(&opt.MaxLen, "max-length", 2000, "maximum product length [2000]")
 	fs.IntVar(&opt.HitCap, "hit-cap", 10000, "max matches stored per primer per window (0 = unlimited) [10000]")
 	fs.IntVar(&opt.TerminalWindow, "terminal-window", -1, "3' terminal window (nt) disallowed for mismatches (0=allow, -1=auto: realistic=3, debug=0) [-1]")
 
 	// Performance
-	// Default now 0 to match help text ("0 = all CPUs")
 	fs.IntVar(&opt.Threads, "threads", 0, "number of worker threads (0 = all CPUs) [0]")
 	fs.IntVar(&opt.ChunkSize, "chunk-size", 0, "split sequences into N-bp windows (0 = no chunking) [0]")
 
@@ -102,6 +103,8 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.BoolVar(&noHeader, "no-header", false, "suppress header line in text/TSV [false]")
 	fs.IntVar(&opt.NoMatchExitCode, "no-match-exit-code", 1, "exit code to use when no amplicons are found (set 0 to treat as success) [1]")
 
+	// Misc
+	fs.BoolVar(&opt.Quiet, "quiet", false, "suppress non-essential warnings on stderr [false]")
 	fs.BoolVar(&opt.Version, "v", false, "print version and exit (shorthand) [false]")
 	fs.BoolVar(&opt.Version, "version", false, "print version and exit [false]")
 	fs.BoolVar(&help, "h", false, "show this help message (shorthand) [false]")
@@ -110,7 +113,7 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 		return opt, err
 	}
 	if help {
-		fs.Usage()
+		// Caller decides where to print Usage; we only signal intent.
 		return opt, flag.ErrHelp
 	}
 	if opt.Version {
@@ -148,6 +151,11 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	}
 	if opt.Output != "text" && opt.Output != "json" && opt.Output != "fasta" {
 		return opt, fmt.Errorf("invalid --output %q", opt.Output)
+	}
+	switch opt.Mode {
+	case ModeRealistic, ModeDebug:
+	default:
+		return opt, fmt.Errorf("invalid --mode %q (want %s|%s)", opt.Mode, ModeRealistic, ModeDebug)
 	}
 	if opt.TerminalWindow < -1 {
 		return opt, errors.New("--terminal-window must be ≥ -1")

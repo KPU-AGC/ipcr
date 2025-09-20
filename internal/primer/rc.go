@@ -1,14 +1,16 @@
 // internal/primer/rc.go
 package primer
 
-var complement = map[byte]byte{
-	'A': 'T', 'C': 'G', 'G': 'C', 'T': 'A',
-	'R': 'Y', 'Y': 'R', // A/G  <->  C/T
-	'S': 'S', 'W': 'W', // GC   <->  GC   ; AT <-> AT
-	'K': 'M', 'M': 'K',
-	'B': 'V', 'V': 'B',
-	'D': 'H', 'H': 'D',
-	'N': 'N',
+var complement [256]byte
+
+func init() {
+    complement['A'] = 'T'; complement['C'] = 'G'; complement['G'] = 'C'; complement['T'] = 'A'
+    complement['R'] = 'Y'; complement['Y'] = 'R'
+    complement['S'] = 'S'; complement['W'] = 'W'
+    complement['K'] = 'M'; complement['M'] = 'K'
+    complement['B'] = 'V'; complement['V'] = 'B'
+    complement['D'] = 'H'; complement['H'] = 'D'
+    complement['N'] = 'N'
 }
 
 func RevComp(seq []byte) []byte {
@@ -19,11 +21,9 @@ func RevComp(seq []byte) []byte {
 	out := make([]byte, n)
 	for i := 0; i < n; i++ {
 		b := seq[n-1-i]
-		if c, ok := complement[b]; ok {
-			out[i] = c
-		} else {
-			out[i] = 'N'
-		}
+		c := complement[b]
+		if c == 0 { c = 'N' }
+	out[i] = c
 	}
 	return out
 }

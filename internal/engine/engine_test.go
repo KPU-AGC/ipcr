@@ -100,3 +100,31 @@ func TestRevcompProduct(t *testing.T) {
 		t.Fatalf("expected at least one revcomp product, got %+v", hits)
 	}
 }
+
+// Circular template should allow wrap-around amplicon when reverse site is left of forward site.
+func TestCircularAmplicon(t *testing.T) {
+	seq := []byte("TGACAAG") // 7 bp circular
+	pair := primer.Pair{ID: "p1", Forward: "AG", Reverse: "TC"}
+
+	// Linear mode: no amplicon for this configuration.
+	engLin := New(Config{Circular: false, MaxMM: 0, MinLen: 0, MaxLen: 0})
+	hitsLin := engLin.Simulate("seq1", seq, pair)
+	if len(hitsLin) != 0 {
+		t.Errorf("expected no amplicon in linear mode, got %d", len(hitsLin))
+	}
+
+	// Circular mode: should produce one wrap-around product.
+	engCirc := New(Config{Circular: true, MaxMM: 0, MinLen: 0, MaxLen: 0})
+	hitsCirc := engCirc.Simulate("seq1", seq, pair)
+	if len(hitsCirc) != 1 {
+		t.Fatalf("expected 1 amplicon in circular mode, got %d", len(hitsCirc))
+	}
+	prod := hitsCirc[0]
+	if prod.Start <= prod.End {
+		t.Errorf("expected wrap-around coordinates (Start > End), got Start=%d End=%d", prod.Start, prod.End)
+	}
+	expectedLen := len(seq) - prod.Start + prod.End
+	if prod.Length != expectedLen {
+		t.Errorf("expected product length %d, got %d", expectedLen, prod.Length)
+	}
+}

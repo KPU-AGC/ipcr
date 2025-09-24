@@ -18,19 +18,28 @@ Pretty text rendering (biologically accurate):
 We print:
   1) A primer (5'→3') and its match bars with a rightward arrow.
   2) The (+) genomic line.
-  3) The (−) genomic line, complementary and aligned column‑wise with (+).
+  3) The (−) genomic line, complementary and aligned column-wise with (+).
   4) The reverse primer (3'→5') and its bars with a leftward arrow.
 
 For readability, the interior gap ('.') is capped; for short amplicons we use
-the true interior. We render one fewer '.' on the (+) line so the (−) site
-starts exactly where expected visually.
+the true interior — but we *still* enforce a minimum visual separation between
+the forward block and the reverse block so they don’t appear adjacent.
 
 Change: “partial-ish” matches (ambiguous primer base that still matches an
-unambiguous genomic base) are now drawn with a distinct glyph (default “:”).
+unambiguous genomic base) are now drawn with a distinct glyph (default “¦”).
+
+All pretty-print lines are prefixed with "# " so they can be filtered easily.
 */
 
 // Max dots we’ll show between the primer sites (purely cosmetic).
-const maxPrettyGap = 24
+const maxPrettyGap = 30
+
+// Ensure at least this many columns between the last base of the forward site
+// on the (+) line and the first base of the reverse site on the (−) line.
+const minInterPrimerGap = 5
+
+// Prefix for every pretty-print line to allow easy grepping.
+const linePrefix = "# "
 
 // Glyphs used in match bar rendering.
 // - exactMatchGlyph: unambiguous A/C/G/T primer base equals genomic base
@@ -40,6 +49,7 @@ const (
 	exactMatchGlyph   = "|"
 	partialMatchGlyph = "¦"
 )
+
 // intsCSV converts []int to "1,2,3" (empty string if none).
 func intsCSV(a []int) string {
 	if len(a) == 0 {
@@ -111,10 +121,10 @@ func isACGT(b byte) bool {
 	return b == 'A' || b == 'C' || b == 'G' || b == 'T'
 }
 
-// matchLineAmbig draws a per‑column match bar string given primer/site (both 5'→3').
+// matchLineAmbig draws a per-column match bar string given primer/site (both 5'→3').
 // - ' ' (space) for mismatches (indices present in mismIdx)
 // - exactMatchGlyph for unambiguous exact matches (primer ∈ A/C/G/T and equals site)
-// - partialMatchGlyph for ambiguous‑primer matches (primer ∉ A/C/G/T but column is a match)
+// - partialMatchGlyph for ambiguous-primer matches (primer ∉ A/C/G/T but column is a match)
 func matchLineAmbig(primer, site string, mismIdx []int) string {
 	n := len(primer)
 	if n <= 0 {
@@ -131,7 +141,7 @@ func matchLineAmbig(primer, site string, mismIdx []int) string {
 	}
 
 	var b strings.Builder
-	// Under‑reserve is fine; Builder will grow to accommodate multi‑byte glyphs.
+	// Under-reserve is fine; Builder will grow to accommodate multi-byte glyphs.
 	b.Grow(n)
 
 	for i := 0; i < n; i++ {
@@ -151,10 +161,14 @@ func matchLineAmbig(primer, site string, mismIdx []int) string {
 	return b.String()
 }
 
-// diagramPretty prints a two‑strand block aligned to sites.
+// diagramPretty prints a two-strand block aligned to sites.
 // Keeps the exact alignment you wanted, e.g.:
 // 5'-AGAGTTTGATCCTGGCTCAG.......................-3' # (+)
 // 3'-........................CCTATGGAACAATGCTGAA-5' # (-)
+//
+// Additionally, guarantees at least minInterPrimerGap columns between the end of the
+// forward site on the (+) line and the start of the reverse site on the (−) line.
+// Every line emitted here begins with linePrefix ("# ").
 func diagramPretty(w io.Writer, p engine.Product) {
 	if p.FwdPrimer == "" || p.RevPrimer == "" || p.FwdSite == "" || p.RevSite == "" {
 		return
@@ -182,29 +196,50 @@ func diagramPretty(w io.Writer, p engine.Product) {
 			inner = interior
 		}
 	}
-	// One fewer dot on the (+) line to align the (−) site visually.
-	innerPlus := inner
-	if innerPlus > 0 {
-		innerPlus--
-	}
+
+	// Start from the capped interior for both lines (block-style rendering).
 	innerMinus := inner
+	innerPlus := inner
+
+	// Enforce a minimum visual separation so reverse does not start adjacent to forward.
+	// Reverse site (on the − line) must start at least minInterPrimerGap columns
+	// to the right of the last forward-site base.
+	if innerMinus < aLen+minInterPrimerGap {
+		innerMinus = aLen + minInterPrimerGap
+	}
+
+	// Ensure the (+) line extends far enough to the right so the reverse block (length bLen)
+	// can render underneath cleanly, and also keep some right-side padding for symmetry.
+	if innerPlus < bLen+minInterPrimerGap {
+		innerPlus = bLen + minInterPrimerGap
+	}
+
+	// Equalize content widths so the -3'/ -5' suffixes align vertically.
+	contPlus := aLen + innerPlus
+	contMinus := innerMinus + bLen
+	if contMinus > contPlus {
+		innerPlus += (contMinus - contPlus)
+	} else if contPlus > contMinus {
+		innerMinus += (contPlus - contMinus)
+	}
 
 	// Forward primer and bars.
-	fmt.Fprintf(w, "%s%s%s\n", prefixPlus, p.FwdPrimer, suffixPlus)
+	fmt.Fprintf(w, "%s%s%s%s\n", linePrefix, prefixPlus, p.FwdPrimer, suffixPlus)
 	fmt.Fprintf(
-		w, "%s%s%s\n",
+		w, "%s%s%s%s\n",
+		linePrefix,
 		strings.Repeat(" ", len(prefixPlus)),
 		matchLineAmbig(p.FwdPrimer, p.FwdSite, p.FwdMismatchIdx),
 		arrowRight,
 	)
 
 	// Genomic lines: (+) 5'→3', (−) 3'→5' under it, complementary and aligned.
-	fmt.Fprintf(w, "%s%s%s%s # (+)\n", prefixPlus, p.FwdSite, strings.Repeat(".", innerPlus), suffixPlus)
+	fmt.Fprintf(w, "%s%s%s%s%s # (+)\n", linePrefix, prefixPlus, p.FwdSite, strings.Repeat(".", innerPlus), suffixPlus)
 
 	// RevSite is RC(plus slice at B) i.e., minus 5'→3'. To render the (−) line 3'→5' under (+),
 	// we need the column-wise complement of the plus slice at B: complement(RevSite).
 	minusSite := complementString(p.RevSite)
-	fmt.Fprintf(w, "%s%s%s%s # (-)\n", prefixMinus, strings.Repeat(".", innerMinus), minusSite, suffixMinus)
+	fmt.Fprintf(w, "%s%s%s%s%s # (-)\n", linePrefix, prefixMinus, strings.Repeat(".", innerMinus), minusSite, suffixMinus)
 
 	// Column where the first base of the (−) site appears.
 	siteStart := len(prefixMinus) + innerMinus
@@ -215,7 +250,7 @@ func diagramPretty(w io.Writer, p engine.Product) {
 	if padBars < 0 {
 		padBars = 0
 	}
-	fmt.Fprintf(w, "%s%s%s\n", strings.Repeat(" ", padBars), arrowLeft, revBars)
+	fmt.Fprintf(w, "%s%s%s%s\n", linePrefix, strings.Repeat(" ", padBars), arrowLeft, revBars)
 
 	// Reverse primer shown 3'→5' to match the (−) strand orientation.
 	revPrimerDisplayed := reverseString(p.RevPrimer)
@@ -223,7 +258,10 @@ func diagramPretty(w io.Writer, p engine.Product) {
 	if padPrimer < 0 {
 		padPrimer = 0
 	}
-	fmt.Fprintf(w, "%s%s%s%s\n\n", strings.Repeat(" ", padPrimer), prefixMinus, revPrimerDisplayed, suffixMinus)
+	fmt.Fprintf(w, "%s%s%s%s%s\n", linePrefix, strings.Repeat(" ", padPrimer), prefixMinus, revPrimerDisplayed, suffixMinus)
+
+	// Commented spacer line to terminate the block cleanly.
+	fmt.Fprintln(w, "#")
 }
 
 // writeOne prints a single product (TSV row + optional pretty block).

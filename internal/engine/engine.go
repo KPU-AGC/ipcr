@@ -16,6 +16,7 @@ type Config struct {
 	HitCap         int
 	NeedSites      bool // only compute FwdSite/RevSite for pretty text
 	SeedLen        int  // seed length for multi-pattern scan (0=auto/full-length as implemented in seed.go)
+	Circular       bool // treat templates as circular if true
 }
 
 // Engine runs PCR simulations with given config.
@@ -229,43 +230,96 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 			hi = ma.Pos + maxL - blen
 			if hi > last { hi = last }
 		}
-		if hi < lo { continue }
+		if hi >= lo {
+			iMin := sort.SearchInts(bStarts, lo)
+			iMax := sort.Search(len(bStarts), func(i int) bool { return bStarts[i] > hi }) - 1
+			if iMin < 0 { iMin = 0 }
+			if iMax >= len(bStarts) { iMax = len(bStarts) - 1 }
+			if iMin <= iMax {
+				// Descending: farthest-right first (restores legacy test expectations)
+				for j := iMax; j >= iMin; j-- {
+					bStart := bStarts[j]
+					mb := revB[j]
+					end := bStart + blen
+					length := end - ma.Pos
+					if (minL != 0 && length < minL) || (maxL != 0 && length > maxL) { continue }
 
-		iMin := sort.SearchInts(bStarts, lo)
-		iMax := sort.Search(len(bStarts), func(i int) bool { return bStarts[i] > hi }) - 1
-		if iMin < 0 { iMin = 0 }
-		if iMax >= len(bStarts) { iMax = len(bStarts) - 1 }
-		if iMin > iMax { continue }
-
-		// Descending: farthest-right first (restores legacy test expectations)
-		for j := iMax; j >= iMin; j-- {
-			bStart := bStarts[j]
-			mb := revB[j]
-			end := bStart + blen
-			length := end - ma.Pos
-			if (minL != 0 && length < minL) || (maxL != 0 && length > maxL) { continue }
-
-			var fwdSite, revSite string
-			if e.cfg.NeedSites {
-				if ma.Pos+alen <= len(seq) { fwdSite = string(seq[ma.Pos:ma.Pos+alen]) }
-				if bStart+blen <= len(seq) { revSite = string(primer.RevComp(seq[bStart : bStart+blen])) }
+					var fwdSite, revSite string
+					if e.cfg.NeedSites {
+						if ma.Pos+alen <= len(seq) { fwdSite = string(seq[ma.Pos:ma.Pos+alen]) }
+						if bStart+blen <= len(seq) { revSite = string(primer.RevComp(seq[bStart : bStart+blen])) }
+					}
+					out = append(out, Product{
+						ExperimentID:   p.ID,
+						SequenceID:     seqID,
+						Start:          ma.Pos,
+						End:            end,
+						Length:         length,
+						Type:           "forward",
+						FwdMM:          ma.Mismatches,
+						RevMM:          mb.Mismatches,
+						FwdMismatchIdx: ma.MismatchIdx,
+						RevMismatchIdx: flip(blen, mb.MismatchIdx),
+						FwdPrimer:      p.Forward,
+						RevPrimer:      p.Reverse,
+						FwdSite:        fwdSite,
+						RevSite:        revSite,
+					})
+				}
 			}
-			out = append(out, Product{
-				ExperimentID:   p.ID,
-				SequenceID:     seqID,
-				Start:          ma.Pos,
-				End:            end,
-				Length:         length,
-				Type:           "forward",
-				FwdMM:          ma.Mismatches,
-				RevMM:          mb.Mismatches,
-				FwdMismatchIdx: ma.MismatchIdx,
-				RevMismatchIdx: flip(blen, mb.MismatchIdx),
-				FwdPrimer:      p.Forward,
-				RevPrimer:      p.Reverse,
-				FwdSite:        fwdSite,
-				RevSite:        revSite,
-			})
+		}
+
+		// Circular wrap-around: allow rev match before forward match
+		if e.cfg.Circular {
+			// segment from forward to end: X; need remainder on the left to meet min/max
+			X := len(seq) - ma.Pos
+			loWrap := 0
+			if minL > 0 {
+				needed := minL - X - blen
+				if needed < 0 { needed = 0 }
+				loWrap = needed
+			}
+			hiWrap := ma.Pos - 1
+			if maxL > 0 {
+				allowed := maxL - X - blen
+				if allowed < hiWrap { hiWrap = allowed }
+			}
+			if hiWrap >= loWrap {
+				iMinW := sort.SearchInts(bStarts, loWrap)
+				iMaxW := sort.Search(len(bStarts), func(i int) bool { return bStarts[i] > hiWrap }) - 1
+				if iMinW < 0 { iMinW = 0 }
+				if iMaxW >= len(bStarts) { iMaxW = len(bStarts) - 1 }
+				for j := iMaxW; j >= iMinW; j-- {
+					bStart := bStarts[j]
+					if bStart >= ma.Pos { continue }
+					mb := revB[j]
+					end := bStart + blen
+					length := (len(seq) - ma.Pos) + end
+					if (minL != 0 && length < minL) || (maxL != 0 && length > maxL) { continue }
+
+					var fwdSite, revSite string
+					if e.cfg.NeedSites {
+						if ma.Pos+alen <= len(seq) { fwdSite = string(seq[ma.Pos:ma.Pos+alen]) }
+						if end <= len(seq) { revSite = string(primer.RevComp(seq[bStart:end])) }
+					}
+					out = append(out, Product{
+						ExperimentID:   p.ID,
+						SequenceID:     seqID,
+						Start:          ma.Pos,
+						End:            end,
+						Length:         length,
+						Type:           "forward",
+						FwdMM:          ma.Mismatches,
+						RevMM:          mb.Mismatches,
+						FwdMismatchIdx: ma.MismatchIdx,
+						RevMismatchIdx: flip(blen, mb.MismatchIdx),
+						FwdPrimer:      p.Forward,
+						RevPrimer:      p.Reverse,
+						FwdSite:        fwdSite,
+						RevSite:        revSite,
+					})
+				}
+			}
 		}
 	}
 
@@ -289,42 +343,94 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 			hi = mb.Pos + maxL - alen
 			if hi > last { hi = last }
 		}
-		if hi < lo { continue }
+		if hi >= lo {
+			iMin := sort.SearchInts(aStarts, lo)
+			iMax := sort.Search(len(aStarts), func(i int) bool { return aStarts[i] > hi }) - 1
+			if iMin < 0 { iMin = 0 }
+			if iMax >= len(aStarts) { iMax = len(aStarts) - 1 }
+			if iMin <= iMax {
+				for j := iMax; j >= iMin; j-- {
+					aStart := aStarts[j]
+					ma := revA[j]
+					end := aStart + alen
+					length := end - mb.Pos
+					if (minL != 0 && length < minL) || (maxL != 0 && length > maxL) { continue }
 
-		iMin := sort.SearchInts(aStarts, lo)
-		iMax := sort.Search(len(aStarts), func(i int) bool { return aStarts[i] > hi }) - 1
-		if iMin < 0 { iMin = 0 }
-		if iMax >= len(aStarts) { iMax = len(aStarts) - 1 }
-		if iMin > iMax { continue }
-
-		for j := iMax; j >= iMin; j-- {
-			aStart := aStarts[j]
-			ma := revA[j]
-			end := aStart + alen
-			length := end - mb.Pos
-			if (minL != 0 && length < minL) || (maxL != 0 && length > maxL) { continue }
-
-			var fwdSite, revSite string
-			if e.cfg.NeedSites {
-				if mb.Pos+blen <= len(seq) { fwdSite = string(seq[mb.Pos:mb.Pos+blen]) }
-				if aStart+alen <= len(seq) { revSite = string(primer.RevComp(seq[aStart:aStart+alen])) }
+					var fwdSite, revSite string
+					if e.cfg.NeedSites {
+						if mb.Pos+blen <= len(seq) { fwdSite = string(seq[mb.Pos:mb.Pos+blen]) }
+						if aStart+alen <= len(seq) { revSite = string(primer.RevComp(seq[aStart:aStart+alen])) }
+					}
+					out = append(out, Product{
+						ExperimentID:   p.ID,
+						SequenceID:     seqID,
+						Start:          mb.Pos,
+						End:            end,
+						Length:         length,
+						Type:           "revcomp",
+						FwdMM:          mb.Mismatches,
+						RevMM:          ma.Mismatches,
+						FwdMismatchIdx: mb.MismatchIdx,
+						RevMismatchIdx: flip(alen, ma.MismatchIdx),
+						FwdPrimer:      p.Reverse,
+						RevPrimer:      p.Forward,
+						FwdSite:        fwdSite,
+						RevSite:        revSite,
+					})
+				}
 			}
-			out = append(out, Product{
-				ExperimentID:   p.ID,
-				SequenceID:     seqID,
-				Start:          mb.Pos,
-				End:            end,
-				Length:         length,
-				Type:           "revcomp",
-				FwdMM:          mb.Mismatches,
-				RevMM:          ma.Mismatches,
-				FwdMismatchIdx: mb.MismatchIdx,
-				RevMismatchIdx: flip(alen, ma.MismatchIdx),
-				FwdPrimer:      p.Reverse,
-				RevPrimer:      p.Forward,
-				FwdSite:        fwdSite,
-				RevSite:        revSite,
-			})
+		}
+
+		// Circular wrap-around: allow rc(A) before B forward match
+		if e.cfg.Circular {
+			X := len(seq) - mb.Pos
+			loWrap := 0
+			if minL > 0 {
+				needed := minL - X - alen
+				if needed < 0 { needed = 0 }
+				loWrap = needed
+			}
+			hiWrap := mb.Pos - 1
+			if maxL > 0 {
+				allowed := maxL - X - alen
+				if allowed < hiWrap { hiWrap = allowed }
+			}
+			if hiWrap >= loWrap {
+				iMinW := sort.SearchInts(aStarts, loWrap)
+				iMaxW := sort.Search(len(aStarts), func(i int) bool { return aStarts[i] > hiWrap }) - 1
+				if iMinW < 0 { iMinW = 0 }
+				if iMaxW >= len(aStarts) { iMaxW = len(aStarts) - 1 }
+				for j := iMaxW; j >= iMinW; j-- {
+					aStart := aStarts[j]
+					if aStart >= mb.Pos { continue }
+					ma := revA[j]
+					end := aStart + alen
+					length := (len(seq) - mb.Pos) + end
+					if (minL != 0 && length < minL) || (maxL != 0 && length > maxL) { continue }
+
+					var fwdSite, revSite string
+					if e.cfg.NeedSites {
+						if mb.Pos+blen <= len(seq) { fwdSite = string(seq[mb.Pos:mb.Pos+blen]) }
+						if end <= len(seq) { revSite = string(primer.RevComp(seq[aStart:end])) }
+					}
+					out = append(out, Product{
+						ExperimentID:   p.ID,
+						SequenceID:     seqID,
+						Start:          mb.Pos,
+						End:            end,
+						Length:         length,
+						Type:           "revcomp",
+						FwdMM:          mb.Mismatches,
+						RevMM:          ma.Mismatches,
+						FwdMismatchIdx: mb.MismatchIdx,
+						RevMismatchIdx: flip(alen, ma.MismatchIdx),
+						FwdPrimer:      p.Reverse,
+						RevPrimer:      p.Forward,
+						FwdSite:        fwdSite,
+						RevSite:        revSite,
+					})
+				}
+			}
 		}
 	}
 	return out

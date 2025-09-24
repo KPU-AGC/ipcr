@@ -163,9 +163,14 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		}
 	}
 
-	// Chunking / overlap
+	// Chunking / overlap (disable if circular)
 	overlap := 0
-	if opts.ChunkSize > 0 {
+	if opts.Circular {
+		if opts.ChunkSize != 0 && !opts.Quiet {
+			fmt.Fprintln(stderr, "warning: --circular disables chunking; ignoring --chunk-size")
+		}
+		opts.ChunkSize = 0
+	} else if opts.ChunkSize > 0 {
 		if opts.MaxLen <= 0 {
 			if !opts.Quiet {
 				fmt.Fprintln(stderr, "warning: --chunk-size requires --max-length; disabling chunking")
@@ -184,7 +189,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		}
 	}
 
-	// Engine (NeedSites only for pretty text) — includes seed-length
+	// Engine (NeedSites only for pretty text) — includes seed-length & circular
 	eng := engine.New(engine.Config{
 		MaxMM:          opts.Mismatches,
 		TerminalWindow: termWin,
@@ -193,6 +198,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		HitCap:         opts.HitCap,
 		NeedSites:      (opts.Output == "text" && opts.Pretty),
 		SeedLen:        opts.SeedLength,
+		Circular:       opts.Circular,
 	})
 
 	// Workers
@@ -281,7 +287,14 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 					hits := eng.SimulateBatch(j.rec.ID, j.rec.Seq, j.pairs)
 					if needSeq {
 						for i := range hits {
-							hits[i].Seq = string(j.rec.Seq[hits[i].Start:hits[i].End])
+							if opts.Circular && hits[i].Start > hits[i].End {
+								// Circular product: wrap-around sequence
+								seqBytes := j.rec.Seq
+								hits[i].Seq = string(seqBytes[hits[i].Start:]) + string(seqBytes[:hits[i].End])
+							} else {
+								// Linear product
+								hits[i].Seq = string(j.rec.Seq[hits[i].Start:hits[i].End])
+							}
 						}
 					}
 					select {

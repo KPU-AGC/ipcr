@@ -51,13 +51,12 @@ const (
 )
 
 // intsCSV converts []int to "1,2,3" (empty string if none).
-func intsCSV(ints []int) string {
-	if len(ints) == 0 {
+func intsCSV(a []int) string {
+	if len(a) == 0 {
 		return ""
 	}
-	// Convert slice of ints to comma-separated string (e.g., "3,5,10")
-	strs := make([]string, len(ints))
-	for i, v := range ints {
+	strs := make([]string, len(a))
+	for i, v := range a {
 		strs[i] = strconv.Itoa(v)
 	}
 	return strings.Join(strs, ",")
@@ -139,7 +138,6 @@ func matchLineAmbig(primer, site string, mismIdx []int) string {
 	}
 
 	var b strings.Builder
-	// Under-reserve is fine; Builder will grow to accommodate multi-byte glyphs.
 	b.Grow(n)
 
 	for i := 0; i < n; i++ {
@@ -159,13 +157,7 @@ func matchLineAmbig(primer, site string, mismIdx []int) string {
 	return b.String()
 }
 
-// diagramPretty prints a two-strand block aligned to sites.
-// Keeps the exact alignment you wanted, e.g.:
-// 5'-AGAGTTTGATCCTGGCTCAG.......................-3' # (+)
-// 3'-........................CCTATGGAACAATGCTGAA-5' # (-)
-//
-// Additionally, guarantees at least minInterPrimerGap columns between the end of the
-// forward site on the (+) line and the start of the reverse site on the (−) line.
+// diagramPretty prints the multi-line ASCII diagram.
 // Every line emitted here begins with linePrefix ("# ").
 func diagramPretty(w io.Writer, p engine.Product) {
 	if p.FwdPrimer == "" || p.RevPrimer == "" || p.FwdSite == "" || p.RevSite == "" {
@@ -200,14 +192,11 @@ func diagramPretty(w io.Writer, p engine.Product) {
 	innerPlus := inner
 
 	// Enforce a minimum visual separation so reverse does not start adjacent to forward.
-	// Reverse site (on the − line) must start at least minInterPrimerGap columns
-	// to the right of the last forward-site base.
 	if innerMinus < aLen+minInterPrimerGap {
 		innerMinus = aLen + minInterPrimerGap
 	}
 
-	// Ensure the (+) line extends far enough to the right so the reverse block (length bLen)
-	// can render underneath cleanly, and also keep some right-side padding for symmetry.
+	// Ensure the (+) line extends far enough to the right so the reverse block renders cleanly.
 	if innerPlus < bLen+minInterPrimerGap {
 		innerPlus = bLen + minInterPrimerGap
 	}
@@ -231,11 +220,10 @@ func diagramPretty(w io.Writer, p engine.Product) {
 		arrowRight,
 	)
 
-	// Genomic lines: (+) 5'→3', (−) 3'→5' under it, complementary and aligned.
+	// Genomic lines: (+) 5'→3', (−) 3'→5' under it.
 	fmt.Fprintf(w, "%s%s%s%s%s # (+)\n", linePrefix, prefixPlus, p.FwdSite, strings.Repeat(".", innerPlus), suffixPlus)
 
-	// RevSite is RC(plus slice at B) i.e., minus 5'→3'. To render the (−) line 3'→5' under (+),
-	// we need the column-wise complement of the plus slice at B: complement(RevSite).
+	// For the (−) line, we render the complement of p.RevSite.
 	minusSite := complementString(p.RevSite)
 	fmt.Fprintf(w, "%s%s%s%s%s # (-)\n", linePrefix, prefixMinus, strings.Repeat(".", innerMinus), minusSite, suffixMinus)
 
@@ -258,28 +246,14 @@ func diagramPretty(w io.Writer, p engine.Product) {
 	}
 	fmt.Fprintf(w, "%s%s%s%s%s\n", linePrefix, strings.Repeat(" ", padPrimer), prefixMinus, revPrimerDisplayed, suffixMinus)
 
-	// Commented spacer line to terminate the block cleanly.
+	// Spacer line to terminate the block cleanly.
 	fmt.Fprintln(w, "#")
 }
 
+// writeOne prints a single TSV row (with the new first column: source_file).
+// If pretty==true, it also prints the multi-line ASCII diagram below that row.
 func writeOne(w io.Writer, p engine.Product, pretty bool) error {
-	if pretty {
-		// Pretty output: multi-line, with primer and site alignment
-		fwdAlign := fmt.Sprintf("%s\n%s\n",
-			p.FwdPrimer, p.FwdSite)
-		revAlign := fmt.Sprintf("%s\n%s\n",
-			p.RevPrimer, p.RevSite)
-		output := fmt.Sprintf("%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%s\t%s\n%s%s",
-			p.SourceFile, p.SequenceID,
-			p.Start, p.End, p.Length, p.Type,
-			p.FwdMM, p.RevMM,
-			intsCSV(p.FwdMismatchIdx), intsCSV(p.RevMismatchIdx),
-			fwdAlign, revAlign)
-		_, err := io.WriteString(w, output)
-		return err
-	}
-
-	// Standard TSV output (single line per product)
+	// Standard TSV row: MUST match WriteTSV column order exactly.
 	if _, err := fmt.Fprintf(
 		w, "%s\t%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%s\t%s\n",
 		p.SourceFile, p.SequenceID, p.ExperimentID,
@@ -289,24 +263,20 @@ func writeOne(w io.Writer, p engine.Product, pretty bool) error {
 	); err != nil {
 		return err
 	}
+	if pretty {
+		diagramPretty(w, p)
+	}
 	return nil
 }
 
-// StreamText streams products to the writer (optional header; pretty mode).
+// StreamText writes products from a channel (optional header; pretty mode).
 func StreamText(w io.Writer, in <-chan engine.Product, header bool, pretty bool) error {
 	if header {
 		if _, err := fmt.Fprintln(w, TSVHeader); err != nil {
 			return err
 		}
-		header = false
 	}
 	for p := range in {
-		if header {
-			if _, err := fmt.Fprintln(w, TSVHeader); err != nil {
-				return err
-			}
-			header = false
-		}
 		if err := writeOne(w, p, pretty); err != nil {
 			return err
 		}

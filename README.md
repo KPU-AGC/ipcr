@@ -1,10 +1,10 @@
-# ipcr
+# `ipcr`
 
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/ipcr/README.html)
 [![Go](https://img.shields.io/badge/go-%3E=1.19-blue)](https://golang.org)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
-**ipcr** is a fast, parallel, in‑silico PCR tool written in Go.  
+**`ipcr`** is a fast, parallel, in‑silico PCR tool written in Go.  
 It scans large (including gzipped) FASTA references for amplicons from primer pairs and streams results as text/TSV, FASTA, or JSON.
 
 ---
@@ -46,7 +46,7 @@ Print help:
 
 `ipcr` accepts primer pairs **either** inline **or** from a TSV file, plus one or more FASTA references:
 
-* **Inline primers:** `--forward`, `--reverse` (5′→3′).
+* **Inline primers:** `-f/--forward`, `-r/--reverse` (5′→3′).
 * **TSV primers:** `--primers FILE.tsv` (see format below).
 * **FASTA inputs:** repeat `--sequences FILE[.gz]` **or** supply positional FASTA paths/globs (`ref*.fa gz/*.fa.gz`). Using `-` reads from **stdin**. Globs are expanded only for positional arguments; `--sequences` is literal.
 
@@ -144,8 +144,13 @@ Pretty‑printed array of objects with fields:
 
 Default text/TSV:
 
-```
-./ipcr --forward AGRGTTYGATYMTGGCTCAG --reverse RGYTACCTTGTTACGACTT  ref.fna.gz --mismatches 1 --pretty
+```bash
+./ipcr \
+  --forward AGRGTTYGATYMTGGCTCAG \
+  --reverse RGYTACCTTGTTACGACTT \
+  --mismatches 1 \
+  --pretty \
+  ref.fna.gz
 ```
 ```
 source_file      sequence_id     experiment_id   start   end     length  type    fwd_mm  rev_mm  fwd_mm_i        rev_mm_i
@@ -162,7 +167,12 @@ ref.fna.gz       REF:0-1003404   manual          316104  317579  1475    forward
 FASTA with sequences:
 
 ```bash
-./ipcr --forward AGRGTTYGATYMTGGCTCAG --reverse RGYTACCTTGTTACGACTT  ref.fna.gz --mismatches 1 --output fasta
+./ipcr \
+  --forward AGRGTTYGATYMTGGCTCAG \
+  --reverse RGYTACCTTGTTACGACTT \
+  --mismatches 1 \
+  --output fasta \
+  ref.fna.gz
 ```
 ```bash
 >manual_1 start=316104 end=317579 len=1475 source_file=ref.fna.gz
@@ -172,7 +182,12 @@ AGAGT...TATCC
 JSON:
 
 ```bash
-./ipcr --forward AGRGTTYGATYMTGGCTCAG --reverse RGYTACCTTGTTACGACTT  ref.fna.gz --mismatches 1 --output json | jq
+./ipcr \
+  --forward AGRGTTYGATYMTGGCTCAG \
+  --reverse RGYTACCTTGTTACGACTT \
+  --mismatches 1 \
+  --output json \
+  ref.fna.gz | jq
 ```
 ```json
 [

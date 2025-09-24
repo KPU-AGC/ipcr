@@ -5,30 +5,18 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 **ipcr** is a fast, parallel, in‑silico PCR tool written in Go.  
-It scans large (including gzipped) FASTA references for amplicons from primer pairs and streams results as text, FASTA, or JSON.
+It scans large (including gzipped) FASTA references for amplicons from primer pairs and streams results as text/TSV, FASTA, or JSON.
 
 ---
 
-## Why ipcr?
+## Highlights
 
-- **Fast & parallel** – uses all CPU cores by default.
-- **Large‑scale friendly** – streams `.fa` / `.fa.gz` and supports chunked windows with boundary‑safe overlap.
-- **Pragmatic matching** – k‑mismatch support with a 3′ terminal window policy.
-- **Deterministic when needed** – `--sort` provides stable output ordering.
-- **Single static binary** – no external dependencies.
-
----
-
-## Install
-
-```bash
-# Build the CLI
-go build -o ipcr cmd/ipcr/main.go
-# Run tests
-go test ./...
-````
-
-> Requires Go ≥ 1.19.
+- **Fast & parallel by default.**
+- **Seeded multi‑pattern scan.**
+- **IUPAC support on primers.**
+- **Deterministic when needed.**
+- **Pretty text mode.**
+- **Robust outputs.**
 
 ---
 
@@ -54,121 +42,161 @@ Print help:
 
 ---
 
-## Input formats
+## Usage & inputs
 
-### Primer TSV
+`ipcr` accepts primer pairs **either** inline **or** from a TSV file, plus one or more FASTA references:
 
-Tab‑separated file with required columns:
+* **Inline primers:** `--forward`, `--reverse` (5′→3′).
+* **TSV primers:** `--primers FILE.tsv` (see format below).
+* **FASTA inputs:** repeat `--sequences FILE[.gz]` **or** supply positional FASTA paths/globs (`ref*.fa gz/*.fa.gz`). Using `-` reads from **stdin**. Globs are expanded only for positional arguments; `--sequences` is literal.
+
+At least one primer source **and** at least one FASTA input are required. The program prints a structured usage banner on `-h/--help`.
+
+### Primer TSV format
+
+Whitespace‑separated columns:
 
 ```
-id   FORWARD_PRIMER   REVERSE_PRIMER   [min_len]   [max_len]
+id  FORWARD_PRIMER  REVERSE_PRIMER  [min_len]  [max_len]
 ```
 
 * `id`: experiment/primer‑pair identifier.
-* `FORWARD_PRIMER`, `REVERSE_PRIMER`: 5′→3′ sequences (IUPAC allowed).
-* `min_len`, `max_len` (optional): per‑pair product length bounds.
-  If omitted, global `--min-length/--max-length` apply.
-
-### Sequences (FASTA)
-
-* One or more files via repeated `--sequences`.
-* Use `--sequences -` to read from `stdin`.
-* `.gz` is detected automatically.
+* `FORWARD_PRIMER`, `REVERSE_PRIMER`: 5′→3′ sequences; IUPAC ambiguity codes are allowed.
+* Optional `min_len`, `max_len`: per‑pair length bounds; otherwise global `--min-length/--max-length` apply.
 
 ---
 
-## Output formats
+## Matching model (what’s simulated)
 
-### Text (default)
+* **Mismatches:** Allow up to `--mismatches` per primer.
+  A **3′ terminal window** (`--terminal-window`) forbids mismatches at the 3′ end (auto: `3` in `--mode realistic`)
+* **Primer ambiguity (IUPAC):** Primer codes like R/Y/W... match the allowed bases; genome `N` and non‑ACGT characters are treated as mismatches to prevent flood hits in unknown regions.
+* **Seeded scan:**
 
-Tabular, one hit per line:
+  * 3′‑anchored suffix seeds for forward primers (**A**, **B**) and 5′‑anchored prefix seeds for reverse‑complements (**a=rc(A)**, **b=rc(B)**) are built (exact A/C/G/T only) and packed into an AC automaton.
+  * Each seed hit is **verified in place** against the full primer with the mismatch + 3′ policy; orientations lacking usable seeds fall back to a direct verifier.
+* **Product typing:** Hits are labeled `forward` (A × rc(B)) or `revcomp` (B × rc(A)). Coordinates are 0‑based, half‑open over the scanned window; when chunking is enabled, IDs carry `:<start>-<end>` to indicate window origin. De‑duplication yields the true intervals across chunk boundaries.
+* **Circular templates:** When `--circular` is set, amplicons that wrap from the end to the beginning are allowed (and recognizable as Start > End in the per‑chunk coordinates). Chunking is disabled in this mode.
+
+---
+
+## Performance
+
+* **Threads:** `--threads N` (default `0` = all CPUs). Work is sharded across records/chunks.
+* **Chunking:** `--chunk-size N` streams a fixed‑size sliding window per record; overlap is chosen to cover `max(primer_len-1, --max-length)` so boundary hits are kept. If `--circular` is set, chunking is disabled. If `--max-length` is missing or `--chunk-size <= --max-length`, chunking is auto‑disabled with a warning (suppress with `--quiet`).
+* **Seeds:** `--seed-length L` (default `12`; `0`=auto=min(12, primer length)). Only unambiguous seed segments are used; others fall back to verifier.
+* **Hit cap:** `--hit-cap N` limits matches stored per primer/orientation/window (`0`=unlimited) to control memory.
+
+---
+
+## Outputs
+
+### Text / TSV (default)
+
+Canonical header (always the same order):
 
 ```
-sequence_id  experiment_id  start  end  length  type  fwd_mm  rev_mm  fwd_mismatch_idx  rev_mismatch_idx
+source_file  sequence_id  experiment_id  start  end  length  type  fwd_mm  rev_mm  fwd_mm_i  rev_mm_i
 ```
 
-* `type`: `forward` (A × rc(B)) or `revcomp` (B × rc(A)).
-* Coordinates are **0‑based half‑open** over the input chunk; when chunking, IDs carry `:<start>-<end>` and de‑duping preserves real genomic intervals.
+* `source_file` is the input FASTA file the hit came from (handy with many inputs).
+* `type` ∈ `{forward, revcomp}`.
+* Use `--no-header` to suppress the header row.
+* `--sort` sorts in‑memory for determinism (SequenceID, Start, End, Type, ExperimentID).
+
+**Pretty mode:** `--pretty` appends a multi‑line diagram per hit, with `# `‑prefixed lines that you can grep away. Exact matches render as `|`; ambiguity‑mediated matches render as `¦`; mismatches are spaces. The (+) strand is 5′→3′ left→right; the (–) strand is 3′→5′ under it.
 
 ### FASTA
 
-Amplicon sequences with coordinates in headers.
+FASTA records for each product when `--output fasta` (and `--products` to include sequences for text/JSON too). Headers carry metadata:
+
+```
+>EXPERIMENT_i start=... end=... len=... source_file=...
+SEQUENCE
+```
+
+Streamed or batch‑written depending on `--sort`.
 
 ### JSON
 
-Structured objects for downstream pipelines.
+Pretty‑printed array of objects with fields:
 
-Use `--products` to attach the amplicon sequence to text/JSON outputs.
-
----
-
-## Key options (most used)
-
-* `--forward`, `--reverse` – inline primers (use **instead of** `--primers`).
-* `--primers FILE.tsv` – TSV primer file (see above).
-* `--sequences FILE[.gz]` – one or more FASTA files (repeatable or `-`).
-* `--mismatches N` – per‑primer mismatch cap (default: `0`).
-* `--terminal-window N` – number of 3′ bases where mismatches are disallowed. `-1` = auto (`3` in realistic mode, `0` in debug).
-* `--min-length N`, `--max-length N` – product length bounds (global defaults; per‑pair overrides in TSV).
-* `--output text|json|fasta` – choose output format (default: `text`).
-* `--products` – include product sequence.
-* `--pretty` – add ASCII site strings to text output (slower; gated to avoid extra allocations otherwise).
-* `--threads N` – worker threads (`0` = all CPUs).
-* `--chunk-size N` – process the reference in sliding windows; overlap is set to cover the largest primer/product so boundary hits aren’t lost.
-* `--hit-cap N` – cap matches retained per primer/orientation per window (`0` = unlimited).
-* `--mode realistic|debug` – sets sensible defaults (e.g., terminal window).
-* `--sort` – make stream ordering deterministic (costs some memory).
-* `--seed-length N` – seed length for the multi‑pattern scan (`12` default; `0` = full‑length seeds).
-  Larger seeds reduce candidates; smaller seeds are more sensitive with more verification.
-
-Run `./ipcr --help` to see all flags and defaults.
-
----
-
-## Methods (overview)
-
-* **Single‑pass seeded scan.** For each pair, exact seeds anchored at the primer 3′ end (and the 5′ end of the reverse‑complement) are combined into a multi‑pattern automaton. The genome is scanned **once** per chunk/strand; seed hits are then **verified** against full primers allowing up to `--mismatches` and enforcing the 3′ terminal‑window policy.
-* **No reverse‑complementing the genome.** Reverse primers are scanned via **reverse‑complemented primers on the forward strand**, eliminating an O(n) pass per pair.
-* **Exact‑match fast path.** With `--mismatches=0` and unambiguous A/C/G/T primers, exact matches use a jump‑scanning path.
-* **Boundary‑safe chunking.** Sliding windows reuse buffers (allocation‑free) and overlap sufficiently to keep amplicons that span window edges; duplicates are removed across chunks.
+```json
+{
+  "experiment_id": "...",
+  "sequence_id": "...",
+  "start": 0,
+  "end": 0,
+  "length": 0,
+  "type": "forward|revcomp",
+  "fwd_mm": 0,
+  "rev_mm": 0,
+  "fwd_mismatch_idx": [],
+  "rev_mismatch_idx": [],
+  "seq": "ACGT...",          // only when --products
+  "source_file": "ref.fa"
+}
+```
 
 ---
 
 ## Examples
 
-Text (default):
+Default text/TSV:
 
-```bash
-./ipcr --forward AGCTG --reverse TTGCA --sequences test.fa
-sequence_id  experiment_id  start  end  length  type     fwd_mm  rev_mm  fwd_mismatch_idx  rev_mismatch_idx
-chr1         manual         12345  12378 33     forward  0       1                        2
+```
+./ipcr --forward AGRGTTYGATYMTGGCTCAG --reverse RGYTACCTTGTTACGACTT  ref.fna.gz --mismatches 1 --pretty
+```
+```
+source_file      sequence_id     experiment_id   start   end     length  type    fwd_mm  rev_mm  fwd_mm_i        rev_mm_i
+ref.fna.gz       REF:0-1003404   manual          316104  317579  1475    forward 0       1                       2
+# 5'-AGRGTTYGATYMTGGCTCAG-3'
+#    ||¦|||¦|||¦¦||||||||-->
+# 5'-AGAGTTTGATCCTGGCTCAG..............................-3' # (+)
+# 3'-...............................CCTATGGAACAATGCTGAA-5' # (-)
+#                                <--|||||||||||||||| |¦
+#                                3'-TTCAGCATTGTTCCATYGR-5'
+#
 ```
 
-FASTA:
+FASTA with sequences:
 
 ```bash
-./ipcr --forward AGCTG --reverse TTGCA --sequences test.fa --output fasta --products
->manual  chr1:12345-12378  len=33  type=forward
-AGCTG...TTGCA
+./ipcr --forward AGRGTTYGATYMTGGCTCAG --reverse RGYTACCTTGTTACGACTT  ref.fna.gz --mismatches 1 --output fasta
+```
+```bash
+>manual_1 start=316104 end=317579 len=1475 source_file=ref.fna.gz
+AGAGT...TATCC
 ```
 
----
+JSON:
 
-## Reproducibility & performance tips
-
-* Prefer unambiguous primers with `--mismatches=0` for the fastest path.
-* Tune `--seed-length` for your datasets (`8–16` is typical).
-  Full‑length seeds (`0`) minimize verification work but can reduce sensitivity with degenerate primers.
-* Use `--sort` if you need deterministic order; leave off for maximum throughput.
-* Set `--chunk-size` for very large references to limit memory while keeping overlap correctness.
+```bash
+./ipcr --forward AGRGTTYGATYMTGGCTCAG --reverse RGYTACCTTGTTACGACTT  ref.fna.gz --mismatches 1 --output json | jq
+```
+```json
+[
+  {
+    "experiment_id": "manual",
+    "sequence_id": "REF:0-1003404",
+    "start": 316104,
+    "end": 317579,
+    "length": 1475,
+    "type": "forward",
+    "rev_mm": 1,
+    "rev_mismatch_idx": [
+      2
+    ],
+    "source_file": "ref.fna.gz"
+  },
+]
+```
 
 ---
 
 ## License
 
 MIT. See [LICENSE](./LICENSE).
-
----
 
 ## Citation
 

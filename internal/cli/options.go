@@ -99,7 +99,6 @@ func NewFlagSet(name string) *flag.FlagSet {
 		fmt.Fprintf(out, "  -m, --mismatches int        Maximum mismatches per primer [%s]\n", def("mismatches"))
 		fmt.Fprintf(out, "      --min-length int        Minimum product length [%s]\n", def("min-length"))
 		fmt.Fprintf(out, "      --max-length int        Maximum product length [%s]\n", def("max-length"))
-		fmt.Fprintf(out, "      --hit-cap int           Max matches stored per primer/window (0 = unlimited) [%s]\n", def("hit-cap"))
 		fmt.Fprintf(out, "      --terminal-window int   3' terminal mismatch window (0=allow, -1=auto) [%s]\n", def("terminal-window"))
 		fmt.Fprintf(out, "      --mode string           Matching mode: realistic | debug [%s]\n", def("mode"))
 		fmt.Fprintf(out, "  -c, --circular              Treat each FASTA record as circular (wrap-around) [%s]\n", def("circular"))
@@ -107,6 +106,7 @@ func NewFlagSet(name string) *flag.FlagSet {
 		// -------------------- Performance --------------------
 		fmt.Fprintln(out, "\nPerformance:")
 		fmt.Fprintf(out, "  -t, --threads int           Number of worker threads (0 = all CPUs) [%s]\n", def("threads"))
+		fmt.Fprintf(out, "      --hit-cap int           Max matches stored per primer/window (0 = unlimited) [%s]\n", def("hit-cap"))
 		fmt.Fprintf(out, "      --chunk-size int        Chunk size for splitting sequences (0 = no chunking) [%s]\n", def("chunk-size"))
 		fmt.Fprintf(out, "      --seed-length int       Seed length for multi-pattern scan (0=auto) [%s]\n", def("seed-length"))
 

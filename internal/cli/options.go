@@ -55,26 +55,77 @@ type Options struct {
 // NewFlagSet returns a configured FlagSet with custom usage/help.
 func NewFlagSet(name string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+
+	// NOTE: Usage relies on flags having been registered on fs.
+	// In app.RunContext, we call ParseArgs(fs, []string{"-h"}) to register flags
+	// before invoking fs.Usage(), so fs.Lookup() returns correct defaults.
 	fs.Usage = func() {
-		fmt.Fprintf(fs.Output(),
-			`%s: in-silico PCR
+		out := fs.Output()
 
-Author:  Erick Samera (erick.samera@kpu.ca)
-License: MIT
-Version: %s
+		// Helpers to fetch defaults from registered flags.
+		def := func(flagName string) string {
+			if f := fs.Lookup(flagName); f != nil {
+				return f.DefValue
+			}
+			return ""
+		}
 
-Usage of %s:
+		fmt.Fprintf(out, "%s – in-silico PCR\n\n", name)
+		fmt.Fprintf(out, "Author:  Erick Samera (erick.samera@kpu.ca)\n")
+		fmt.Fprintf(out, "License: MIT\n")
+		fmt.Fprintf(out, "Version: %s\n\n", version.Version)
 
-  # With flags (legacy; literal paths, no globbing validated here)
-  %s --forward AAA --reverse TTT --sequences ref.fa
+		fmt.Fprintln(out, "Usage:")
+		fmt.Fprintf(out, "  %s [options] --forward AAA --reverse TTT --sequences ref.fa\n", name)
+		fmt.Fprintln(out, "      (flags for inputs; no glob expansion for --sequences)")
+		fmt.Fprintf(out, "  %s [options] --forward AAA --reverse TTT ref*.fa gz/*.fa.gz\n", name)
+		fmt.Fprintln(out, "      (positional FASTA args; globs are expanded)")
 
-  # With positionals (new; globs are expanded; literals are accepted as-is)
-  # Flags may appear before or after positionals.
-  %s --forward AAA --reverse TTT ref*.fa gz/*.fa.gz
+		fmt.Fprintln(out, "\nRequirements:")
+		fmt.Fprintln(out, "  • Provide either --primers OR (--forward AND --reverse).")
+		fmt.Fprintln(out, "  • Provide at least one FASTA input (via --sequences or positionals).")
 
-`, name, version.Version, name, name, name)
-		fs.PrintDefaults()
+		fmt.Fprintln(out, "\nFlags (grouped by category; [*] marks required inputs):")
+
+		// -------------------- Input --------------------
+		fmt.Fprintln(out, "Input:")
+		fmt.Fprintln(out, "  -f, --forward string        Forward primer sequence (5'→3') [*]")
+		fmt.Fprintln(out, "  -r, --reverse string        Reverse primer sequence (5'→3') [*]")
+		fmt.Fprintln(out, "  -p, --primers string        TSV file of primer pairs (forward & reverse) [*]")
+		fmt.Fprintln(out, "  -s, --sequences file        FASTA file(s) (repeatable) or \"-\" for STDIN [*]")
+
+		// -------------------- PCR Parameters --------------------
+		fmt.Fprintln(out, "\nPCR Parameters:")
+		fmt.Fprintf(out, "  -m, --mismatches int        Maximum mismatches per primer [%s]\n", def("mismatches"))
+		fmt.Fprintf(out, "      --min-length int        Minimum product length [%s]\n", def("min-length"))
+		fmt.Fprintf(out, "      --max-length int        Maximum product length [%s]\n", def("max-length"))
+		fmt.Fprintf(out, "      --hit-cap int           Max matches stored per primer/window (0 = unlimited) [%s]\n", def("hit-cap"))
+		fmt.Fprintf(out, "      --terminal-window int   3' terminal mismatch window (0=allow, -1=auto) [%s]\n", def("terminal-window"))
+		fmt.Fprintf(out, "      --mode string           Matching mode: realistic | debug [%s]\n", def("mode"))
+		fmt.Fprintf(out, "  -c, --circular              Treat each FASTA record as circular (wrap-around) [%s]\n", def("circular"))
+
+		// -------------------- Performance --------------------
+		fmt.Fprintln(out, "\nPerformance:")
+		fmt.Fprintf(out, "  -t, --threads int           Number of worker threads (0 = all CPUs) [%s]\n", def("threads"))
+		fmt.Fprintf(out, "      --chunk-size int        Chunk size for splitting sequences (0 = no chunking) [%s]\n", def("chunk-size"))
+		fmt.Fprintf(out, "      --seed-length int       Seed length for multi-pattern scan (0=auto) [%s]\n", def("seed-length"))
+
+		// -------------------- Output --------------------
+		fmt.Fprintln(out, "\nOutput:")
+		fmt.Fprintf(out, "  -o, --output string         Output format: text | json | fasta [%s]\n", def("output"))
+		fmt.Fprintf(out, "      --products              Emit product sequences [%s]\n", def("products"))
+		fmt.Fprintf(out, "      --pretty                Pretty ASCII alignment block (text mode) [%s]\n", def("pretty"))
+		fmt.Fprintf(out, "      --sort                  Sort outputs for determinism [%s]\n", def("sort"))
+		fmt.Fprintf(out, "      --no-header             Suppress header line in text/TSV [%s]\n", def("no-header"))
+		fmt.Fprintf(out, "      --no-match-exit-code int  Exit code when no amplicons found (0=success) [%s]\n", def("no-match-exit-code"))
+
+		// -------------------- Misc --------------------
+		fmt.Fprintln(out, "\nMiscellaneous:")
+		fmt.Fprintf(out, "  -q, --quiet                 Suppress non-essential warnings [%s]\n", def("quiet"))
+		fmt.Fprintln(out, "  -v, --version               Print version and exit")
+		fmt.Fprintln(out, "  -h, --help                  Show this help message and exit")
 	}
+
 	return fs
 }
 
@@ -153,26 +204,38 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	var opt Options
 	var help bool
 
-	// File & primer input
+	// --------------------- File & primer input ---------------------
 	fs.StringVar(&opt.PrimerFile, "primers", "", "TSV primer file [*]")
 	fs.StringVar(&opt.Fwd, "forward", "", "forward primer (5'→3') [*]")
 	fs.StringVar(&opt.Rev, "reverse", "", "reverse primer (5'→3') [*]")
 	var seq stringSlice
 	fs.Var(&seq, "sequences", "FASTA file(s) (repeatable or '-') [*] (literal; no glob expansion here)")
 
-	// PCR parameters
+	// Short aliases for input
+	fs.StringVar(&opt.PrimerFile, "p", "", "alias of --primers")
+	fs.StringVar(&opt.Fwd, "f", "", "alias of --forward")
+	fs.StringVar(&opt.Rev, "r", "", "alias of --reverse")
+	fs.Var(&seq, "s", "alias of --sequences")
+
+	// ------------------------- PCR parameters -------------------------
 	fs.IntVar(&opt.Mismatches, "mismatches", 0, "max mismatches per primer [0]")
 	fs.IntVar(&opt.MinLen, "min-length", 0, "minimum product length [0]")
 	fs.IntVar(&opt.MaxLen, "max-length", 2000, "maximum product length [2000]")
 	fs.IntVar(&opt.HitCap, "hit-cap", 10000, "max matches stored per primer per window (0 = unlimited) [10000]")
 	fs.IntVar(&opt.TerminalWindow, "terminal-window", -1, "3' terminal window (nt) disallowed for mismatches (0=allow, -1=auto: realistic=3, debug=0) [-1]")
 
-	// Performance
+	// Short alias where non-conflicting
+	fs.IntVar(&opt.Mismatches, "m", 0, "alias of --mismatches")
+
+	// ---------------------------- Performance ----------------------------
 	fs.IntVar(&opt.Threads, "threads", 0, "number of worker threads (0 = all CPUs) [0]")
 	fs.IntVar(&opt.ChunkSize, "chunk-size", 0, "split sequences into N-bp windows (0 = no chunking) [0]")
 	fs.IntVar(&opt.SeedLength, "seed-length", 12, "seed length for multi-pattern scan (0=auto: min(12, primer length)) [12]")
 
-	// Output / misc behavior
+	// Short aliases
+	fs.IntVar(&opt.Threads, "t", 0, "alias of --threads")
+
+	// ------------------------- Output / misc behavior -------------------------
 	fs.StringVar(&opt.Output, "output", "text", "output format: text | json | fasta [text]")
 	fs.StringVar(&opt.Mode, "mode", ModeRealistic, "matching mode: realistic | debug ["+ModeRealistic+"]")
 	fs.BoolVar(&opt.Circular, "circular", false, "treat each FASTA record as circular (disables chunking) [false]")
@@ -183,11 +246,18 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.BoolVar(&noHeader, "no-header", false, "suppress header line in text/TSV [false]")
 	fs.IntVar(&opt.NoMatchExitCode, "no-match-exit-code", 1, "exit code to use when no amplicons are found (set 0 to treat as success) [1]")
 
-	// Misc
+	// Short aliases
+	fs.StringVar(&opt.Output, "o", "text", "alias of --output")
+	fs.BoolVar(&opt.Circular, "c", false, "alias of --circular")
+
+	// ------------------------------- Misc --------------------------------
 	fs.BoolVar(&opt.Quiet, "quiet", false, "suppress non-essential warnings on stderr [false]")
 	fs.BoolVar(&opt.Version, "v", false, "print version and exit (shorthand) [false]")
 	fs.BoolVar(&opt.Version, "version", false, "print version and exit [false]")
 	fs.BoolVar(&help, "h", false, "show this help message (shorthand) [false]")
+
+	// Short alias
+	fs.BoolVar(&opt.Quiet, "q", false, "alias of --quiet")
 
 	// Support interspersed flags: split argv into flag tokens + positionals.
 	flagArgs, posArgs := splitFlagsAndPositionals(fs, argv)

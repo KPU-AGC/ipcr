@@ -1,4 +1,3 @@
-// internal/output/fasta.go
 package output
 
 import (
@@ -17,8 +16,8 @@ func StreamFASTA(w io.Writer, in <-chan engine.Product) error {
 		}
 		if _, err := fmt.Fprintf(
 			w,
-			">%s_%d start=%d end=%d len=%d\n%s\n",
-			p.ExperimentID, idx, p.Start, p.End, p.Length, p.Seq,
+			">%s_%d start=%d end=%d len=%d source_file=%s\n%s\n",
+			p.ExperimentID, idx, p.Start, p.End, p.Length, p.SourceFile, p.Seq,
 		); err != nil {
 			return err
 		}
@@ -35,8 +34,8 @@ func WriteFASTA(w io.Writer, list []engine.Product) error {
 		}
 		if _, err := fmt.Fprintf(
 			w,
-			">%s_%d start=%d end=%d len=%d\n%s\n",
-			p.ExperimentID, i+1, p.Start, p.End, p.Length, p.Seq,
+			">%s_%d start=%d end=%d len=%d source_file=%s\n%s\n",
+			p.ExperimentID, i+1, p.Start, p.End, p.Length, p.SourceFile, p.Seq,
 		); err != nil {
 			return err
 		}
@@ -53,8 +52,8 @@ func WriteTSV(w io.Writer, list []engine.Product, header bool) error {
 	}
 	for _, p := range list {
 		if _, err := fmt.Fprintf(
-			w, "%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%s\t%s\n",
-			p.SequenceID, p.ExperimentID,
+			w, "%s\t%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%s\t%s\n",
+			p.SourceFile, p.SequenceID, p.ExperimentID,
 			p.Start, p.End, p.Length, p.Type,
 			p.FwdMM, p.RevMM,
 			intsCSV(p.FwdMismatchIdx), intsCSV(p.RevMismatchIdx),

@@ -1,4 +1,3 @@
-// internal/app/app.go
 package app
 
 import (
@@ -208,8 +207,9 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	}
 
 	type job struct {
-		rec   fasta.Record
-		pairs []primer.Pair
+		rec        fasta.Record
+		pairs      []primer.Pair
+		sourceFile string
 	}
 	type result struct {
 		prods []engine.Product
@@ -297,6 +297,12 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 							}
 						}
 					}
+
+					// Assign source file to each product
+					for i := range hits {
+						hits[i].SourceFile = j.sourceFile
+					}
+
 					select {
 					case results <- result{prods: hits}:
 					case <-ctx.Done():
@@ -307,9 +313,9 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		}()
 	}
 
-	// Collector (de‑dup across chunks)
+	// Collector (de-dup across chunks)
 	type dkey struct {
-		base       string
+		base, file string
 		start, end int
 		typ, exp   string
 	}
@@ -333,7 +339,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 					off = 0
 				}
 				gs, ge := p.Start+off, p.End+off
-				k := dkey{base: base, start: gs, end: ge, typ: p.Type, exp: p.ExperimentID}
+				k := dkey{base: base, file: p.SourceFile, start: gs, end: ge, typ: p.Type, exp: p.ExperimentID}
 				if _, dup := seen[k]; dup {
 					continue
 				}
@@ -356,20 +362,19 @@ feed:
 		rch, err := fasta.StreamChunks(fa, opts.ChunkSize, overlap)
 		if err != nil {
 			fmt.Fprintln(stderr, err)
-			return 3
+			continue
 		}
 		for rec := range rch {
 			if ctx.Err() != nil {
 				break feed
 			}
 			select {
-			case jobs <- job{rec: rec, pairs: pairs}:
+			case jobs <- job{rec: rec, pairs: pairs, sourceFile: fa}:
 			case <-ctx.Done():
 				break feed
 			}
 		}
 	}
-
 	close(jobs)
 	wg.Wait()
 	close(results)
@@ -403,7 +408,7 @@ feed:
 	return 0
 }
 
-// sort key: (SequenceID, Start, End, Type, ExperimentID)
+// sortProducts sorts the products by (SequenceID, Start, End, Type, ExperimentID).
 func sortProducts(a []engine.Product) {
 	sort.Slice(a, func(i, j int) bool {
 		ai, aj := a[i], a[j]

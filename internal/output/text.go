@@ -51,18 +51,16 @@ const (
 )
 
 // intsCSV converts []int to "1,2,3" (empty string if none).
-func intsCSV(a []int) string {
-	if len(a) == 0 {
+func intsCSV(ints []int) string {
+	if len(ints) == 0 {
 		return ""
 	}
-	var b strings.Builder
-	for i, v := range a {
-		if i > 0 {
-			b.WriteByte(',')
-		}
-		b.WriteString(strconv.Itoa(v))
+	// Convert slice of ints to comma-separated string (e.g., "3,5,10")
+	strs := make([]string, len(ints))
+	for i, v := range ints {
+		strs[i] = strconv.Itoa(v)
 	}
-	return b.String()
+	return strings.Join(strs, ",")
 }
 
 // reverseString returns s reversed (ASCII-safe).
@@ -264,22 +262,37 @@ func diagramPretty(w io.Writer, p engine.Product) {
 	fmt.Fprintln(w, "#")
 }
 
-// writeOne prints a single product (TSV row + optional pretty block).
 func writeOne(w io.Writer, p engine.Product, pretty bool) error {
-	if _, err := fmt.Fprintf(
-		w, "%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%s\t%s\n",
-		p.SequenceID, p.ExperimentID, p.Start, p.End, p.Length, p.Type,
-		p.FwdMM, p.RevMM, intsCSV(p.FwdMismatchIdx), intsCSV(p.RevMismatchIdx),
-	); err != nil {
+	if pretty {
+		// Pretty output: multi-line, with primer and site alignment
+		fwdAlign := fmt.Sprintf("%s\n%s\n",
+			p.FwdPrimer, p.FwdSite)
+		revAlign := fmt.Sprintf("%s\n%s\n",
+			p.RevPrimer, p.RevSite)
+		output := fmt.Sprintf("%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%s\t%s\n%s%s",
+			p.SourceFile, p.SequenceID,
+			p.Start, p.End, p.Length, p.Type,
+			p.FwdMM, p.RevMM,
+			intsCSV(p.FwdMismatchIdx), intsCSV(p.RevMismatchIdx),
+			fwdAlign, revAlign)
+		_, err := io.WriteString(w, output)
 		return err
 	}
-	if pretty {
-		diagramPretty(w, p)
+
+	// Standard TSV output (single line per product)
+	if _, err := fmt.Fprintf(
+		w, "%s\t%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%s\t%s\n",
+		p.SourceFile, p.SequenceID, p.ExperimentID,
+		p.Start, p.End, p.Length, p.Type,
+		p.FwdMM, p.RevMM,
+		intsCSV(p.FwdMismatchIdx), intsCSV(p.RevMismatchIdx),
+	); err != nil {
+		return err
 	}
 	return nil
 }
 
-// StreamText writes products from a channel (optional header; pretty mode).
+// StreamText streams products to the writer (optional header; pretty mode).
 func StreamText(w io.Writer, in <-chan engine.Product, header bool, pretty bool) error {
 	if header {
 		if _, err := fmt.Fprintln(w, TSVHeader); err != nil {
@@ -288,6 +301,12 @@ func StreamText(w io.Writer, in <-chan engine.Product, header bool, pretty bool)
 		header = false
 	}
 	for p := range in {
+		if header {
+			if _, err := fmt.Fprintln(w, TSVHeader); err != nil {
+				return err
+			}
+			header = false
+		}
 		if err := writeOne(w, p, pretty); err != nil {
 			return err
 		}

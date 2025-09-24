@@ -1,4 +1,3 @@
-// internal/engine/product.go
 package engine
 
 type Product struct {
@@ -23,4 +22,6 @@ type Product struct {
 
 	// Optional amplicon sequence
 	Seq string `json:"seq,omitempty"`
+
+	SourceFile string `json:"source_file"`
 }

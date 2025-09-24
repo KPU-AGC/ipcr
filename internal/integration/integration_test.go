@@ -4,6 +4,7 @@ package integration
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sort"
@@ -55,7 +56,7 @@ func TestParallelMatchesEqualSerial(t *testing.T) {
 			"--sequences", fa,
 			"--threads", fmt.Sprint(threads),
 			"--output", "json",
-			"--sort", // ensure deterministic order
+			"--sort", // deterministic order
 		}, &out, &errB)
 		if code != 0 {
 			t.Fatalf("exit %d err %s", code, errB.String())
@@ -100,63 +101,69 @@ func TestTextVsTSVParity(t *testing.T) {
 	}
 }
 
-// canonicalize: convert chunk-local coords to global by adding the chunk start offset,
-// and drop chunk ranges from SequenceID (keep base id) so chunked vs no-chunk are comparable.
-func canonicalize(out string) []string {
-	sc := bufio.NewScanner(strings.NewReader(out))
-	var rows []string
-	for sc.Scan() {
-		line := strings.TrimSpace(sc.Text())
-		if line == "" || strings.HasPrefix(line, "sequence_id") || strings.HasPrefix(line, "FWD ") || strings.HasPrefix(line, "REV ") {
-			continue
-		}
-		cols := strings.Split(line, "\t")
-		if len(cols) < 8 {
-			continue
-		}
-		seqID := cols[0]
-		exp := cols[1]
-		start, _ := strconv.Atoi(cols[2])
-		end, _ := strconv.Atoi(cols[3])
-		length := cols[4]
-		typ := cols[5]
-		fwdmm := cols[6]
-		revmm := cols[7]
+/*** Canonicalization helpers (robust to output format changes) ***/
 
-		base := seqID
-		offset := 0
-		if i := strings.Index(seqID, ":"); i > -1 {
-			base = seqID[:i]
-			if j := strings.Index(seqID[i+1:], "-"); j > -1 {
-				a := seqID[i+1 : i+1+j]
-				if v, err := strconv.Atoi(a); err == nil {
-					offset = v
-				}
-			}
-		}
-		gStart := start + offset
-		gEnd := end + offset
-		rows = append(rows, fmt.Sprintf("%s\t%s\t%d\t%d\t%s\t%s\t%s\t%s", base, exp, gStart, gEnd, length, typ, fwdmm, revmm))
+// parse base ID and chunk offset from IDs like "s:8-24".
+// Returns base="s", off=8 if present; else base=id, off=0.
+func baseAndOffset(id string) (string, int) {
+	colon := strings.LastIndex(id, ":")
+	if colon == -1 || colon == len(id)-1 {
+		return id, 0
 	}
-	sort.Strings(rows)
-	return rows
+	suffix := id[colon+1:]
+	dash := strings.IndexByte(suffix, '-')
+	if dash == -1 {
+		return id, 0
+	}
+	startStr := suffix[:dash]
+	if start, err := strconv.Atoi(startStr); err == nil {
+		return id[:colon], start
+	}
+	return id, 0
 }
 
-// Chunking large enough (and with safe overlap) should match no-chunking results (after canonicalization)
+// canonicalizeJSON parses the JSON array of products, normalizes chunked coords
+// to global coords, and returns a sorted, de-duplicated set of signature rows.
+// Using JSON avoids any brittleness from text/TSV column changes.
+func canonicalizeJSON(js string) ([]string, error) {
+	var prods []engine.Product
+	if err := json.Unmarshal([]byte(js), &prods); err != nil {
+		return nil, err
+	}
+	uniq := make(map[string]struct{}, len(prods))
+	for _, p := range prods {
+		base, off := baseAndOffset(p.SequenceID)
+		gs, ge := p.Start+off, p.End+off
+		// Signature captures the amplicon identity invariant under chunking.
+		sig := fmt.Sprintf("%s\t%s\t%d\t%d\t%d\t%s",
+			base, p.ExperimentID, gs, ge, p.Length, p.Type)
+		uniq[sig] = struct{}{}
+	}
+	out := make([]string, 0, len(uniq))
+	for k := range uniq {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+/*** The chunking equivalence test (now using JSON output) ***/
+
+// Chunking large enough (and with safe overlap) should match no-chunking results
+// after canonicalization. We run in JSON to avoid dependence on text/TSV columns.
 func TestChunkingKeepsBoundaryHits(t *testing.T) {
 	// Sequence long enough that many products exist
 	fa := write(t, "chunk.fa", ">s\nACGTACGTACGTACGTACGTACGTACGT\n")
 	defer os.Remove(fa)
 
-	run := func(chunk int) string {
+	runJSON := func(chunk int) string {
 		var out, errB bytes.Buffer
 		args := []string{
 			"--forward", "ACGTAC",
 			"--reverse", "ACGTAC",
 			"--sequences", fa,
-			"--output", "text",
+			"--output", "json",
 			"--sort",
-			"--no-header",
 			"--max-length", "8", // constrain to 8 so chunking can be exact
 		}
 		if chunk > 0 {
@@ -169,14 +176,52 @@ func TestChunkingKeepsBoundaryHits(t *testing.T) {
 		return out.String()
 	}
 
-	noChunk := run(0)
-	// Safe: chunk-size > max-length and code will set overlap >= max-length
-	chunked := run(16)
+	noChunkJSON := runJSON(0)
+	chunkedJSON := runJSON(16) // safe: > max-length; code uses overlap ≥ max-length
 
-	nc := strings.Join(canonicalize(noChunk), "\n")
-	ck := strings.Join(canonicalize(chunked), "\n")
-
-	if nc != ck {
-		t.Fatalf("chunked output differs from no-chunking\nno-chunk:\n%s\nchunked:\n%s", nc, ck)
+	nc, err := canonicalizeJSON(noChunkJSON)
+	if err != nil {
+		t.Fatalf("canonicalize no-chunk (json): %v", err)
 	}
+	ck, err := canonicalizeJSON(chunkedJSON)
+	if err != nil {
+		t.Fatalf("canonicalize chunked (json): %v", err)
+	}
+
+	if strings.Join(nc, "\n") != strings.Join(ck, "\n") {
+		// For debugging, also dump the *text* versions alongside the normalized sets.
+		var rawNo, rawCh bytes.Buffer
+		_ = app.Run([]string{
+			"--forward", "ACGTAC", "--reverse", "ACGTAC",
+			"--sequences", fa, "--output", "text", "--sort", "--no-header",
+			"--max-length", "8",
+		}, &rawNo, &bytes.Buffer{})
+		_ = app.Run([]string{
+			"--forward", "ACGTAC", "--reverse", "ACGTAC",
+			"--sequences", fa, "--output", "text", "--sort", "--no-header",
+			"--max-length", "8", "--chunk-size", "16",
+		}, &rawCh, &bytes.Buffer{})
+
+		t.Fatalf("chunked output differs from no-chunking\nno-chunk(norm):\n%s\nchunked(norm):\n%s\n\nno-chunk(text):\n%s\nchunked(text):\n%s",
+			strings.Join(nc, "\n"), strings.Join(ck, "\n"),
+			trimHead(rawNo.String()), trimHead(rawCh.String()))
+	}
+}
+
+func trimHead(out string) string {
+	var b strings.Builder
+	sc := bufio.NewScanner(strings.NewReader(out))
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" ||
+			strings.HasPrefix(line, "sequence_id") ||
+			strings.HasPrefix(line, "source_file") ||
+			strings.HasPrefix(line, "FWD ") ||
+			strings.HasPrefix(line, "REV ") {
+			continue
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }

@@ -24,11 +24,22 @@ We print:
 For readability, the interior gap ('.') is capped; for short amplicons we use
 the true interior. We render one fewer '.' on the (+) line so the (−) site
 starts exactly where expected visually.
+
+Change: “partial-ish” matches (ambiguous primer base that still matches an
+unambiguous genomic base) are now drawn with a distinct glyph (default “:”).
 */
 
 // Max dots we’ll show between the primer sites (purely cosmetic).
 const maxPrettyGap = 24
 
+// Glyphs used in match bar rendering.
+// - exactMatchGlyph: unambiguous A/C/G/T primer base equals genomic base
+// - partialMatchGlyph: ambiguous primer code matches the genomic base (e.g., R vs A)
+// - mismatch is drawn as space ' ' (kept)
+const (
+	exactMatchGlyph   = "|"
+	partialMatchGlyph = "¦"
+)
 // intsCSV converts []int to "1,2,3" (empty string if none).
 func intsCSV(a []int) string {
 	if len(a) == 0 {
@@ -44,36 +55,13 @@ func intsCSV(a []int) string {
 	return b.String()
 }
 
-// matchLine draws '|' for matches and ' ' for mismatches at given indices.
-func matchLine(n int, mismIdx []int) string {
-	if n <= 0 {
-		return ""
-	}
-	if len(mismIdx) == 0 {
-		return strings.Repeat("|", n)
-	}
-	m := make(map[int]struct{}, len(mismIdx))
-	for _, i := range mismIdx {
-		m[i] = struct{}{}
-	}
-	var b strings.Builder
-	b.Grow(n)
-	for i := 0; i < n; i++ {
-		if _, bad := m[i]; bad {
-			b.WriteByte(' ')
-		} else {
-			b.WriteByte('|')
-		}
-	}
-	return b.String()
-}
-
+// reverseString returns s reversed (ASCII-safe).
 func reverseString(s string) string {
-	b := []byte(s)
-	for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
-		b[i], b[j] = b[j], b[i]
+	rs := []rune(s)
+	for i, j := 0, len(rs)-1; i < j; i, j = i+1, j-1 {
+		rs[i], rs[j] = rs[j], rs[i]
 	}
-	return string(b)
+	return string(rs)
 }
 
 // complementString returns the DNA complement for common IUPAC codes (uppercase).
@@ -118,6 +106,51 @@ func complementString(s string) string {
 	return string(out)
 }
 
+// isACGT returns true if b ∈ {A,C,G,T}.
+func isACGT(b byte) bool {
+	return b == 'A' || b == 'C' || b == 'G' || b == 'T'
+}
+
+// matchLineAmbig draws a per‑column match bar string given primer/site (both 5'→3').
+// - ' ' (space) for mismatches (indices present in mismIdx)
+// - exactMatchGlyph for unambiguous exact matches (primer ∈ A/C/G/T and equals site)
+// - partialMatchGlyph for ambiguous‑primer matches (primer ∉ A/C/G/T but column is a match)
+func matchLineAmbig(primer, site string, mismIdx []int) string {
+	n := len(primer)
+	if n <= 0 {
+		return ""
+	}
+	if len(site) < n {
+		n = len(site) // defensive
+	}
+
+	// Build a set for O(1) mismatch lookup.
+	mism := make(map[int]struct{}, len(mismIdx))
+	for _, i := range mismIdx {
+		mism[i] = struct{}{}
+	}
+
+	var b strings.Builder
+	// Under‑reserve is fine; Builder will grow to accommodate multi‑byte glyphs.
+	b.Grow(n)
+
+	for i := 0; i < n; i++ {
+		if _, bad := mism[i]; bad {
+			b.WriteByte(' ')
+			continue
+		}
+		p := primer[i]
+		if isACGT(p) {
+			// Unambiguous primer base matched exactly (since not listed as mismatch).
+			b.WriteString(exactMatchGlyph)
+		} else {
+			// Ambiguous primer base matched one of its allowed genomic bases.
+			b.WriteString(partialMatchGlyph)
+		}
+	}
+	return b.String()
+}
+
 // diagramPretty prints a two‑strand block aligned to sites.
 // Keeps the exact alignment you wanted, e.g.:
 // 5'-AGAGTTTGATCCTGGCTCAG.......................-3' # (+)
@@ -158,7 +191,12 @@ func diagramPretty(w io.Writer, p engine.Product) {
 
 	// Forward primer and bars.
 	fmt.Fprintf(w, "%s%s%s\n", prefixPlus, p.FwdPrimer, suffixPlus)
-	fmt.Fprintf(w, "%s%s%s\n", strings.Repeat(" ", len(prefixPlus)), matchLine(aLen, p.FwdMismatchIdx), arrowRight)
+	fmt.Fprintf(
+		w, "%s%s%s\n",
+		strings.Repeat(" ", len(prefixPlus)),
+		matchLineAmbig(p.FwdPrimer, p.FwdSite, p.FwdMismatchIdx),
+		arrowRight,
+	)
 
 	// Genomic lines: (+) 5'→3', (−) 3'→5' under it, complementary and aligned.
 	fmt.Fprintf(w, "%s%s%s%s # (+)\n", prefixPlus, p.FwdSite, strings.Repeat(".", innerPlus), suffixPlus)
@@ -172,7 +210,7 @@ func diagramPretty(w io.Writer, p engine.Product) {
 	siteStart := len(prefixMinus) + innerMinus
 
 	// Reverse primer bars (3' end under the first base of minusSite).
-	revBars := reverseString(matchLine(bLen, p.RevMismatchIdx))
+	revBars := reverseString(matchLineAmbig(p.RevPrimer, p.RevSite, p.RevMismatchIdx))
 	padBars := siteStart - len(arrowLeft)
 	if padBars < 0 {
 		padBars = 0

@@ -1,0 +1,8 @@
+# 5'-TCAGGCCTTTGCTACAATGAAC-3'
+#    ||||||||||||||||||||||-->
+# 5'-TCAGGCCTTTGCTACAAYGAAC....................................................................-3' # (+)
+# 3'-..............................AGTATGTGATATGATGCAGTT.................AGTCCGGAAACGATGTTACTTG-5' # (-)
+#                                  |||||||||||||||||||||              <--||||||||||||||||||||||
+#                               3'-AGTATGTGATATGATGCAGTT-5'           3'-CAAGTAACATCGTTTCCGGACT-5'
+# probe "probe" (-) pos=52 mm=0 site=AGTATGTGATATGATGCAGTT fwd_mm=0@[] rev_mm=0@[]
+#

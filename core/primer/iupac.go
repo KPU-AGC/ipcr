@@ -1,40 +1,65 @@
-// internal/primer/iupac.go
+// core/primer/iupac.go
 package primer
 
-/* -------------------------- IUPAC lookup table -------------------------- */
+// iupacMask maps IUPAC nucleotide codes to a 4-bit mask (A=1, C=2, G=4, T=8).
+// Ambiguity codes are bitwise ORs of those bases (e.g., R=A|G).
+var iupacMask [256]byte
 
-var iupacMask [256]byte // bit0=A bit1=C bit2=G bit3=T
+const (
+	maskA = 1
+	maskC = 2
+	maskG = 4
+	maskT = 8
+)
+
+func add(c byte, bits byte) { iupacMask[c] = bits }
 
 func init() {
-	set := func(c byte, bits byte) { iupacMask[c] = bits }
-	set('A', 1)           // 0001
-	set('C', 2)           // 0010
-	set('G', 4)           // 0100
-	set('T', 8)           // 1000
-	set('R', 1|4)         // A/G
-	set('Y', 2|8)         // C/T
-	set('S', 2|4)         // C/G
-	set('W', 1|8)         // A/T
-	set('K', 4|8)         // G/T
-	set('M', 1|2)         // A/C
-	set('B', 2|4|8)       // C/G/T
-	set('D', 1|4|8)       // A/G/T
-	set('H', 1|2|8)       // A/C/T
-	set('V', 1|2|4)       // A/C/G
-	set('N', 1|2|4|8)     // any   (primer side only)
+	// Canonical bases
+	add('A', maskA)
+	add('C', maskC)
+	add('G', maskG)
+	add('T', maskT)
+	add('U', maskT) // treat U as T
+
+	// Ambiguity codes (uppercase)
+	add('R', maskA|maskG)       // A/G
+	add('Y', maskC|maskT)       // C/T
+	add('S', maskC|maskG)       // C/G
+	add('W', maskA|maskT)       // A/T
+	add('K', maskG|maskT)       // G/T
+	add('M', maskA|maskC)       // A/C
+	add('B', maskC|maskG|maskT) // C/G/T
+	add('D', maskA|maskG|maskT) // A/G/T
+	add('H', maskA|maskC|maskT) // A/C/T
+	add('V', maskA|maskC|maskG) // A/C/G
+	add('N', maskA|maskC|maskG|maskT)
+
+	// Lowercase equivalents
+	add('a', maskA)
+	add('c', maskC)
+	add('g', maskG)
+	add('t', maskT)
+	add('u', maskT)
+
+	add('r', maskA|maskG)
+	add('y', maskC|maskT)
+	add('s', maskC|maskG)
+	add('w', maskA|maskT)
+	add('k', maskG|maskT)
+	add('m', maskA|maskC)
+	add('b', maskC|maskG|maskT)
+	add('d', maskA|maskG|maskT)
+	add('h', maskA|maskC|maskT)
+	add('v', maskA|maskC|maskG)
+	add('n', maskA|maskC|maskG|maskT)
 }
 
-/* --------------------------- BaseMatch (FAST) --------------------------- */
-
-// baseMatch returns true if primer base `p` can pair with genome base `g`
-// according to the IUPAC ambiguity codes *and* g ∈ {A,C,G,T}.
-//
-// A genome base of 'N' (or any non‑ACGT ASCII) is treated as a HARD mismatch.
-// This prevents large N‑blocks from producing thousands of spurious hits.
+// BaseMatch reports whether primer base p can pair with genome base g under
+// IUPAC ambiguity rules. Non-ACGT genome bases (incl. 'N') are hard mismatches.
 func BaseMatch(g, p byte) bool {
 	if g != 'A' && g != 'C' && g != 'G' && g != 'T' {
-		return false // genome N or unknown char ⇒ mismatch
+		return false
 	}
 	return iupacMask[p]&iupacMask[g] != 0
 }
-// ===

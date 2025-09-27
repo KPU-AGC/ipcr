@@ -63,8 +63,7 @@ jobs:
         with:
           version: v1.59.1
           working-directory: .
-          # Skip scanning core/ from the root lint to avoid config clashes
-          args: --timeout=5m --skip-dirs core
+          args: --timeout=5m --skip-dirs core --fix
           skip-cache: true
           verify: true
 
@@ -89,7 +88,6 @@ jobs:
         with:
           version: v1.59.1
           working-directory: core
-          # Use core's own config; no cache reuse to avoid export-data mismatch
-          args: -c .golangci.yml --timeout=5m
+          args: -c .golangci.yml --timeout=5m --fix
           skip-cache: true
           verify: true

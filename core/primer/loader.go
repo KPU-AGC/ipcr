@@ -1,4 +1,4 @@
-// internal/primer/loader.go
+// core/primer/loader.go
 package primer
 
 import (
@@ -10,8 +10,10 @@ import (
 
 func LoadTSV(path string) ([]Pair, error) {
 	fh, err := os.Open(path)
-	if err != nil { return nil, err }
-	defer func() { _ = fh.Close() }() // ignore close error
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = fh.Close() }()
 
 	var list []Pair
 	sc := bufio.NewScanner(fh)
@@ -19,7 +21,9 @@ func LoadTSV(path string) ([]Pair, error) {
 	for sc.Scan() {
 		ln++
 		line := strings.TrimSpace(sc.Text())
-		if line == "" || line[0] == '#' { continue }
+		if line == "" || line[0] == '#' {
+			continue
+		}
 		f := strings.Fields(line)
 		if len(f) < 3 || len(f) == 4 || len(f) > 5 {
 			return nil, fmt.Errorf("%s:%d bad field count", path, ln)
@@ -41,6 +45,8 @@ func LoadTSV(path string) ([]Pair, error) {
 		}
 		list = append(list, p)
 	}
-	if err := sc.Err(); err != nil { return nil, err }
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
 	return list, nil
 }

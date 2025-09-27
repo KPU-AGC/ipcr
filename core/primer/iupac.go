@@ -12,7 +12,9 @@ const (
 	maskT = 8
 )
 
-func add(c byte, bits byte) { iupacMask[c] = bits }
+func add(c byte, bits byte) {
+	iupacMask[c] = bits
+}
 
 func init() {
 	// Canonical bases

@@ -1,35 +1,29 @@
+// internal/probeoutput/text.go  (REPLACE)
 package probeoutput
 
 import (
 	"fmt"
 	"io"
 	"strconv"
-	"strings"
+
+	"ipcr/internal/output"
 )
 
-// intsCSV converts []int to "1,2,3" (empty string if none).
-func intsCSV(a []int) string {
-	if len(a) == 0 { return "" }
-	ss := make([]string, len(a))
-	for i, v := range a { ss[i] = strconv.Itoa(v) }
-	return strings.Join(ss, ",")
-}
-
-// WriteRowTSV emits exactly one TSV row for an AnnotatedProduct.
 func WriteRowTSV(w io.Writer, ap AnnotatedProduct) error {
-	p := ap.Product
+	base := output.FormatBaseRowTSV(ap.Product)
+
+	pos := ""
+	mm := ""
+	if ap.ProbeFound {
+		pos = strconv.Itoa(ap.ProbePos)
+		mm = strconv.Itoa(ap.ProbeMM)
+	}
+
 	_, err := fmt.Fprintf(
-		w, "%s\t%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%s\t%s\t%s\t%s\t%t\t%s\t%s\t%s\t%s\n",
-		p.SourceFile, p.SequenceID, p.ExperimentID,
-		p.Start, p.End, p.Length, p.Type,
-		p.FwdMM, p.RevMM,
-		intsCSV(p.FwdMismatchIdx), intsCSV(p.RevMismatchIdx),
-		ap.ProbeName, ap.ProbeSeq, ap.ProbeFound,
-		ap.ProbeStrand,
-		// empty if not found:
-		func() string { if ap.ProbeFound { return strconv.Itoa(ap.ProbePos) } else { return "" } }(),
-		func() string { if ap.ProbeFound { return strconv.Itoa(ap.ProbeMM) } else { return "" } }(),
-		ap.ProbeSite,
+		w, "%s\t%s\t%s\t%t\t%s\t%s\t%s\t%s\n",
+		base,
+		ap.ProbeName, ap.ProbeSeq, ap.ProbeFound, ap.ProbeStrand,
+		pos, mm, ap.ProbeSite,
 	)
 	return err
 }

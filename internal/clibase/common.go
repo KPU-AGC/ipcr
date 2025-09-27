@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	"ipcr/internal/cliutil"
+	"ipcr/internal/output"
 )
 
 // Common holds CLI fields shared by ipcr and ipcr-probe.
@@ -44,7 +45,7 @@ type Common struct {
 	Version bool
 }
 
-// sliceValue appends each value to a *[]string (for --sequences/-s)
+// sliceValue is a flag.Value that appends string occurrences to a slice.
 type sliceValue struct{ dst *[]string }
 
 func (s *sliceValue) String() string {
@@ -55,6 +56,12 @@ func (s *sliceValue) Set(v string) error {
 	*s.dst = append(*s.dst, v)
 	return nil
 }
+
+// Modes (single source of truth)
+const (
+	ModeRealistic = "realistic"
+	ModeDebug     = "debug"
+)
 
 // Register wires shared flags onto fs and returns a pointer to the “no-header” bool
 // that the caller can use to set Common.Header = !noHeader after parsing.
@@ -76,7 +83,7 @@ func Register(fs *flag.FlagSet, c *Common) *bool {
 	fs.IntVar(&c.MaxLen, "max-length", 2000, "maximum product length [2000]")
 	fs.IntVar(&c.HitCap, "hit-cap", 10000, "max matches stored per primer/window (0=unlimited) [10000]")
 	fs.IntVar(&c.TerminalWindow, "terminal-window", -1, "3' terminal window (0=allow, -1=auto) [-1]")
-	fs.StringVar(&c.Mode, "mode", "realistic", "matching mode: realistic | debug")
+	fs.StringVar(&c.Mode, "mode", ModeRealistic, "matching mode: realistic | debug")
 	fs.IntVar(&c.Mismatches, "m", 0, "alias of --mismatches")
 
 	// Performance
@@ -120,7 +127,7 @@ func AfterParse(fs *flag.FlagSet, c *Common, noHeader *bool, posArgs []string) e
 	return Validate(c)
 }
 
-// Validate applies shared CLI invariants used by all tools.
+// Validate runs shared validation on the parsed flags.
 func Validate(c *Common) error {
 	usingFile := c.PrimerFile != ""
 	usingInline := c.Fwd != "" || c.Rev != ""
@@ -145,7 +152,8 @@ func Validate(c *Common) error {
 		return errors.New("--hit-cap must be ≥ 0")
 	}
 	switch c.Output {
-	case "text", "json", "jsonl", "fasta":
+	case output.FormatText, output.FormatJSON, output.FormatJSONL, output.FormatFASTA:
+		// ok
 	default:
 		return fmt.Errorf("invalid --output %q", c.Output)
 	}

@@ -1,21 +1,9 @@
-// cmd/ipcr/main.go
+// cmd/ipcr/main.go  (REPLACE)
 package main
 
 import (
-	"context"
-	"os"
-	"os/signal"
-	"syscall"
-
 	"ipcr/internal/app"
+	"ipcr/internal/appshell"
 )
 
-func main() {
-	// Derive cancellation from signals (Ctrl‑C / SIGTERM).
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-
-	// Stream directly to the process writers.
-	code := app.RunContext(ctx, os.Args[1:], os.Stdout, os.Stderr)
-	os.Exit(code)
-}
+func main() { appshell.Main(app.RunContext) }

@@ -2,7 +2,7 @@
 package engine
 
 import (
-	"ipcr/internal/primer"
+	"ipcr-core/primer"
 )
 
 // ---- Seeds & AC automaton --------------------------------------------------

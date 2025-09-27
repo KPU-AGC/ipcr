@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 )
 
 // ProbeAnnotation carries the probe overlay to render on top of a Product.

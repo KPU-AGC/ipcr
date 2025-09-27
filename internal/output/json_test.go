@@ -3,7 +3,7 @@ package output
 import (
 	"bytes"
 	"encoding/json"
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 	"ipcr/pkg/api"
 	"testing"
 )

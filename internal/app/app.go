@@ -10,8 +10,8 @@ import (
 
 	"ipcr/internal/appcore"
 	"ipcr/internal/cli"
-	"ipcr/internal/engine"
-	"ipcr/internal/primer"
+	"ipcr-core/engine"
+	"ipcr-core/primer"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
 	"ipcr/internal/visitors"

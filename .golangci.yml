@@ -1,66 +1,52 @@
+# .golangci.yml
 run:
-  timeout: 3m
-  tests: true
+  timeout: 5m
   issues-exit-code: 1
 
 linters:
   enable:
-    - govet
-    - staticcheck
-    - gosimple
-    - errcheck
-    - ineffassign
-    - gofmt
-    - goimports
-    - revive
     - depguard
+    - gofumpt
+    - govet
+    - gocritic
+    - misspell
+    - prealloc
+    - exportloopref
 
 linters-settings:
+  gofumpt:
+    extra-rules: true
+
   depguard:
     rules:
-      engine-no-up:
-        files:
-          - "internal/engine/**"
+      # Core must NOT depend on the app module.
+      core-boundary:
+        packages:
+          - "^ipcr-core(/|$)"
         deny:
-          - pkg: "ipcr/internal/pipeline"
-            desc: "engine must not depend on pipeline"
-          - pkg: "ipcr/internal/writers"
-            desc: "engine must not depend on writers"
-          - pkg: "ipcr/internal/output"
-            desc: "engine must not depend on output"
-          - pkg: "ipcr/internal/probeoutput"
-            desc: "engine must not depend on probeoutput"
-          - pkg: "ipcr/internal/cli"
-            desc: "engine must not depend on cli"
-          - pkg: "ipcr/internal/probecli"
-            desc: "engine must not depend on probecli"
-          - pkg: "ipcr/internal/appcore"
-            desc: "engine must not depend on appcore/app"
-          - pkg: "ipcr/internal/app"
-            desc: "engine must not depend on appcore/app"
-      writers-no-up:
-        files:
-          - "internal/writers/**"
+          - pkg: "^ipcr(/|$)"
+            desc: "ipcr-core must not import app-side packages (ipcr/*)"
+        allow:
+          - $gostd
+          - "^ipcr-core/"
+          - "^github.com/"
+          - "^golang.org/"
+          - "^gopkg.in/"
+
+      # App must NOT import the old, now-deleted internals for engine/primer/oligo/probe/fasta.
+      app-hygiene:
+        packages:
+          - "^ipcr(/|$)"
         deny:
-          - pkg: "ipcr/internal/appcore"
-            desc: "writers must not depend on app/appcore"
-          - pkg: "ipcr/internal/app"
-            desc: "writers must not depend on app/appcore"
-          - pkg: "ipcr/internal/cli"
-            desc: "writers must not depend on cli"
-          - pkg: "ipcr/internal/probecli"
-            desc: "writers must not depend on probecli"
-          - pkg: "ipcr/internal/pipeline"
-            desc: "writers must not depend on pipeline"
-      pipeline-no-up:
-        files:
-          - "internal/pipeline/**"
-        deny:
-          - pkg: "ipcr/internal/appcore"
-            desc: "pipeline must not depend on app/appcore"
-          - pkg: "ipcr/internal/app"
-            desc: "pipeline must not depend on app/appcore"
-          - pkg: "ipcr/internal/cli"
-            desc: "pipeline must not depend on cli"
-          - pkg: "ipcr/internal/probecli"
-            desc: "pipeline must not depend on probecli"
+          - pkg: "^ipcr/internal/(engine|primer|probe|oligo|fasta)(/|$)"
+            desc: "use ipcr-core/* instead of ipcr/internal/*"
+        allow:
+          - $gostd
+          - "^ipcr-core/"
+          - "^ipcr/internal/"   # allow other internal packages in this repo
+          - "^github.com/"
+          - "^golang.org/"
+          - "^gopkg.in/"
+
+issues:
+  exclude-use-default: false

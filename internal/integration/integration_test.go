@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"ipcr/internal/app"
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 	"ipcr/internal/output"
 	"ipcr/pkg/api"
 )

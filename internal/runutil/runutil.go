@@ -1,72 +1,77 @@
 // internal/runutil/runutil.go
 package runutil
 
-// ComputeTerminalWindow returns the effective terminal 3' window
-// given the CLI mode and an override value. If terminalWindow >= 0,
-// that value is used as-is. Otherwise: realistic=3, everything else=0.
-func ComputeTerminalWindow(mode string, terminalWindow int) int {
-	if terminalWindow >= 0 {
-		return terminalWindow
+import (
+	"fmt"
+	"strings"
+
+	"ipcr/internal/output"
+)
+
+// ComputeTerminalWindow picks the default 3' terminal-window length.
+// override >= 0 takes precedence; otherwise "realistic" => 3, "debug" => 0.
+func ComputeTerminalWindow(mode string, override int) int {
+	if override >= 0 {
+		return override
 	}
-	if mode == "realistic" {
+	switch strings.ToLower(mode) {
+	case "debug":
+		return 0
+	default: // realistic (or anything else) defaults to 3
 		return 3
+	}
+}
+
+// ComputeOverlap returns the overlap used for chunking.
+// If maxLen>0, use that (so a product never spans >1 chunk). Otherwise,
+// fall back to maxPrimerLen-1 (minimum to keep flanking primers together).
+func ComputeOverlap(maxLen, maxPrimerLen int) int {
+	if maxLen > 0 {
+		return maxLen
+	}
+	if maxPrimerLen > 0 {
+		if v := maxPrimerLen - 1; v > 0 {
+			return v
+		}
 	}
 	return 0
 }
 
-// ComputeOverlap chooses a safe chunk overlap. If maxLen > 0, overlap must be
-// at least maxLen to ensure a product straddling a boundary is seen. We also
-// ensure overlap >= (maxPrimerLen - 1) so a primer site cannot be split.
-func ComputeOverlap(maxLen, maxPrimerLen int) int {
-	ov := 0
-	if maxLen > 0 {
-		ov = maxLen
-	}
-	if mpl := maxPrimerLen - 1; mpl > ov {
-		ov = mpl
-	}
-	return ov
-}
-
-// ValidateChunking decides whether chunking is allowed, returns (chunkSize, overlap, warnings).
-// Rules (matching current behavior):
-//  • --circular disables chunking (ignore --chunk-size)
-//  • If --chunk-size <= 0 → no chunking
-//  • If --max-length <= 0 → disable chunking (needs max-length)
-//  • If --chunk-size <= --max-length → disable chunking (must be larger)
-// When enabled, overlap is ComputeOverlap(maxLen, maxPrimerLen).
+// ValidateChunking decides effective chunking and emits human-readable warnings.
+// Rules (matching tests):
+//   • circular => disable (warn)
+//   • maxLen==0 => disable (warn)
+//   • chunkSize<=maxLen => disable (warn)
+//   • else enable with overlap=ComputeOverlap(maxLen,maxPrimerLen)
 func ValidateChunking(circular bool, chunkSize, maxLen, maxPrimerLen int) (int, int, []string) {
 	var warns []string
+
 	if circular {
-		if chunkSize != 0 {
-			warns = append(warns, "warning: --circular disables chunking; ignoring --chunk-size")
-		}
+		warns = append(warns, "chunking disabled for circular templates")
 		return 0, 0, warns
 	}
-	if chunkSize <= 0 {
-		return 0, 0, nil
-	}
 	if maxLen <= 0 {
-		warns = append(warns, "warning: --chunk-size requires --max-length; disabling")
+		warns = append(warns, "chunking disabled: --max-length is required to compute safe overlap")
 		return 0, 0, warns
 	}
 	if chunkSize <= maxLen {
-		warns = append(warns, "warning: --chunk-size must be > --max-length; disabling")
+		warns = append(warns, fmt.Sprintf("chunk-size (%d) <= max-length (%d): disabling chunking", chunkSize, maxLen))
 		return 0, 0, warns
 	}
-	return chunkSize, ComputeOverlap(maxLen, maxPrimerLen), nil
+	ov := ComputeOverlap(maxLen, maxPrimerLen)
+	return chunkSize, ov, warns
 }
 
-// ComputeNeedSeq tells the pipeline whether to populate Product.Seq.
-// For ipcr: we need sequences for --products, for pretty text, and for FASTA.
-func ComputeNeedSeq(output string, products, pretty bool) bool {
+// ComputeNeedSeq decides if the pipeline must materialize sequence strings.
+// True if: --products, FASTA output, or pretty rendering requested (any format).
+func ComputeNeedSeq(format string, pretty bool, products bool) bool {
 	if products {
 		return true
 	}
-	if output == "fasta" {
+	if format == output.FormatFASTA {
 		return true
 	}
-	if output == "text" && pretty {
+	if pretty { // treat pretty as “needs seq” even if format isn’t text (matches tests)
 		return true
 	}
 	return false

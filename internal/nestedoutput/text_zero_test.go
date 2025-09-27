@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 )
 
 func TestWriteText_InnerAtZero_PrintsZero(t *testing.T) {

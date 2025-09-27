@@ -2,7 +2,7 @@
 package common
 
 import (
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 	"ipcr/internal/probeoutput"
 	"sort"
 )

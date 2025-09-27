@@ -26,7 +26,7 @@ func TestImportBoundaries(t *testing.T) {
 	dec := json.NewDecoder(&out)
 
 	bans := map[string][]string{
-		"ipcr/internal/engine": {
+		"ipcr-core/engine": {
 			"ipcr/internal/pipeline", "ipcr/internal/writers",
 			"ipcr/internal/output", "ipcr/internal/probeoutput", "ipcr/internal/nestedoutput",
 			"ipcr/internal/cli", "ipcr/internal/probecli", "ipcr/internal/nestedcli",

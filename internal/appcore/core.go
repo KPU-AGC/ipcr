@@ -10,9 +10,9 @@ import (
 	"runtime"
 
 	"ipcr/internal/cmdutil"
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 	"ipcr/internal/pipeline"
-	"ipcr/internal/primer"
+	"ipcr-core/primer"
 	"ipcr/internal/runutil"
 	"ipcr/internal/writers"
 )
@@ -56,12 +56,8 @@ func Run[T any](
 	// longest primer
 	maxPLen := 0
 	for _, pr := range pairs {
-		if l := len(pr.Forward); l > maxPLen {
-			maxPLen = l
-		}
-		if l := len(pr.Reverse); l > maxPLen {
-			maxPLen = l
-		}
+		if l := len(pr.Forward); l > maxPLen { maxPLen = l }
+		if l := len(pr.Reverse); l > maxPLen { maxPLen = l }
 	}
 	if o.MaxLen > 0 && o.MaxLen < maxPLen {
 		fmt.Fprintf(stderr, "error: --max-length (%d) is smaller than the longest primer length (%d)\n", o.MaxLen, maxPLen)
@@ -73,10 +69,8 @@ func Run[T any](
 	}
 
 	chunkSize, overlap, warns := runutil.ValidateChunking(o.Circular, o.ChunkSize, o.MaxLen, maxPLen)
-	if !o.Quiet {
-		for _, w := range warns {
-			fmt.Fprintln(stderr, w)
-		}
+	for _, w := range warns {
+		cmdutil.Warnf(stderr, o.Quiet, "%s", w)
 	}
 
 	thr := o.Threads
@@ -100,7 +94,7 @@ func Run[T any](
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
-	total, perr := cmdutil.RunStream[T](
+	total, perr := cmdutil.RunStream[T]( // ← qualify here
 		ctx,
 		pipeline.Config{
 			Threads:   thr,
@@ -111,7 +105,7 @@ func Run[T any](
 		},
 		o.SeqFiles,
 		pairs,
-		sim, // <— interface now
+		sim,
 		visit,
 		func(x T) error {
 			select {

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 )
 
 func TestStartProductWriter_JSON(t *testing.T) {

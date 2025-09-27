@@ -4,9 +4,9 @@ package visitors
 import (
 	"sort"
 
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 	"ipcr/internal/nestedoutput"
-	"ipcr/internal/primer"
+	"ipcr-core/primer"
 )
 
 type Nested struct {

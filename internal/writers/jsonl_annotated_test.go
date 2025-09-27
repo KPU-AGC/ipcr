@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 	"ipcr/internal/probeoutput"
 	"ipcr/pkg/api"
 )

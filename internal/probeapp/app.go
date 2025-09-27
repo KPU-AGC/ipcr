@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"ipcr/internal/appcore"
-	"ipcr/internal/primer"
+	"ipcr-core/primer"
 	"ipcr/internal/probecli"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"

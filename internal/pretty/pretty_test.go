@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 )
 
 func writeIfMissingOrUpdate(path string, got string) (created bool, err error) {

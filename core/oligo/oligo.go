@@ -4,7 +4,7 @@ package oligo
 import (
 	"strings"
 
-	"ipcr/internal/primer"
+	"ipcr-core/primer"
 )
 
 type Hit struct {

@@ -1,6 +1,6 @@
 package visitors
 
-import "ipcr/internal/engine"
+import "ipcr-core/engine"
 
 // PassThrough returns the product unchanged.
 type PassThrough struct{}

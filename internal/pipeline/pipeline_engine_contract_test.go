@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"ipcr/internal/engine"
-	"ipcr/internal/primer"
+	"ipcr-core/engine"
+	"ipcr-core/primer"
 )
 
 // Compile-time check: the concrete engine satisfies the minimal contract.

@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"testing"
 
-	"ipcr/internal/primer"
+	"ipcr-core/primer"
 )
 
 // Minimal simulation: should find one full-length product

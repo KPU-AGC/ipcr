@@ -1,22 +1,23 @@
-// ./internal/appcore/writer_factories.go
+// internal/appcore/writer_factories.go
 package appcore
 
 import (
 	"io"
 
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
+	"ipcr/internal/nestedoutput"
+	"ipcr/internal/output"
 	"ipcr/internal/probeoutput"
 	"ipcr/internal/writers"
-	"ipcr/internal/nestedoutput"
 )
 
 // ---------------- Product writer ----------------
 
 type ProductWriterFactory struct {
-	Format   string
-	Sort     bool
-	Header   bool
-	Pretty   bool
+	Format  string
+	Sort    bool
+	Header  bool
+	Pretty  bool
 	Products bool
 }
 
@@ -25,13 +26,19 @@ func NewProductWriterFactory(format string, sort, header, pretty, products bool)
 }
 
 func (w ProductWriterFactory) NeedSites() bool {
-	return w.Format == "text" && w.Pretty
+	return w.Format == output.FormatText && w.Pretty
 }
 
 func (w ProductWriterFactory) NeedSeq() bool {
-	if w.Products { return true }
-	if w.Format == "fasta" { return true }
-	if w.Format == "text" && w.Pretty { return true }
+	if w.Products {
+		return true
+	}
+	if w.Format == output.FormatFASTA {
+		return true
+	}
+	if w.Format == output.FormatText && w.Pretty {
+		return true
+	}
 	return false
 }
 
@@ -39,7 +46,7 @@ func (w ProductWriterFactory) Start(out io.Writer, bufSize int) (chan<- engine.P
 	return writers.StartProductWriter(out, w.Format, w.Sort, w.Header, w.Pretty, bufSize)
 }
 
-// ---------------- Annotated writer (probe) ----------------
+// ---------------- Annotated writer ----------------
 
 type AnnotatedWriterFactory struct {
 	Format string
@@ -53,7 +60,7 @@ func NewAnnotatedWriterFactory(format string, sort, header, pretty bool) Annotat
 }
 
 func (w AnnotatedWriterFactory) NeedSites() bool { return w.Pretty }
-func (w AnnotatedWriterFactory) NeedSeq() bool  { return true }
+func (w AnnotatedWriterFactory) NeedSeq() bool   { return true } // probe overlay requires sequence
 
 func (w AnnotatedWriterFactory) Start(out io.Writer, bufSize int) (chan<- probeoutput.AnnotatedProduct, <-chan error) {
 	return writers.StartAnnotatedWriter(out, w.Format, w.Sort, w.Header, w.Pretty, bufSize)

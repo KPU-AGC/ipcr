@@ -1,10 +1,11 @@
+// internal/output/fasta.go
 package output
 
 import (
 	"fmt"
 	"io"
 
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 )
 
 // StreamFASTA streams FASTA records from a channel to the writer.
@@ -51,13 +52,7 @@ func WriteTSV(w io.Writer, list []engine.Product, header bool) error {
 		}
 	}
 	for _, p := range list {
-		if _, err := fmt.Fprintf(
-			w, "%s\t%s\t%s\t%d\t%d\t%d\t%s\t%d\t%d\t%s\t%s\n",
-			p.SourceFile, p.SequenceID, p.ExperimentID,
-			p.Start, p.End, p.Length, p.Type,
-			p.FwdMM, p.RevMM,
-			intsCSV(p.FwdMismatchIdx), intsCSV(p.RevMismatchIdx),
-		); err != nil {
+		if _, err := fmt.Fprintln(w, FormatBaseRowTSV(p)); err != nil {
 			return err
 		}
 	}

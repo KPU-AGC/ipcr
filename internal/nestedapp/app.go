@@ -11,9 +11,9 @@ import (
 	"strings"
 
 	"ipcr/internal/appcore"
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 	"ipcr/internal/nestedcli"
-	"ipcr/internal/primer"
+	"ipcr-core/primer"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
 	"ipcr/internal/visitors"

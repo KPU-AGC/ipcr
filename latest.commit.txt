@@ -1,0 +1,48 @@
+diff --git a/internal/probe/annotate.go b/internal/probe/annotate.go
+deleted file mode 100644
+index b2ce817..0000000
+--- a/internal/probe/annotate.go
++++ /dev/null
+@@ -1,17 +0,0 @@
+-// internal/probe/annotate.go
+-package probe
+-
+-import "ipcr/internal/oligo"
+-
+-type Annotation struct {
+-	Found  bool
+-	Strand string // "+" or "-"
+-	Pos    int
+-	MM     int
+-	Site   string
+-}
+-
+-func AnnotateAmplicon(amplicon string, probe string, maxMM int) Annotation {
+-	h := oligo.BestHit(amplicon, probe, maxMM)
+-	return Annotation{Found: h.Found, Strand: h.Strand, Pos: h.Pos, MM: h.MM, Site: h.Site}
+-}
+diff --git a/internal/probe/annotate_test.go b/internal/probe/annotate_test.go
+deleted file mode 100644
+index 1d57816..0000000
+--- a/internal/probe/annotate_test.go
++++ /dev/null
+@@ -1,19 +0,0 @@
+-package probe
+-
+-import "testing"
+-
+-func TestAnnotateAmplicon(t *testing.T) {
+-	amp := "ACGTACGTACGT"
+-	probe := "GTAC" // occurs at pos 2 and 6 and 10
+-
+-	a := AnnotateAmplicon(amp, probe, 0)
+-	if !a.Found || a.MM != 0 || a.Pos != 2 || a.Site != "GTAC" {
+-		t.Fatalf("unexpected: %+v", a)
+-	}
+-
+-	// Reverse complement should also match
+-	a2 := AnnotateAmplicon(amp, "GTGC", 1) // RC is GCAC; allow 1 mm
+-	if !a2.Found {
+-		t.Fatalf("expected rc match with mismatches")
+-	}
+-}

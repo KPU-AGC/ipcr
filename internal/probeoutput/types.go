@@ -1,21 +1,26 @@
-// internal/probeoutput/types.go
+// internal/probeoutput/types.go  (REPLACE)
 package probeoutput
 
-import "ipcr/internal/engine"
+import (
+	"ipcr-core/engine"
+	"ipcr/internal/output"
+)
 
+// AnnotatedProduct = base Product + probe overlay
 type AnnotatedProduct struct {
-	engine.Product
+	// Base product (keep named for callers that use ap.Product)
+	Product engine.Product
 
-	ProbeName   string `json:"probe_name"`
-	ProbeSeq    string `json:"probe_seq"`
-	ProbeFound  bool   `json:"probe_found"`
-	ProbeStrand string `json:"probe_strand,omitempty"` // "+", "-" if found
-	ProbePos    int    `json:"probe_pos,omitempty"`
-	ProbeMM     int    `json:"probe_mm,omitempty"`
-	ProbeSite   string `json:"probe_site,omitempty"`
+	// Probe overlay
+	ProbeName   string
+	ProbeSeq    string
+	ProbeFound  bool
+	ProbeStrand string // "+"/"-"
+	ProbePos    int
+	ProbeMM     int
+	ProbeSite   string
 }
 
-// Append probe columns to the base TSV header used by ipcr text output.
-const TSVHeaderProbe = "source_file\tsequence_id\texperiment_id\tstart\tend\tlength\ttype\t" +
-	"fwd_mm\trev_mm\tfwd_mm_i\trev_mm_i\t" +
+// Build the probe header on top of the canonical base header.
+const TSVHeaderProbe = output.TSVHeader + "\t" +
 	"probe_name\tprobe_seq\tprobe_found\tprobe_strand\tprobe_pos\tprobe_mm\tprobe_site"

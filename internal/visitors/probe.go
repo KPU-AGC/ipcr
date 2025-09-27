@@ -3,8 +3,8 @@ package visitors
 import (
 	"strings"
 
-	"ipcr/internal/engine"
-	"ipcr/internal/probe"
+	"ipcr-core/engine"
+	"ipcr-core/probe"
 	"ipcr/internal/probeoutput"
 )
 

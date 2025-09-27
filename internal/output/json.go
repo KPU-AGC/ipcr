@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"io"
 
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 	"ipcr/pkg/api"
 )
 

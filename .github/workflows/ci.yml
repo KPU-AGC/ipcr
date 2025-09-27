@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21.x'
+          check-latest: true
+          cache: true
+
+      - name: Go workspace sync
+        run: |
+          cat > go.work <<'EOF'
+          go 1.21
+          use (
+            .
+            ./core
+          )
+          EOF
+          go work sync
+
+      - name: Tidy modules
+        run: |
+          (cd core && go mod tidy)
+          go mod tidy
+
+      - name: Test (app module)
+        run: go test ./...
+
+      - name: Test (core module)
+        run: |
+          cd core
+          go test ./...
+
+      - name: Lint (app)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.59.1
+          working-directory: .
+          args: --timeout=5m
+
+      - name: Lint (core)
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.59.1
+          working-directory: core
+          args: --timeout=5m

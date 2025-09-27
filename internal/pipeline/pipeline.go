@@ -6,9 +6,10 @@ import (
 	"sync"
 
 	"ipcr/internal/common"
-	"ipcr/internal/engine"
-	"ipcr/internal/fasta"
-	"ipcr/internal/primer"
+	"ipcr-core/engine"
+	"ipcr-core/fasta"
+	"ipcr-core/primer"
+	"ipcr/internal/runutil"
 )
 
 // Config controls the scanning pipeline.
@@ -92,11 +93,11 @@ func ForEachProduct(
 		}()
 	}
 
-	// Collector + deduper
+	// Collector + bounded deduper (LRU)
 	var (
 		cerr error
 		cwg  sync.WaitGroup
-		seen = make(map[Key]struct{}, 1<<12)
+		seen = runutil.NewLRUSet[Key](200_000) // capacity can be tuned
 	)
 	cwg.Add(1)
 	go func() {
@@ -113,10 +114,9 @@ func ForEachProduct(
 				}
 				gs, ge := p.Start+off, p.End+off
 				k := Key{Base: base, File: p.SourceFile, Start: gs, End: ge, Type: p.Type, Exp: p.ExperimentID}
-				if _, dup := seen[k]; dup {
+				if seen.Add(k) { // already seen recently
 					continue
 				}
-				seen[k] = struct{}{}
 				if err := visit(p); err != nil && cerr == nil {
 					cerr = err
 				}
@@ -127,19 +127,22 @@ func ForEachProduct(
 	// Feed work
 feed:
 	for _, fa := range seqFiles {
-		rch, err := fasta.StreamChunks(fa, cfg.ChunkSize, cfg.Overlap)
+		err := fasta.StreamChunksPathCtx(ctx, fa, cfg.ChunkSize, cfg.Overlap, func(rec fasta.Record) error {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case jobs <- job{rec: rec, sourceFile: fa}:
+				return nil
+			}
+		})
 		if err != nil {
+			if ctx.Err() != nil {
+				break feed
+			}
 			if cerr == nil {
 				cerr = err
 			}
 			continue
-		}
-		for rec := range rch {
-			select {
-			case <-ctx.Done():
-				break feed
-			case jobs <- job{rec: rec, sourceFile: fa}:
-			}
 		}
 	}
 

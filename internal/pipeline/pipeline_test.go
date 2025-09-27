@@ -5,8 +5,8 @@ import (
 	"os"
 	"testing"
 
-	"ipcr/internal/engine"
-	"ipcr/internal/primer"
+	"ipcr-core/engine"
+	"ipcr-core/primer"
 )
 
 func TestForEachProduct_NoChunking(t *testing.T) {

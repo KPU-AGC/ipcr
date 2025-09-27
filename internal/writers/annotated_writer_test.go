@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 	"ipcr/internal/probeoutput"
 )
 

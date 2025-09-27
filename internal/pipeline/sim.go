@@ -2,8 +2,8 @@
 package pipeline
 
 import (
-	"ipcr/internal/engine"
-	"ipcr/internal/primer"
+	"ipcr-core/engine"
+	"ipcr-core/primer"
 )
 
 // Simulator is the minimal capability the pipeline needs.

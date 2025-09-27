@@ -1,3 +1,4 @@
+// internal/probeoutput/json_text_test.go  (REPLACE)
 package probeoutput
 
 import (
@@ -9,8 +10,8 @@ import (
 
 func TestJSONRoundTrip(t *testing.T) {
 	ap := AnnotatedProduct{}
-	ap.ExperimentID = "x"
-	ap.SequenceID = "s"
+	ap.Product.ExperimentID = "x"
+	ap.Product.SequenceID = "s"
 	ap.ProbeName = "p"
 	ap.ProbeSeq  = "ACG"
 	ap.ProbeFound = true

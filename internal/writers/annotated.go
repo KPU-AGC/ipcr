@@ -1,86 +1,127 @@
+// internal/writers/annotated.go
 package writers
 
 import (
-	"fmt"
 	"io"
 
 	"ipcr/internal/common"
+	"ipcr/internal/output"
 	"ipcr/internal/pretty"
 	"ipcr/internal/probeoutput"
 )
 
-// Backward-compatible wrapper
+type annotatedArgs struct {
+	Sort   bool
+	Header bool
+	Pretty bool
+	Opt    pretty.Options
+	In     <-chan probeoutput.AnnotatedProduct
+}
+
+func drainAnnotated(ch <-chan probeoutput.AnnotatedProduct) []probeoutput.AnnotatedProduct {
+	list := make([]probeoutput.AnnotatedProduct, 0, 128)
+	for ap := range ch {
+		list = append(list, ap)
+	}
+	return list
+}
+
+func init() {
+	// JSON array
+	RegisterAnnotated(output.FormatJSON, func(w io.Writer, payload interface{}) error {
+		args := payload.(annotatedArgs)
+		list := drainAnnotated(args.In)
+		if args.Sort {
+			common.SortAnnotated(list)
+		}
+		return probeoutput.WriteJSON(w, list)
+	})
+
+	// JSONL streaming
+	RegisterAnnotated(output.FormatJSONL, func(w io.Writer, payload interface{}) error {
+		args := payload.(annotatedArgs)
+		pipe, done := StartAnnotatedJSONLWriter(w, 64)
+		for ap := range args.In {
+			pipe <- ap
+		}
+		close(pipe)
+		return <-done
+	})
+
+	// FASTA (stream or buffered+sort)
+	RegisterAnnotated(output.FormatFASTA, func(w io.Writer, payload interface{}) error {
+		args := payload.(annotatedArgs)
+		if args.Sort {
+			list := drainAnnotated(args.In)
+			common.SortAnnotated(list)
+			return probeoutput.WriteFASTA(w, list)
+		}
+		return probeoutput.StreamFASTA(w, args.In)
+	})
+
+	// TEXT/TSV (+ optional pretty blocks)
+	RegisterAnnotated(output.FormatText, func(w io.Writer, payload interface{}) error {
+		args := payload.(annotatedArgs)
+		if args.Pretty {
+			// Header once
+			if args.Header {
+				if _, err := io.WriteString(w, probeoutput.TSVHeaderProbe+"\n"); err != nil {
+					return err
+				}
+			}
+			if args.Sort {
+				list := drainAnnotated(args.In)
+				common.SortAnnotated(list)
+				for _, ap := range list {
+					if err := probeoutput.WriteRowTSV(w, ap); err != nil {
+						return err
+					}
+					if _, err := io.WriteString(w, probeoutput.RenderPrettyWithOptions(ap, args.Opt)); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+			for ap := range args.In {
+				if err := probeoutput.WriteRowTSV(w, ap); err != nil {
+					return err
+				}
+				if _, err := io.WriteString(w, probeoutput.RenderPrettyWithOptions(ap, args.Opt)); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+		// Plain TSV
+		if args.Sort {
+			list := drainAnnotated(args.In)
+			common.SortAnnotated(list)
+			return probeoutput.WriteText(w, list, args.Header)
+		}
+		return probeoutput.StreamText(w, args.In, args.Header)
+	})
+}
+
+// Public API (unchanged)
 func StartAnnotatedWriter(out io.Writer, format string, sort bool, header bool, prettyMode bool, bufSize int) (chan<- probeoutput.AnnotatedProduct, <-chan error) {
 	return StartAnnotatedWriterWithPrettyOptions(out, format, sort, header, prettyMode, pretty.DefaultOptions, bufSize)
 }
 
-// Options-aware variant
 func StartAnnotatedWriterWithPrettyOptions(out io.Writer, format string, sort bool, header bool, prettyMode bool, popt pretty.Options, bufSize int) (chan<- probeoutput.AnnotatedProduct, <-chan error) {
-	if bufSize <= 0 { bufSize = 64 }
+	if bufSize <= 0 {
+		bufSize = 64
+	}
 	in := make(chan probeoutput.AnnotatedProduct, bufSize)
 	errCh := make(chan error, 1)
-
 	go func() {
-		var err error
-		switch format {
-		case "json":
-			var buf []probeoutput.AnnotatedProduct
-			for ap := range in { buf = append(buf, ap) }
-			if sort { common.SortAnnotated(buf) }
-			err = probeoutput.WriteJSON(out, buf)
-
-		case "jsonl":
-			jsonlIn, done := StartAnnotatedJSONLWriter(out, bufSize)
-			for ap := range in { jsonlIn <- ap }
-			close(jsonlIn)
-			err = <-done
-
-		case "fasta":
-			if sort {
-				var buf []probeoutput.AnnotatedProduct
-				for ap := range in { buf = append(buf, ap) }
-				common.SortAnnotated(buf)
-				err = probeoutput.WriteFASTA(out, buf)
-			} else {
-				err = probeoutput.StreamFASTA(out, in)
-			}
-
-		case "text":
-			if prettyMode {
-				// Header once
-				if header {
-					if _, e := io.WriteString(out, probeoutput.TSVHeaderProbe+"\n"); e != nil && err == nil { err = e }
-				}
-				if sort {
-					var buf []probeoutput.AnnotatedProduct
-					for ap := range in { buf = append(buf, ap) }
-					common.SortAnnotated(buf)
-					for _, ap := range buf {
-						if e := probeoutput.WriteRowTSV(out, ap); e != nil && err == nil { err = e }
-						if _, e := io.WriteString(out, probeoutput.RenderPrettyWithOptions(ap, popt)); e != nil && err == nil { err = e }
-					}
-				} else {
-					for ap := range in {
-						if e := probeoutput.WriteRowTSV(out, ap); e != nil && err == nil { err = e }
-						if _, e := io.WriteString(out, probeoutput.RenderPrettyWithOptions(ap, popt)); e != nil && err == nil { err = e }
-					}
-				}
-			} else {
-				if sort {
-					var buf []probeoutput.AnnotatedProduct
-					for ap := range in { buf = append(buf, ap) }
-					common.SortAnnotated(buf)
-					err = probeoutput.WriteText(out, buf, header)
-				} else {
-					err = probeoutput.StreamText(out, in, header)
-				}
-			}
-
-		default:
-			err = fmt.Errorf("unsupported output %q", format)
-		}
+		err := WriteAnnotated(format, out, annotatedArgs{
+			Sort:   sort,
+			Header: header,
+			Pretty: prettyMode,
+			Opt:    popt,
+			In:     in,
+		})
 		errCh <- err
 	}()
-
 	return in, errCh
 }

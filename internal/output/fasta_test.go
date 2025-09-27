@@ -3,7 +3,7 @@ package output
 
 import (
 	"bytes"
-	"ipcr/internal/engine"
+	"ipcr-core/engine"
 	"strings"
 	"testing"
 )

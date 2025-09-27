@@ -1,7 +1,7 @@
 // ./internal/nestedoutput/types.go
 package nestedoutput
 
-import "ipcr/internal/engine"
+import "ipcr-core/engine"
 
 type NestedProduct struct {
 	// Outer

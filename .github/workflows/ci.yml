@@ -1,3 +1,4 @@
+# .github/workflows/ci.yml  (REPLACE)
 name: ci
 
 on:
@@ -10,15 +11,14 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Setup Go (tests)
         uses: actions/setup-go@v5
         with:
           go-version: '1.22.x'
           check-latest: true
-          cache: false   # avoid go.sum cache warnings
+          cache: false
 
       - name: Go workspace sync
         run: |
@@ -52,16 +52,19 @@ jobs:
         with:
           go-version: '1.22.x'
           check-latest: true
+          cache: false
       - name: Tidy (root)
         run: go mod tidy
-      - uses: golangci/golangci-lint-action@v6
+      - name: Lint (root)
+        uses: golangci/golangci-lint-action@v6
         env:
           GOWORK: off
           GOTOOLCHAIN: local
         with:
           version: v1.59.1
           working-directory: .
-          args: --timeout=5m
+          # Skip scanning core/ from the root lint to avoid config clashes
+          args: --timeout=5m --skip-dirs core
           skip-cache: true
           verify: true
 
@@ -73,18 +76,20 @@ jobs:
         with:
           go-version: '1.22.x'
           check-latest: true
+          cache: false
       - name: Tidy (core)
         run: |
           cd core
           go mod tidy
-      - uses: golangci/golangci-lint-action@v6
+      - name: Lint (core)
+        uses: golangci/golangci-lint-action@v6
         env:
           GOWORK: off
           GOTOOLCHAIN: local
         with:
           version: v1.59.1
           working-directory: core
-          # Explicitly point to core's config so it doesn't inherit the root one
+          # Use core's own config; no cache reuse to avoid export-data mismatch
           args: -c .golangci.yml --timeout=5m
           skip-cache: true
           verify: true

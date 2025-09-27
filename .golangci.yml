@@ -2,6 +2,8 @@ run:
   timeout: 5m
   issues-exit-code: 1
   tests: true
+  skip-dirs:
+    - core   # linted in a separate job with its own config
 
 linters:
   enable:
@@ -18,19 +20,10 @@ linters-settings:
   gofumpt:
     extra-rules: true
 
+  # Only keep a boundary rule here if you really need one for root code.
+  # (Core has its own config; root should NOT police core/.)
   depguard:
-    rules:
-      core-boundary:
-        files: ["core/**"]
-        allow:
-          - $gostd
-          - "^ipcr-core/"
-          - "^github.com/"
-          - "^golang.org/"
-          - "^gopkg.in/"
-        deny:
-          - pkg: "^ipcr(/|$)"
-            desc: "ipcr-core must not import app-side packages (ipcr/*)"
+    rules: {}
 
   errcheck:
     exclude-functions:

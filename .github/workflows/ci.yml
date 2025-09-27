@@ -18,7 +18,7 @@ jobs:
         with:
           go-version: '1.22.x'
           check-latest: true
-          cache: true
+          cache: false   # avoid go.sum cache warnings
 
       - name: Go workspace sync
         run: |
@@ -49,11 +49,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.22.x', check-latest: true }
+        with:
+          go-version: '1.22.x'
+          check-latest: true
       - name: Tidy (root)
         run: go mod tidy
       - uses: golangci/golangci-lint-action@v6
-        env: { GOWORK: off, GOTOOLCHAIN: local }
+        env:
+          GOWORK: off
+          GOTOOLCHAIN: local
         with:
           version: v1.59.1
           working-directory: .
@@ -66,16 +70,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.22.x', check-latest: true }
+        with:
+          go-version: '1.22.x'
+          check-latest: true
       - name: Tidy (core)
         run: |
           cd core
           go mod tidy
       - uses: golangci/golangci-lint-action@v6
-        env: { GOWORK: off, GOTOOLCHAIN: local }
+        env:
+          GOWORK: off
+          GOTOOLCHAIN: local
         with:
           version: v1.59.1
           working-directory: core
-          args: --timeout=5m
+          # Explicitly point to core's config so it doesn't inherit the root one
+          args: -c .golangci.yml --timeout=5m
           skip-cache: true
           verify: true

@@ -1,4 +1,3 @@
-// internal/nestedcli/options.go  (REPLACE FILE)
 package nestedcli
 
 import (
@@ -10,7 +9,6 @@ import (
 	"ipcr/internal/cliutil"
 )
 
-// Options embeds shared CLI options and adds inner-primer controls.
 type Options struct {
 	clibase.Common
 
@@ -43,7 +41,6 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	var o Options
 	var help bool
 
-	// Shared flags
 	var c clibase.Common
 	noHeader := clibase.Register(fs, &c)
 
@@ -57,28 +54,20 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.StringVar(&o.InnerFwd, "F", "", "alias of --inner-forward")
 	fs.StringVar(&o.InnerRev, "R", "", "alias of --inner-reverse")
 
-	// Help like other tools
+	// Help
 	fs.BoolVar(&help, "h", false, "show this help [false]")
 
-	// Split & parse
 	flagArgs, posArgs := cliutil.SplitFlagsAndPositionals(fs, argv)
-	if err := fs.Parse(flagArgs); err != nil {
-		return o, err
-	}
-	if help {
-		return o, flag.ErrHelp
-	}
+	if err := fs.Parse(flagArgs); err != nil { return o, err }
+	if help { return o, flag.ErrHelp }
 	if c.Version {
-		o.Version = true
+		o.Common = c
 		return o, nil
 	}
 
-	// Finalize shared bits
-	if err := clibase.AfterParse(fs, &c, noHeader, posArgs); err != nil {
-		return o, err
-	}
+	if err := clibase.AfterParse(fs, &c, noHeader, posArgs); err != nil { return o, err }
 
-	// Validate inner selection
+	// Validate inner
 	usingFile := o.InnerPrimerFile != ""
 	usingInline := o.InnerFwd != "" || o.InnerRev != ""
 	switch {
@@ -90,7 +79,6 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 		return o, fmt.Errorf("provide --inner-primers or --inner-forward/--inner-reverse")
 	}
 
-	// Embed shared options
 	o.Common = c
 	return o, nil
 }

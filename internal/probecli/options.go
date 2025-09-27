@@ -1,4 +1,3 @@
-// internal/probecli/options.go
 package probecli
 
 import (
@@ -67,7 +66,8 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 		return o, flag.ErrHelp
 	}
 	if c.Version {
-		o.Version = true
+		// avoid promoted-field write; just copy Common and return
+		o.Common = c
 		return o, nil
 	}
 
@@ -80,7 +80,7 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 		return o, fmt.Errorf("--probe is required")
 	}
 
-	// Single assignment now that Options embeds Common.
+	// Embed shared options
 	o.Common = c
 	return o, nil
 }

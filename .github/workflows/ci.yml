@@ -47,44 +47,32 @@ jobs:
   lint-root:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go (lint)
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22.x'
-          check-latest: true
-
-      - name: Lint (root)
-        uses: golangci/golangci-lint-action@v6
-        env:
-          GOWORK: off          # avoid workspace/toolchain upshift
-          GOTOOLCHAIN: local   # pin to setup-go's toolchain
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.22.x', check-latest: true }
+      - name: Tidy (root)
+        run: go mod tidy
+      - uses: golangci/golangci-lint-action@v6
+        env: { GOWORK: off, GOTOOLCHAIN: local }
         with:
           version: v1.59.1
           working-directory: .
           args: --timeout=5m
-          skip-cache: true     # don't reuse export data from newer Go
+          skip-cache: true
           verify: true
 
   lint-core:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go (lint)
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22.x'
-          check-latest: true
-
-      - name: Lint (core)
-        uses: golangci/golangci-lint-action@v6
-        env:
-          GOWORK: off
-          GOTOOLCHAIN: local
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.22.x', check-latest: true }
+      - name: Tidy (core)
+        run: |
+          cd core
+          go mod tidy
+      - uses: golangci/golangci-lint-action@v6
+        env: { GOWORK: off, GOTOOLCHAIN: local }
         with:
           version: v1.59.1
           working-directory: core

@@ -8,13 +8,10 @@ import (
 	"strings"
 )
 
-// LoadTSV reads a whitespace‑separated file with
-// id forward reverse min max
-// min / max are optional (0 if absent).
 func LoadTSV(path string) ([]Pair, error) {
 	fh, err := os.Open(path)
 	if err != nil { return nil, err }
-	defer fh.Close()
+	defer func() { _ = fh.Close() }() // ignore close error
 
 	var list []Pair
 	sc := bufio.NewScanner(fh)
@@ -33,14 +30,17 @@ func LoadTSV(path string) ([]Pair, error) {
 			Reverse: strings.ToUpper(f[2]),
 		}
 		if len(f) >= 4 {
-			fmt.Sscan(f[3], &p.MinProduct)
+			if _, err := fmt.Sscan(f[3], &p.MinProduct); err != nil {
+				return nil, fmt.Errorf("%s:%d bad min: %v", path, ln, err)
+			}
 		}
 		if len(f) == 5 {
-			fmt.Sscan(f[4], &p.MaxProduct)
+			if _, err := fmt.Sscan(f[4], &p.MaxProduct); err != nil {
+				return nil, fmt.Errorf("%s:%d bad max: %v", path, ln, err)
+			}
 		}
 		list = append(list, p)
 	}
 	if err := sc.Err(); err != nil { return nil, err }
 	return list, nil
 }
-// ===

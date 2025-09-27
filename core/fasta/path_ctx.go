@@ -1,4 +1,4 @@
-// internal/fasta/path_ctx.go
+// core/fasta/path_ctx.go
 package fasta
 
 import (
@@ -29,7 +29,7 @@ func StreamChunksPathCtx(
 	if err != nil {
 		return err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
 	sc := bufio.NewScanner(rc)
 	const maxLine = 64 * 1024 * 1024 // allow very long single-line sequences (64 MiB)

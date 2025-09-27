@@ -69,8 +69,8 @@ func TestStreamStdin(t *testing.T) {
 
 	// Write sample then close writer to signal EOF
 	go func() {
-		io.WriteString(w, plain)
-		w.Close()
+	_, _ = io.WriteString(w, plain)
+	_ = w.Close()
 	}()
 
 	ch, err := StreamChunks("-", 0, 0)

@@ -1,4 +1,4 @@
-// internal/fasta/reader.go
+// core/fasta/reader.go
 package fasta
 
 import (
@@ -48,7 +48,7 @@ func openReader(path string) (io.ReadCloser, error) {
 	if (n == 2 && sig[0] == 0x1f && sig[1] == 0x8b) || strings.HasSuffix(path, ".gz") {
 		gr, err := gzip.NewReader(fh)
 		if err != nil {
-			fh.Close()
+			_ = fh.Close()
 			return nil, err
 		}
 		return &multiReadCloser{Reader: gr, closers: []io.Closer{gr, fh}}, nil
@@ -69,7 +69,7 @@ func StreamChunks(path string, chunkSize, overlap int) (<-chan Record, error) {
 
 	go func() {
 		defer close(out)
-		defer rc.Close()
+		defer func() { _ = rc.Close() }()
 
 		sc := bufio.NewScanner(rc)
 		const maxLine = 64 * 1024 * 1024 // allow very long single-line sequences (64 MiB)

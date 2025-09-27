@@ -4,16 +4,16 @@ package primer
 import "testing"
 
 func TestMismatchCount(t *testing.T) {
-	//genome := []byte("ACGTACGT")
+	// genome := []byte("ACGTACGT")
 	tests := []struct {
 		window string
 		primer string
 		want   int
 	}{
-		{"ACGT", "ACGT", 0},      // perfect
-		{"ACGT", "NNNN", 0},      // N matches everything
-		{"ACGT", "RRRR", 2},      // R=A/G  => mismatches at C,T = 2
-		{"ACGT", "TTTT", 3},      // only final T matches
+		{"ACGT", "ACGT", 0}, // perfect
+		{"ACGT", "NNNN", 0}, // N matches everything
+		{"ACGT", "RRRR", 2}, // R=A/G  => mismatches at C,T = 2
+		{"ACGT", "TTTT", 3}, // only final T matches
 	}
 	for _, tc := range tests {
 		got := MismatchCount([]byte(tc.window), []byte(tc.primer))
@@ -23,7 +23,7 @@ func TestMismatchCount(t *testing.T) {
 		}
 	}
 
-	// Length‑mismatch panic check (optional)
+	// Length-mismatch panic check (optional)
 	defer func() {
 		if r := recover(); r == nil {
 			t.Errorf("expected panic on unequal lengths")
@@ -31,4 +31,3 @@ func TestMismatchCount(t *testing.T) {
 	}()
 	MismatchCount([]byte("AAA"), []byte("AA"))
 }
-// ===

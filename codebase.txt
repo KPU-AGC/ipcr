@@ -3,7 +3,7 @@
 BIN_DIR := bin
 GO ?= go
 
-# Embed a nice version at build-time; falls back to "dev".
+# Embed a version at build-time; falls back to "dev".
 VERSION := $(shell git describe --tags --dirty --always 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X ipcr/internal/version.Version=$(VERSION)
 GOFLAGS ?= -trimpath
@@ -15,7 +15,7 @@ GOARCH := $(shell $(GO) env GOARCH)
 CCBIN := $(shell $(GO) env CC)
 HASCC := $(shell command -v $(CCBIN) >/dev/null 2>&1 && echo yes || echo no)
 
-# Race detector is considered "supported" only if cgo is enabled AND a C compiler exists.
+# Race detector is "supported" only if cgo is enabled AND a C compiler exists.
 RACE_SUPPORTED := $(if $(and $(filter 1,$(CGO_ENABLED)),$(filter yes,$(HASCC))),yes,no)
 RACEFLAG := $(if $(filter yes,$(RACE_SUPPORTED)),-race,)
 
@@ -118,6 +118,28 @@ func main() {
 }
 
 ===== END ./cmd/ipcr-multiplex/main.go =====
+
+===== BEGIN ./cmd/ipcr-nested/main.go =====
+// ./cmd/ipcr-nested/main.go
+package main
+
+import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"ipcr/internal/nestedapp"
+)
+
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	code := nestedapp.RunContext(ctx, os.Args[1:], os.Stdout, os.Stderr)
+	os.Exit(code)
+}
+
+===== END ./cmd/ipcr-nested/main.go =====
 
 ===== BEGIN ./cmd/ipcr-probe/main.go =====
 // cmd/ipcr-probe/main.go
@@ -2741,30 +2763,48 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		_, _ = cli.ParseArgs(fs, []string{"-h"})
 		fs.SetOutput(outw)
 		fs.Usage()
-		if err := outw.Flush(); writers.IsBrokenPipe(err) { return 0 }
-		if err != nil { fmt.Fprintln(stderr, err); return 3 }
+		if err := outw.Flush(); writers.IsBrokenPipe(err) {
+			return 0
+		} else if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 3
+		}
 		return 0
 	}
 
 	opts, err := cli.ParseArgs(fs, argv)
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			fs.SetOutput(outw); fs.Usage()
-			if e := outw.Flush(); writers.IsBrokenPipe(e) { return 0 }
-			if e != nil { fmt.Fprintln(stderr, e); return 3 }
+			fs.SetOutput(outw)
+			fs.Usage()
+			if err := outw.Flush(); writers.IsBrokenPipe(err) {
+				return 0
+			} else if err != nil {
+				fmt.Fprintln(stderr, err)
+				return 3
+			}
 			return 0
 		}
 		fmt.Fprintln(stderr, err)
-		fs.SetOutput(outw); fs.Usage()
-		if e := outw.Flush(); writers.IsBrokenPipe(e) { return 0 }
-		if e != nil { fmt.Fprintln(stderr, e); return 3 }
+		fs.SetOutput(outw)
+		fs.Usage()
+		if err := outw.Flush(); writers.IsBrokenPipe(err) {
+			return 0
+		} else if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 3
+		}
 		return 2
 	}
 
 	if opts.Version {
 		fmt.Fprintf(outw, "ipcr version %s (ipcr-multiplex)\n", version.Version)
-		if e := outw.Flush(); writers.IsBrokenPipe(e) { return 0 }
-		if e != nil { fmt.Fprintln(stderr, e); return 3 }
+		if err := outw.Flush(); writers.IsBrokenPipe(err) {
+			return 0
+		} else if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 3
+		}
 		return 0
 	}
 
@@ -2772,7 +2812,10 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	var pairs []primer.Pair
 	if opts.PrimerFile != "" {
 		pairs, err = primer.LoadTSV(opts.PrimerFile)
-		if err != nil { fmt.Fprintln(stderr, err); return 2 }
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 2
+		}
 	} else {
 		pairs = []primer.Pair{{
 			ID:         "manual",
@@ -2842,31 +2885,50 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	if len(argv) == 0 {
 		_, _ = nestedcli.ParseArgs(fs, []string{"-h"})
-		fs.SetOutput(outw); fs.Usage()
-		if err := outw.Flush(); writers.IsBrokenPipe(err) { return 0 }
-		if err != nil { fmt.Fprintln(stderr, err); return 3 }
+		fs.SetOutput(outw)
+		fs.Usage()
+		if err := outw.Flush(); writers.IsBrokenPipe(err) {
+			return 0
+		} else if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 3
+		}
 		return 0
 	}
 
 	opts, err := nestedcli.ParseArgs(fs, argv)
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			fs.SetOutput(outw); fs.Usage()
-			if e := outw.Flush(); writers.IsBrokenPipe(e) { return 0 }
-			if e != nil { fmt.Fprintln(stderr, e); return 3 }
+			fs.SetOutput(outw)
+			fs.Usage()
+			if err := outw.Flush(); writers.IsBrokenPipe(err) {
+				return 0
+			} else if err != nil {
+				fmt.Fprintln(stderr, err)
+				return 3
+			}
 			return 0
 		}
 		fmt.Fprintln(stderr, err)
-		fs.SetOutput(outw); fs.Usage()
-		if e := outw.Flush(); writers.IsBrokenPipe(e) { return 0 }
-		if e != nil { fmt.Fprintln(stderr, e); return 3 }
+		fs.SetOutput(outw)
+		fs.Usage()
+		if err := outw.Flush(); writers.IsBrokenPipe(err) {
+			return 0
+		} else if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 3
+		}
 		return 2
 	}
 
 	if opts.Version {
 		fmt.Fprintf(outw, "ipcr version %s (ipcr-nested)\n", version.Version)
-		if e := outw.Flush(); writers.IsBrokenPipe(e) { return 0 }
-		if e != nil { fmt.Fprintln(stderr, e); return 3 }
+		if err := outw.Flush(); writers.IsBrokenPipe(err) {
+			return 0
+		} else if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 3
+		}
 		return 0
 	}
 
@@ -2874,7 +2936,10 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	var outer []primer.Pair
 	if opts.PrimerFile != "" {
 		outer, err = primer.LoadTSV(opts.PrimerFile)
-		if err != nil { fmt.Fprintln(stderr, err); return 2 }
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 2
+		}
 	} else {
 		outer = []primer.Pair{{
 			ID:         "outer",
@@ -2889,13 +2954,15 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	var inner []primer.Pair
 	if opts.InnerPrimerFile != "" {
 		inner, err = primer.LoadTSV(opts.InnerPrimerFile)
-		if err != nil { fmt.Fprintln(stderr, err); return 2 }
+		if err != nil {
+			fmt.Fprintln(stderr, err)
+			return 2
+		}
 	} else {
 		inner = []primer.Pair{{
-			ID:         "inner",
-			Forward:    strings.ToUpper(opts.InnerFwd),
-			Reverse:    strings.ToUpper(opts.InnerRev),
-			// For inner stage we don’t enforce min/max by default; can add flags later.
+			ID:      "inner",
+			Forward: strings.ToUpper(opts.InnerFwd),
+			Reverse: strings.ToUpper(opts.InnerRev),
 		}}
 	}
 
@@ -2922,10 +2989,9 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		EngineCfg: engine.Config{
 			MaxMM:          opts.Mismatches,
 			TerminalWindow: termWin,
-			// inner MinLen/MaxLen can be added as extra flags later
-			SeedLen:   opts.SeedLength,
-			Circular:  false, // inner stage scans linear amplicon strings
-			NeedSites: false,
+			SeedLen:        opts.SeedLength,
+			Circular:       false, // inner stage scans linear amplicon strings
+			NeedSites:      false,
 		},
 		RequireInner: opts.RequireInner,
 	}

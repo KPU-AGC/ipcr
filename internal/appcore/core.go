@@ -7,14 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"runtime"
-
-	"ipcr/internal/cmdutil"
 	"ipcr-core/engine"
-	"ipcr/internal/pipeline"
 	"ipcr-core/primer"
+	"ipcr/internal/cmdutil"
+	"ipcr/internal/pipeline"
 	"ipcr/internal/runutil"
 	"ipcr/internal/writers"
+	"runtime"
 )
 
 type Options struct {
@@ -56,15 +55,19 @@ func Run[T any](
 	// longest primer
 	maxPLen := 0
 	for _, pr := range pairs {
-		if l := len(pr.Forward); l > maxPLen { maxPLen = l }
-		if l := len(pr.Reverse); l > maxPLen { maxPLen = l }
+		if l := len(pr.Forward); l > maxPLen {
+			maxPLen = l
+		}
+		if l := len(pr.Reverse); l > maxPLen {
+			maxPLen = l
+		}
 	}
 	if o.MaxLen > 0 && o.MaxLen < maxPLen {
-		fmt.Fprintf(stderr, "error: --max-length (%d) is smaller than the longest primer length (%d)\n", o.MaxLen, maxPLen)
+		_, _ = fmt.Fprintf(stderr, "error: --max-length (%d) is smaller than the longest primer length (%d)\n", o.MaxLen, maxPLen)
 		return 2
 	}
 	if o.MinLen > 0 && o.MaxLen > 0 && o.MinLen > o.MaxLen {
-		fmt.Fprintf(stderr, "error: --min-length (%d) exceeds --max-length (%d)\n", o.MinLen, o.MaxLen)
+		_, _ = fmt.Fprintf(stderr, "error: --min-length (%d) exceeds --max-length (%d)\n", o.MinLen, o.MaxLen)
 		return 2
 	}
 
@@ -122,13 +125,13 @@ func Run[T any](
 	if werr := <-writeErr; writers.IsBrokenPipe(werr) {
 		return 0
 	} else if werr != nil {
-		fmt.Fprintln(stderr, werr)
+		_, _ = fmt.Fprintln(stderr, werr)
 		return 3
 	}
 	if e := outw.Flush(); writers.IsBrokenPipe(e) {
 		return 0
 	} else if e != nil {
-		fmt.Fprintln(stderr, e)
+		_, _ = fmt.Fprintln(stderr, e)
 		return 3
 	}
 
@@ -136,7 +139,7 @@ func Run[T any](
 		if errors.Is(perr, context.Canceled) {
 			return 130
 		}
-		fmt.Fprintln(stderr, perr)
+		_, _ = fmt.Fprintln(stderr, perr)
 		return 3
 	}
 	if total == 0 {

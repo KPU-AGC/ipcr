@@ -4,7 +4,6 @@ package probeoutput
 import (
 	"encoding/json"
 	"io"
-
 	"ipcr/pkg/api"
 )
 

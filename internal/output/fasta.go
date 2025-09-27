@@ -4,7 +4,6 @@ package output
 import (
 	"fmt"
 	"io"
-
 	"ipcr-core/engine"
 )
 

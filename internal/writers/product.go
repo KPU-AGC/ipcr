@@ -3,9 +3,8 @@ package writers
 
 import (
 	"io"
-
-	"ipcr/internal/common"
 	"ipcr-core/engine"
+	"ipcr/internal/common"
 	"ipcr/internal/output"
 	"ipcr/internal/pretty"
 )
@@ -73,11 +72,11 @@ func init() {
 }
 
 // Public API (unchanged)
-func StartProductWriter(out io.Writer, format string, sort bool, header bool, prettyMode bool, bufSize int) (chan<- engine.Product, <-chan error) {
+func StartProductWriter(out io.Writer, format string, sort, header, prettyMode bool, bufSize int) (chan<- engine.Product, <-chan error) {
 	return StartProductWriterWithPrettyOptions(out, format, sort, header, prettyMode, pretty.DefaultOptions, bufSize)
 }
 
-func StartProductWriterWithPrettyOptions(out io.Writer, format string, sort bool, header bool, prettyMode bool, popt pretty.Options, bufSize int) (chan<- engine.Product, <-chan error) {
+func StartProductWriterWithPrettyOptions(out io.Writer, format string, sort, header, prettyMode bool, popt pretty.Options, bufSize int) (chan<- engine.Product, <-chan error) {
 	if bufSize <= 0 {
 		bufSize = 64
 	}

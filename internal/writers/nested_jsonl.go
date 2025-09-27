@@ -5,7 +5,6 @@ import (
 	"bufio"
 	"encoding/json"
 	"io"
-
 	"ipcr/internal/nestedoutput"
 )
 

@@ -3,16 +3,15 @@ package probeintegration
 import (
 	"bytes"
 	"encoding/json"
-	"os"
-	"testing"
-
 	"ipcr/internal/probeapp"
 	"ipcr/pkg/api"
+	"os"
+	"testing"
 )
 
 func write(t *testing.T, fn, data string) string {
 	t.Helper()
-	if err := os.WriteFile(fn, []byte(data), 0644); err != nil {
+	if err := os.WriteFile(fn, []byte(data), 0o644); err != nil {
 		t.Fatalf("write %s: %v", fn, err)
 	}
 	return fn
@@ -20,7 +19,7 @@ func write(t *testing.T, fn, data string) string {
 
 func TestProbeEndToEndJSON(t *testing.T) {
 	fa := write(t, "p_itest.fa", ">s\nACGTACGTACGT\n")
-	defer os.Remove(fa)
+	defer func() { _ = os.Remove(fa) }()
 
 	var out, errB bytes.Buffer
 	code := probeapp.Run([]string{
@@ -57,7 +56,7 @@ func TestProbeEndToEndJSON(t *testing.T) {
 
 func TestRequireProbeFilter(t *testing.T) {
 	fa := write(t, "p_itest2.fa", ">s\nACGTACGTACGT\n")
-	defer os.Remove(fa)
+	defer func() { _ = os.Remove(fa) }()
 
 	var out, errB bytes.Buffer
 	code := probeapp.Run([]string{

@@ -21,8 +21,8 @@ func TestExpandPositionals(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.fa")
 	b := filepath.Join(dir, "b.fa")
-	_ = os.WriteFile(a, []byte(">a\nA\n"), 0644)
-	_ = os.WriteFile(b, []byte(">b\nA\n"), 0644)
+	_ = os.WriteFile(a, []byte(">a\nA\n"), 0o644)
+	_ = os.WriteFile(b, []byte(">b\nA\n"), 0o644)
 	got, err := ExpandPositionals([]string{filepath.Join(dir, "*.fa")})
 	if err != nil || len(got) != 2 {
 		t.Fatalf("expand: err=%v got=%v", err, got)

@@ -7,11 +7,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-
-	"ipcr/internal/appcore"
-	"ipcr/internal/cli"
 	"ipcr-core/engine"
 	"ipcr-core/primer"
+	"ipcr/internal/appcore"
+	"ipcr/internal/cli"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
 	"ipcr/internal/visitors"
@@ -21,7 +20,7 @@ import (
 // RunContext is the ipcr app entrypoint used by cmd/ipcr.
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
 	outw := bufio.NewWriter(stdout)
-	defer outw.Flush() // harmless if re-flushed later
+	defer func() { _ = outw.Flush() }() // harmless if re-flushed later
 
 	// Build a throwaway FlagSet so we can render usage cleanly.
 	fs := cli.NewFlagSet("ipcr")
@@ -35,7 +34,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		if err := outw.Flush(); writers.IsBrokenPipe(err) {
 			return 0
 		} else if err != nil {
-			fmt.Fprintln(stderr, err)
+			_, _ = fmt.Fprintln(stderr, err)
 			return 3
 		}
 		return 0
@@ -49,29 +48,29 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 			if e := outw.Flush(); writers.IsBrokenPipe(e) {
 				return 0
 			} else if e != nil {
-				fmt.Fprintln(stderr, e)
+				_, _ = fmt.Fprintln(stderr, e)
 				return 3
 			}
 			return 0
 		}
-		fmt.Fprintln(stderr, err)
+		_, _ = fmt.Fprintln(stderr, err)
 		fs.SetOutput(outw)
 		fs.Usage()
 		if e := outw.Flush(); writers.IsBrokenPipe(e) {
 			return 0
 		} else if e != nil {
-			fmt.Fprintln(stderr, e)
+			_, _ = fmt.Fprintln(stderr, e)
 			return 3
 		}
 		return 2
 	}
 
 	if opts.Version {
-		fmt.Fprintf(outw, "ipcr version %s\n", version.Version)
+		_, _ = fmt.Fprintf(outw, "ipcr version %s\n", version.Version)
 		if e := outw.Flush(); writers.IsBrokenPipe(e) {
 			return 0
 		} else if e != nil {
-			fmt.Fprintln(stderr, e)
+			_, _ = fmt.Fprintln(stderr, e)
 			return 3
 		}
 		return 0
@@ -82,7 +81,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	if opts.PrimerFile != "" {
 		pairs, err = primer.LoadTSV(opts.PrimerFile)
 		if err != nil {
-			fmt.Fprintln(stderr, err)
+			_, _ = fmt.Fprintln(stderr, err)
 			return 2
 		}
 	} else {

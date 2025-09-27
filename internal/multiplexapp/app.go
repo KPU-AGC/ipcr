@@ -1,4 +1,4 @@
-// ./internal/multiplexapp/app.go
+// internal/multiplexapp/app.go
 package multiplexapp
 
 import (
@@ -8,11 +8,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-
-	"ipcr/internal/appcore"
-	"ipcr/internal/cli"
 	"ipcr-core/engine"
 	"ipcr-core/primer"
+	"ipcr/internal/appcore"
+	"ipcr/internal/cli"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
 	"ipcr/internal/visitors"
@@ -21,11 +20,13 @@ import (
 
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
 	outw := bufio.NewWriter(stdout)
-	defer outw.Flush()
+	defer func() { _ = outw.Flush() }()
 
+	// Build a FlagSet so we can render usage like the main app.
 	fs := cli.NewFlagSet("ipcr-multiplex")
 	fs.SetOutput(io.Discard)
 
+	// No args → help
 	if len(argv) == 0 {
 		_, _ = cli.ParseArgs(fs, []string{"-h"})
 		fs.SetOutput(outw)
@@ -33,54 +34,55 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		if err := outw.Flush(); writers.IsBrokenPipe(err) {
 			return 0
 		} else if err != nil {
-			fmt.Fprintln(stderr, err)
+			_, _ = fmt.Fprintln(stderr, err)
 			return 3
 		}
 		return 0
 	}
 
+	// Parse standard options (supports --primers or inline A/B)
 	opts, err := cli.ParseArgs(fs, argv)
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			fs.SetOutput(outw)
 			fs.Usage()
-			if err := outw.Flush(); writers.IsBrokenPipe(err) {
+			if e := outw.Flush(); writers.IsBrokenPipe(e) {
 				return 0
-			} else if err != nil {
-				fmt.Fprintln(stderr, err)
+			} else if e != nil {
+				_, _ = fmt.Fprintln(stderr, e)
 				return 3
 			}
 			return 0
 		}
-		fmt.Fprintln(stderr, err)
+		_, _ = fmt.Fprintln(stderr, err)
 		fs.SetOutput(outw)
 		fs.Usage()
-		if err := outw.Flush(); writers.IsBrokenPipe(err) {
+		if e := outw.Flush(); writers.IsBrokenPipe(e) {
 			return 0
-		} else if err != nil {
-			fmt.Fprintln(stderr, err)
+		} else if e != nil {
+			_, _ = fmt.Fprintln(stderr, e)
 			return 3
 		}
 		return 2
 	}
 
 	if opts.Version {
-		fmt.Fprintf(outw, "ipcr version %s (ipcr-multiplex)\n", version.Version)
-		if err := outw.Flush(); writers.IsBrokenPipe(err) {
+		_, _ = fmt.Fprintf(outw, "ipcr version %s (ipcr-multiplex)\n", version.Version)
+		if e := outw.Flush(); writers.IsBrokenPipe(e) {
 			return 0
-		} else if err != nil {
-			fmt.Fprintln(stderr, err)
+		} else if e != nil {
+			_, _ = fmt.Fprintln(stderr, e)
 			return 3
 		}
 		return 0
 	}
 
-	// Primer pairs (supports TSV with many pairs = multiplex)
+	// Build primer pairs: prefer TSV when provided
 	var pairs []primer.Pair
 	if opts.PrimerFile != "" {
 		pairs, err = primer.LoadTSV(opts.PrimerFile)
 		if err != nil {
-			fmt.Fprintln(stderr, err)
+			_, _ = fmt.Fprintln(stderr, err)
 			return 2
 		}
 	} else {
@@ -108,12 +110,21 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		Quiet:           opts.Quiet,
 		NoMatchExitCode: opts.NoMatchExitCode,
 	}
-	writer := appcore.NewProductWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty, opts.Products)
 
-	// For now this is pass-through; later you can add per-panel constraints.
-	return appcore.Run[engine.Product](parent, stdout, stderr, coreOpts, pairs, visitors.PassThrough{}.Visit, writer)
+	// Multiplex just passes products through (different source of pairs)
+	vis := visitors.PassThrough{}
+
+	wf := appcore.NewProductWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty, opts.Products)
+	return appcore.Run[engine.Product](
+		parent, stdout, stderr,
+		coreOpts,
+		pairs,
+		vis.Visit,
+		wf,
+	)
 }
 
+// Compatibility shim for tests: same signature as other apps.
 func Run(argv []string, stdout, stderr io.Writer) int {
 	return RunContext(context.Background(), argv, stdout, stderr)
 }

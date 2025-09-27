@@ -8,21 +8,20 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"strings"
-
-	"ipcr/internal/appcore"
 	"ipcr-core/engine"
-	"ipcr/internal/nestedcli"
 	"ipcr-core/primer"
+	"ipcr/internal/appcore"
+	"ipcr/internal/nestedcli"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
 	"ipcr/internal/visitors"
 	"ipcr/internal/writers"
+	"strings"
 )
 
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
 	outw := bufio.NewWriter(stdout)
-	defer outw.Flush()
+	defer func() { _ = outw.Flush() }()
 
 	fs := nestedcli.NewFlagSet("ipcr-nested")
 	fs.SetOutput(io.Discard)
@@ -34,7 +33,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		if err := outw.Flush(); writers.IsBrokenPipe(err) {
 			return 0
 		} else if err != nil {
-			fmt.Fprintln(stderr, err)
+			_, _ = fmt.Fprintln(stderr, err)
 			return 3
 		}
 		return 0
@@ -48,29 +47,29 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 			if err := outw.Flush(); writers.IsBrokenPipe(err) {
 				return 0
 			} else if err != nil {
-				fmt.Fprintln(stderr, err)
+				_, _ = fmt.Fprintln(stderr, err)
 				return 3
 			}
 			return 0
 		}
-		fmt.Fprintln(stderr, err)
+		_, _ = fmt.Fprintln(stderr, err)
 		fs.SetOutput(outw)
 		fs.Usage()
 		if err := outw.Flush(); writers.IsBrokenPipe(err) {
 			return 0
 		} else if err != nil {
-			fmt.Fprintln(stderr, err)
+			_, _ = fmt.Fprintln(stderr, err)
 			return 3
 		}
 		return 2
 	}
 
 	if opts.Version {
-		fmt.Fprintf(outw, "ipcr version %s (ipcr-nested)\n", version.Version)
+		_, _ = fmt.Fprintf(outw, "ipcr version %s (ipcr-nested)\n", version.Version)
 		if err := outw.Flush(); writers.IsBrokenPipe(err) {
 			return 0
 		} else if err != nil {
-			fmt.Fprintln(stderr, err)
+			_, _ = fmt.Fprintln(stderr, err)
 			return 3
 		}
 		return 0
@@ -81,7 +80,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	if opts.PrimerFile != "" {
 		outer, err = primer.LoadTSV(opts.PrimerFile)
 		if err != nil {
-			fmt.Fprintln(stderr, err)
+			_, _ = fmt.Fprintln(stderr, err)
 			return 2
 		}
 	} else {
@@ -99,7 +98,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	if opts.InnerPrimerFile != "" {
 		inner, err = primer.LoadTSV(opts.InnerPrimerFile)
 		if err != nil {
-			fmt.Fprintln(stderr, err)
+			_, _ = fmt.Fprintln(stderr, err)
 			return 2
 		}
 	} else {

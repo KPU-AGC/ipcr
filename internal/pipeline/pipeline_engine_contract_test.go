@@ -3,11 +3,10 @@ package pipeline
 
 import (
 	"context"
-	"os"
-	"testing"
-
 	"ipcr-core/engine"
 	"ipcr-core/primer"
+	"os"
+	"testing"
 )
 
 // Compile-time check: the concrete engine satisfies the minimal contract.
@@ -25,10 +24,10 @@ func (fakeEng) SimulateBatch(seqID string, seq []byte, pairs []primer.Pair) []en
 
 func TestForEachProduct_UsesSimulatorAndFillsSeq(t *testing.T) {
 	fn := "pipe_fake.fa"
-	if err := os.WriteFile(fn, []byte(">s\nACGT\n"), 0644); err != nil {
+	if err := os.WriteFile(fn, []byte(">s\nACGT\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(fn)
+	defer func() { _ = os.Remove(fn) }()
 
 	var n int
 	err := ForEachProduct(

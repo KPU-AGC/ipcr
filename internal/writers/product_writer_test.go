@@ -3,9 +3,8 @@ package writers
 import (
 	"bytes"
 	"encoding/json"
-	"testing"
-
 	"ipcr-core/engine"
+	"testing"
 )
 
 func TestStartProductWriter_JSON(t *testing.T) {

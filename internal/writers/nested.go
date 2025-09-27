@@ -3,11 +3,10 @@ package writers
 
 import (
 	"io"
-	"sort"
-
 	"ipcr/internal/common"
 	"ipcr/internal/nestedoutput"
 	"ipcr/internal/output"
+	"sort"
 )
 
 type nestedArgs struct {
@@ -59,7 +58,7 @@ func init() {
 }
 
 // Public API (unchanged)
-func StartNestedWriter(out io.Writer, format string, sortOut bool, header bool, bufSize int) (chan<- nestedoutput.NestedProduct, <-chan error) {
+func StartNestedWriter(out io.Writer, format string, sortOut, header bool, bufSize int) (chan<- nestedoutput.NestedProduct, <-chan error) {
 	if bufSize <= 0 {
 		bufSize = 64
 	}

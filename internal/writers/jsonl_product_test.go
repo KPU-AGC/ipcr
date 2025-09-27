@@ -4,10 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"testing"
-
 	"ipcr-core/engine"
 	"ipcr/pkg/api"
+	"testing"
 )
 
 func TestProductJSONL_StreamsValidV1(t *testing.T) {

@@ -4,9 +4,8 @@ package probeoutput
 import (
 	"fmt"
 	"io"
-	"strconv"
-
 	"ipcr/internal/output"
+	"strconv"
 )
 
 func WriteRowTSV(w io.Writer, ap AnnotatedProduct) error {
@@ -30,20 +29,28 @@ func WriteRowTSV(w io.Writer, ap AnnotatedProduct) error {
 
 func StreamText(w io.Writer, in <-chan AnnotatedProduct, header bool) error {
 	if header {
-		if _, err := fmt.Fprintln(w, TSVHeaderProbe); err != nil { return err }
+		if _, err := fmt.Fprintln(w, TSVHeaderProbe); err != nil {
+			return err
+		}
 	}
 	for ap := range in {
-		if err := WriteRowTSV(w, ap); err != nil { return err }
+		if err := WriteRowTSV(w, ap); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
 func WriteText(w io.Writer, list []AnnotatedProduct, header bool) error {
 	if header {
-		if _, err := fmt.Fprintln(w, TSVHeaderProbe); err != nil { return err }
+		if _, err := fmt.Fprintln(w, TSVHeaderProbe); err != nil {
+			return err
+		}
 	}
 	for _, ap := range list {
-		if err := WriteRowTSV(w, ap); err != nil { return err }
+		if err := WriteRowTSV(w, ap); err != nil {
+			return err
+		}
 	}
 	return nil
 }

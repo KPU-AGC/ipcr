@@ -3,21 +3,20 @@ package integration
 import (
 	"context"
 	"io"
+	"ipcr/internal/app"
 	"os"
 	"strings"
 	"testing"
 	"time"
-
-	"ipcr/internal/app"
 )
 
 func TestCtrlC_MidScan_Exit130(t *testing.T) {
 	// Biggish FASTA to ensure scanning is underway.
 	fn := "cancel_big.fa"
-	defer os.Remove(fn)
+	defer func() { _ = os.Remove(fn) }()
 	const Mb = 1 << 20
 	seq := strings.Repeat("ACGT", (8*Mb)/4) // ~8MB
-	if err := os.WriteFile(fn, []byte(">chr1\n"+seq+"\n"), 0644); err != nil {
+	if err := os.WriteFile(fn, []byte(">chr1\n"+seq+"\n"), 0o644); err != nil {
 		t.Fatalf("write fasta: %v", err)
 	}
 

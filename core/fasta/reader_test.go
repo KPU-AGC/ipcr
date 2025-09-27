@@ -43,7 +43,7 @@ func writeGz(t *testing.T, data string) string {
 
 func TestStreamGzip(t *testing.T) {
 	gzPath := writeGz(t, plain)
-	defer os.Remove(gzPath)
+	defer func(){ _ = os.Remove(gzPath) }()
 
 	ch, err := StreamChunks(gzPath, 0, 0)
 	if err != nil {

@@ -100,10 +100,10 @@ func TestPositionalGlobOK(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.fa")
 	b := filepath.Join(dir, "b.fa")
-	if err := os.WriteFile(a, []byte(">a\nA\n"), 0644); err != nil {
+	if err := os.WriteFile(a, []byte(">a\nA\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(b, []byte(">b\nA\n"), 0644); err != nil {
+	if err := os.WriteFile(b, []byte(">b\nA\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	pattern := filepath.Join(dir, "*.fa")
@@ -131,13 +131,13 @@ func TestMixFlagAndPositional(t *testing.T) {
 	dir := t.TempDir()
 	x := filepath.Join(dir, "x.fa")
 	y := filepath.Join(dir, "y.fa")
-	_ = os.WriteFile(x, []byte(">x\nA\n"), 0644)
-	_ = os.WriteFile(y, []byte(">y\nA\n"), 0644)
+	_ = os.WriteFile(x, []byte(">x\nA\n"), 0o644)
+	_ = os.WriteFile(y, []byte(">y\nA\n"), 0o644)
 
 	o := mustParse(t,
 		"--forward", "AAA", "--reverse", "TTT",
 		"--sequences", x, // legacy
-		y,                // positional
+		y, // positional
 	)
 	if len(o.SeqFiles) != 2 {
 		t.Fatalf("expected 2 seq files, got %d: %+v", len(o.SeqFiles), o.SeqFiles)

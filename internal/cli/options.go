@@ -1,11 +1,9 @@
-// internal/cli/options.go
 package cli
 
 import (
 	"flag"
 	"fmt"
 	"io"
-
 	"ipcr/internal/clibase"
 	"ipcr/internal/cliutil"
 )
@@ -15,9 +13,9 @@ type Options = clibase.Common
 func NewFlagSet(name string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	clibase.UsageCommon(fs, name, func(out io.Writer, def func(string) string) {
-		fmt.Fprintln(out, "Usage:")
-		fmt.Fprintf(out, "  %s [options] --forward AAA --reverse TTT --sequences ref.fa\n", name)
-		fmt.Fprintf(out, "  %s [options] --forward AAA --reverse TTT ref*.fa gz/*.fa.gz\n", name)
+		_, _ = fmt.Fprintln(out, "Usage:")
+		_, _ = fmt.Fprintf(out, "  %s [options] --forward AAA --reverse TTT --sequences ref.fa\n", name)
+		_, _ = fmt.Fprintf(out, "  %s [options] --forward AAA --reverse TTT ref*.fa gz/*.fa.gz\n", name)
 	})
 	return fs
 }
@@ -39,7 +37,6 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 		return o, flag.ErrHelp
 	}
 	if o.Version {
-		// caller prints version & exits
 		return o, nil
 	}
 	if err := clibase.AfterParse(fs, &o, noHeader, posArgs); err != nil {

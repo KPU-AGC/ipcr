@@ -1,25 +1,24 @@
 package pretty
 
 import (
+	"ipcr-core/engine"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"ipcr-core/engine"
 )
 
-func writeIfMissingOrUpdate(path string, got string) (created bool, err error) {
+func writeIfMissingOrUpdate(path, got string) (created bool, err error) {
 	// Ensure the testdata directory exists before writing.
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return false, err
 	}
 	// Allow updating goldens explicitly.
 	if os.Getenv("UPDATE_GOLDEN") == "1" {
-		return true, os.WriteFile(path, []byte(got), 0644)
+		return true, os.WriteFile(path, []byte(got), 0o644)
 	}
 	// First-run: create golden if missing.
 	if _, e := os.Stat(path); os.IsNotExist(e) {
-		return true, os.WriteFile(path, []byte(got), 0644)
+		return true, os.WriteFile(path, []byte(got), 0o644)
 	}
 	return false, nil
 }
@@ -36,7 +35,7 @@ func mustRead(path string, t *testing.T) string {
 func TestRenderProductForward_Golden(t *testing.T) {
 	p := engine.Product{
 		FwdPrimer: "AAA", RevPrimer: "TTT",
-		FwdSite: "AAA",  RevSite: "TTT",
+		FwdSite: "AAA", RevSite: "TTT",
 		Length: 22, Start: 0, End: 22, Type: "forward",
 	}
 	got := RenderProduct(p)
@@ -56,7 +55,7 @@ func TestRenderProductForward_Golden(t *testing.T) {
 func TestRenderProductRevcomp_Golden(t *testing.T) {
 	p := engine.Product{
 		FwdPrimer: "ACGT", RevPrimer: "ACGT",
-		FwdSite: "ACGT",  RevSite: "ACGT",
+		FwdSite: "ACGT", RevSite: "ACGT",
 		Length: 30, Start: 10, End: 40, Type: "revcomp",
 	}
 	got := RenderProduct(p)
@@ -76,7 +75,7 @@ func TestRenderProductRevcomp_Golden(t *testing.T) {
 func TestRenderAnnotated_Plus_Golden(t *testing.T) {
 	p := engine.Product{
 		FwdPrimer: "TCAG", RevPrimer: "GATC",
-		FwdSite: "TCAG",  RevSite: "GATC",
+		FwdSite: "TCAG", RevSite: "GATC",
 		Length: 40, Start: 0, End: 40, Type: "forward",
 	}
 	ann := ProbeAnnotation{

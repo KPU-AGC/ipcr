@@ -2,16 +2,15 @@
 package visitors
 
 import (
-	"sort"
-
 	"ipcr-core/engine"
-	"ipcr/internal/nestedoutput"
 	"ipcr-core/primer"
+	"ipcr/internal/nestedoutput"
+	"sort"
 )
 
 type Nested struct {
-	InnerPairs  []primer.Pair
-	EngineCfg   engine.Config
+	InnerPairs   []primer.Pair
+	EngineCfg    engine.Config
 	RequireInner bool
 }
 
@@ -22,7 +21,7 @@ func (v Nested) Visit(p engine.Product) (bool, nestedoutput.NestedProduct, error
 
 	// Pick a deterministic “best” inner: fewest total mismatches, then longest, then leftmost.
 	bestIdx := -1
-	bestScore := 1<<30
+	bestScore := 1 << 30
 	for i := range hits {
 		totalMM := hits[i].FwdMM + hits[i].RevMM
 		if bestIdx == -1 || totalMM < bestScore ||
@@ -49,15 +48,15 @@ func (v Nested) Visit(p engine.Product) (bool, nestedoutput.NestedProduct, error
 
 	inner := hits[bestIdx]
 	np := nestedoutput.NestedProduct{
-		Product:      p, // outer
-		InnerFound:   true,
-		InnerPairID:  inner.ExperimentID,
-		InnerStart:   inner.Start,  // relative to amplicon
-		InnerEnd:     inner.End,    // relative to amplicon
-		InnerLength:  inner.Length,
-		InnerType:    inner.Type,
-		InnerFwdMM:   inner.FwdMM,
-		InnerRevMM:   inner.RevMM,
+		Product:     p, // outer
+		InnerFound:  true,
+		InnerPairID: inner.ExperimentID,
+		InnerStart:  inner.Start, // relative to amplicon
+		InnerEnd:    inner.End,   // relative to amplicon
+		InnerLength: inner.Length,
+		InnerType:   inner.Type,
+		InnerFwdMM:  inner.FwdMM,
+		InnerRevMM:  inner.RevMM,
 	}
 	return true, np, nil
 }

@@ -4,7 +4,6 @@ package nestedoutput
 import (
 	"encoding/json"
 	"io"
-
 	"ipcr/pkg/api"
 )
 
@@ -25,14 +24,14 @@ func toAPINested(np NestedProduct) api.NestedProductV1 {
 		Seq:            p.Seq,
 		SourceFile:     p.SourceFile,
 		// Inner
-		InnerFound:   np.InnerFound,
-		InnerPairID:  np.InnerPairID,
-		InnerStart:   np.InnerStart,
-		InnerEnd:     np.InnerEnd,
-		InnerLength:  np.InnerLength,
-		InnerType:    np.InnerType,
-		InnerFwdMM:   np.InnerFwdMM,
-		InnerRevMM:   np.InnerRevMM,
+		InnerFound:  np.InnerFound,
+		InnerPairID: np.InnerPairID,
+		InnerStart:  np.InnerStart,
+		InnerEnd:    np.InnerEnd,
+		InnerLength: np.InnerLength,
+		InnerType:   np.InnerType,
+		InnerFwdMM:  np.InnerFwdMM,
+		InnerRevMM:  np.InnerRevMM,
 	}
 }
 

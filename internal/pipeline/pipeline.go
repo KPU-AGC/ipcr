@@ -3,13 +3,12 @@ package pipeline
 
 import (
 	"context"
-	"sync"
-
-	"ipcr/internal/common"
 	"ipcr-core/engine"
 	"ipcr-core/fasta"
 	"ipcr-core/primer"
+	"ipcr/internal/common"
 	"ipcr/internal/runutil"
+	"sync"
 )
 
 // Config controls the scanning pipeline.

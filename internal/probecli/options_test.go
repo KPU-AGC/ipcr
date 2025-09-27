@@ -64,8 +64,8 @@ func TestPositionalGlobOK(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a.fa")
 	b := filepath.Join(dir, "b.fa")
-	_ = os.WriteFile(a, []byte(">a\nA\n"), 0644)
-	_ = os.WriteFile(b, []byte(">b\nA\n"), 0644)
+	_ = os.WriteFile(a, []byte(">a\nA\n"), 0o644)
+	_ = os.WriteFile(b, []byte(">b\nA\n"), 0o644)
 	pat := filepath.Join(dir, "*.fa")
 
 	o := mustParse(t, "--forward", "AAA", "--reverse", "TTT", "--probe", "ACG", pat)

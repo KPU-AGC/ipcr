@@ -1,3 +1,3 @@
 module ipcr-core
 
-go 1.21
+go 1.22

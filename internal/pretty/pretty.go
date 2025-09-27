@@ -2,9 +2,8 @@ package pretty
 
 import (
 	"fmt"
-	"strings"
-
 	"ipcr-core/engine"
+	"strings"
 )
 
 // ProbeAnnotation carries the probe overlay to render on top of a Product.
@@ -27,7 +26,7 @@ type Options struct {
 	ShowProbeInline bool
 
 	// Draw a caret track (^^^^^) under the genomic line at the probe span.
-	ShowCaret bool
+	ShowCaret  bool
 	CaretGlyph string // default "^"
 
 	// Draw probe bars '|||||' on the composite bars row (reverse-primer bars always shown).
@@ -45,7 +44,7 @@ type Options struct {
 
 // DefaultOptions keeps the current look & feel (matching what you already approved).
 var DefaultOptions = Options{
-	MaxGap:         95,
+	MaxGap:          95,
 	ShowProbeInline: true,
 	ShowCaret:       false,
 	CaretGlyph:      "^",
@@ -180,7 +179,7 @@ func RenderProductWithOptions(p engine.Product, opt Options) string {
 
 	if p.FwdPrimer == "" || p.RevPrimer == "" || p.FwdSite == "" || p.RevSite == "" {
 		var b strings.Builder
-		fmt.Fprintf(&b, "%s(pretty not available: sites missing)\n\n", linePrefix)
+		_, _ = fmt.Fprintf(&b, "%s(pretty not available: sites missing)\n\n", linePrefix)
 		return b.String()
 	}
 
@@ -223,10 +222,10 @@ func RenderProductWithOptions(p engine.Product, opt Options) string {
 	var b strings.Builder
 
 	// 1) Forward primer (5'→3')
-	fmt.Fprintf(&b, "%s%s%s%s\n", linePrefix, prefixPlus, p.FwdPrimer, suffixPlus)
+	_, _ = fmt.Fprintf(&b, "%s%s%s%s\n", linePrefix, prefixPlus, p.FwdPrimer, suffixPlus)
 
 	// 2) Bars under forward primer
-	fmt.Fprintf(&b, "%s%s%s%s\n",
+	_, _ = fmt.Fprintf(&b, "%s%s%s%s\n",
 		linePrefix,
 		strings.Repeat(" ", len(prefixPlus)),
 		matchLineAmbig(p.FwdPrimer, p.FwdSite, p.FwdMismatchIdx, opt.ExactGlyphOrDefault(), opt.PartialGlyphOrDefault()),
@@ -234,13 +233,13 @@ func RenderProductWithOptions(p engine.Product, opt Options) string {
 	)
 
 	// 3) (+) genomic line
-	fmt.Fprintf(&b, "%s%s%s%s%s # (+)\n",
+	_, _ = fmt.Fprintf(&b, "%s%s%s%s%s # (+)\n",
 		linePrefix, prefixPlus, p.FwdSite, strings.Repeat(dot, innerPlus), suffixPlus,
 	)
 
 	// 4) (−) genomic line
 	minusSite := complementString(p.RevSite)
-	fmt.Fprintf(&b, "%s%s%s%s%s # (-)\n",
+	_, _ = fmt.Fprintf(&b, "%s%s%s%s%s # (-)\n",
 		linePrefix, prefixMinus, strings.Repeat(dot, innerMinus), minusSite, suffixMinus,
 	)
 
@@ -251,7 +250,7 @@ func RenderProductWithOptions(p engine.Product, opt Options) string {
 	if padBars < 0 {
 		padBars = 0
 	}
-	fmt.Fprintf(&b, "%s%s%s%s\n", linePrefix, strings.Repeat(" ", padBars), arrowLeft, revBars)
+	_, _ = fmt.Fprintf(&b, "%s%s%s%s\n", linePrefix, strings.Repeat(" ", padBars), arrowLeft, revBars)
 
 	// 6) reverse primer shown 3'→5'
 	revPrimerDisplayed := reverseString(p.RevPrimer)
@@ -259,7 +258,7 @@ func RenderProductWithOptions(p engine.Product, opt Options) string {
 	if padPrimer < 0 {
 		padPrimer = 0
 	}
-	fmt.Fprintf(&b, "%s%s%s%s%s\n", linePrefix, strings.Repeat(" ", padPrimer), prefixMinus, revPrimerDisplayed, suffixMinus)
+	_, _ = fmt.Fprintf(&b, "%s%s%s%s%s\n", linePrefix, strings.Repeat(" ", padPrimer), prefixMinus, revPrimerDisplayed, suffixMinus)
 
 	// spacer
 	b.WriteString("#\n")
@@ -284,7 +283,7 @@ func RenderAnnotatedWithOptions(p engine.Product, ann ProbeAnnotation, opt Optio
 
 	if p.FwdPrimer == "" || p.RevPrimer == "" || p.FwdSite == "" || p.RevSite == "" {
 		var b strings.Builder
-		fmt.Fprintf(&b, "%s(pretty not available: sites missing)\n\n", linePrefix)
+		_, _ = fmt.Fprintf(&b, "%s(pretty not available: sites missing)\n\n", linePrefix)
 		return b.String()
 	}
 
@@ -327,10 +326,10 @@ func RenderAnnotatedWithOptions(p engine.Product, ann ProbeAnnotation, opt Optio
 	var b strings.Builder
 
 	// 1) Forward primer (5'→3')
-	fmt.Fprintf(&b, "%s%s%s%s\n", linePrefix, prefixPlus, p.FwdPrimer, suffixPlus)
+	_, _ = fmt.Fprintf(&b, "%s%s%s%s\n", linePrefix, prefixPlus, p.FwdPrimer, suffixPlus)
 
 	// 2) Bars under forward primer
-	fmt.Fprintf(&b, "%s%s%s%s\n",
+	_, _ = fmt.Fprintf(&b, "%s%s%s%s\n",
 		linePrefix,
 		strings.Repeat(" ", len(prefixPlus)),
 		matchLineAmbig(p.FwdPrimer, p.FwdSite, p.FwdMismatchIdx, opt.ExactGlyphOrDefault(), opt.PartialGlyphOrDefault()),
@@ -409,7 +408,7 @@ func RenderAnnotatedWithOptions(p engine.Product, ann ProbeAnnotation, opt Optio
 	}
 
 	// 3) (+) line (with overlay)
-	fmt.Fprintf(&b, "%s%s%s%s%s # (+)\n",
+	_, _ = fmt.Fprintf(&b, "%s%s%s%s%s # (+)\n",
 		linePrefix, prefixPlus, p.FwdSite, plusInterior, suffixPlus,
 	)
 
@@ -423,12 +422,12 @@ func RenderAnnotatedWithOptions(p engine.Product, ann ProbeAnnotation, opt Optio
 		if g == "" {
 			g = DefaultOptions.CaretGlyph
 		}
-		fmt.Fprintf(&b, "%s%s%s\n", linePrefix, strings.Repeat(" ", startCol), strings.Repeat(g, len(ov.seg)))
+		_, _ = fmt.Fprintf(&b, "%s%s%s\n", linePrefix, strings.Repeat(" ", startCol), strings.Repeat(g, len(ov.seg)))
 	}
 
 	// 4) (−) line (with overlay) — FIXED to use minusInterior
 	minusSite := complementString(p.RevSite)
-	fmt.Fprintf(&b, "%s%s%s%s%s # (-)\n",
+	_, _ = fmt.Fprintf(&b, "%s%s%s%s%s # (-)\n",
 		linePrefix, prefixMinus, minusInterior, minusSite, suffixMinus,
 	)
 
@@ -442,7 +441,7 @@ func RenderAnnotatedWithOptions(p engine.Product, ann ProbeAnnotation, opt Optio
 		if g == "" {
 			g = DefaultOptions.CaretGlyph
 		}
-		fmt.Fprintf(&b, "%s%s%s\n", linePrefix, strings.Repeat(" ", startCol), strings.Repeat(g, len(ov.seg)))
+		_, _ = fmt.Fprintf(&b, "%s%s%s\n", linePrefix, strings.Repeat(" ", startCol), strings.Repeat(g, len(ov.seg)))
 	}
 
 	// Composite bars: probe bars + reverse-primer bars
@@ -472,7 +471,7 @@ func RenderAnnotatedWithOptions(p engine.Product, ann ProbeAnnotation, opt Optio
 	for i, r := range revBars {
 		line[arrowStartCol+len(arrowLeft)+i] = r
 	}
-	fmt.Fprintf(&b, "%s%s\n", linePrefix, string(line))
+	_, _ = fmt.Fprintf(&b, "%s%s\n", linePrefix, string(line))
 
 	// Sequence row: left probe block (optional) + right reverse-primer block
 	if opt.ShowProbeSeqRow {
@@ -511,26 +510,26 @@ func RenderAnnotatedWithOptions(p engine.Product, ann ProbeAnnotation, opt Optio
 		for i, r := range rightBlock {
 			line2[rightStartCol+i] = r
 		}
-		fmt.Fprintf(&b, "%s%s\n", linePrefix, string(line2))
+		_, _ = fmt.Fprintf(&b, "%s%s\n", linePrefix, string(line2))
 	} else {
 		revPrimerDisplayed := reverseString(p.RevPrimer)
 		padPrimer := siteStart - len(prefixMinus)
 		if padPrimer < 0 {
 			padPrimer = 0
 		}
-		fmt.Fprintf(&b, "%s%s%s%s%s\n", linePrefix, strings.Repeat(" ", padPrimer), prefixMinus, revPrimerDisplayed, suffixMinus)
+		_, _ = fmt.Fprintf(&b, "%s%s%s%s%s\n", linePrefix, strings.Repeat(" ", padPrimer), prefixMinus, revPrimerDisplayed, suffixMinus)
 	}
 
 	// Summary
 	if ann.Found {
-		fmt.Fprintf(&b, "%sprobe %q (%s) pos=%d mm=%d site=%s fwd_mm=%d@[%s] rev_mm=%d@[%s]\n",
+		_, _ = fmt.Fprintf(&b, "%sprobe %q (%s) pos=%d mm=%d site=%s fwd_mm=%d@[%s] rev_mm=%d@[%s]\n",
 			linePrefix,
 			ann.Name, ann.Strand, ann.Pos, ann.MM, ann.Site,
 			p.FwdMM, intsCSV(p.FwdMismatchIdx),
 			p.RevMM, intsCSV(p.RevMismatchIdx),
 		)
 	} else {
-		fmt.Fprintf(&b, "%sprobe %q NOT FOUND fwd_mm=%d@[%s] rev_mm=%d@[%s]\n",
+		_, _ = fmt.Fprintf(&b, "%sprobe %q NOT FOUND fwd_mm=%d@[%s] rev_mm=%d@[%s]\n",
 			linePrefix, ann.Name,
 			p.FwdMM, intsCSV(p.FwdMismatchIdx),
 			p.RevMM, intsCSV(p.RevMismatchIdx),
@@ -539,7 +538,6 @@ func RenderAnnotatedWithOptions(p engine.Product, ann ProbeAnnotation, opt Optio
 	b.WriteString("#\n")
 	return b.String()
 }
-
 
 // RenderAnnotated keeps backward compat (uses DefaultOptions).
 func RenderAnnotated(p engine.Product, ann ProbeAnnotation) string {
@@ -553,6 +551,7 @@ func (o Options) ExactGlyphOrDefault() string {
 	}
 	return DefaultOptions.ExactGlyph
 }
+
 func (o Options) PartialGlyphOrDefault() string {
 	if o.PartialGlyph != "" {
 		return o.PartialGlyph

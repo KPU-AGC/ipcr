@@ -13,7 +13,7 @@ func TestJSONRoundTrip(t *testing.T) {
 	ap.Product.ExperimentID = "x"
 	ap.Product.SequenceID = "s"
 	ap.ProbeName = "p"
-	ap.ProbeSeq  = "ACG"
+	ap.ProbeSeq = "ACG"
 	ap.ProbeFound = true
 
 	var buf bytes.Buffer

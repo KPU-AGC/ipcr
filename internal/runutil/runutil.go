@@ -3,9 +3,8 @@ package runutil
 
 import (
 	"fmt"
-	"strings"
-
 	"ipcr/internal/output"
+	"strings"
 )
 
 // ComputeTerminalWindow picks the default 3' terminal-window length.
@@ -39,10 +38,10 @@ func ComputeOverlap(maxLen, maxPrimerLen int) int {
 
 // ValidateChunking decides effective chunking and emits human-readable warnings.
 // Rules (matching tests):
-//   • circular => disable (warn)
-//   • maxLen==0 => disable (warn)
-//   • chunkSize<=maxLen => disable (warn)
-//   • else enable with overlap=ComputeOverlap(maxLen,maxPrimerLen)
+//   - circular => disable (warn)
+//   - maxLen==0 => disable (warn)
+//   - chunkSize<=maxLen => disable (warn)
+//   - else enable with overlap=ComputeOverlap(maxLen,maxPrimerLen)
 func ValidateChunking(circular bool, chunkSize, maxLen, maxPrimerLen int) (int, int, []string) {
 	var warns []string
 
@@ -64,7 +63,7 @@ func ValidateChunking(circular bool, chunkSize, maxLen, maxPrimerLen int) (int, 
 
 // ComputeNeedSeq decides if the pipeline must materialize sequence strings.
 // True if: --products, FASTA output, or pretty rendering requested (any format).
-func ComputeNeedSeq(format string, pretty bool, products bool) bool {
+func ComputeNeedSeq(format string, pretty, products bool) bool {
 	if products {
 		return true
 	}

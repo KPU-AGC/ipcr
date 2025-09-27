@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-
 	"ipcr/internal/clibase"
 	"ipcr/internal/cliutil"
 )
@@ -24,14 +23,14 @@ type Options struct {
 func NewFlagSet(name string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	clibase.UsageCommon(fs, name, func(out io.Writer, def func(string) string) {
-		fmt.Fprintln(out, "Usage:")
-		fmt.Fprintf(out, "  %s [options] --forward AAA --reverse TTT --probe PROBE ref.fa\n", name)
+		_, _ = fmt.Fprintln(out, "Usage:")
+		_, _ = fmt.Fprintf(out, "  %s [options] --forward AAA --reverse TTT --probe PROBE ref.fa\n", name)
 
-		fmt.Fprintln(out, "\nProbe:")
-		fmt.Fprintln(out, "  -P, --probe string          Internal oligo sequence (5'→3') [required]")
-		fmt.Fprintf(out, "      --probe-name string     Label for the probe [%s]\n", def("probe-name"))
-		fmt.Fprintf(out, "  -M, --probe-max-mm int      Max mismatches allowed in probe match [%s]\n", def("probe-max-mm"))
-		fmt.Fprintf(out, "      --require-probe         Only report amplicons that contain the probe [%s]\n", def("require-probe"))
+		_, _ = fmt.Fprintln(out, "\nProbe:")
+		_, _ = fmt.Fprintln(out, "  -P, --probe string          Internal oligo sequence (5'→3') [required]")
+		_, _ = fmt.Fprintf(out, "      --probe-name string     Label for the probe [%s]\n", def("probe-name"))
+		_, _ = fmt.Fprintf(out, "  -M, --probe-max-mm int      Max mismatches allowed in probe match [%s]\n", def("probe-max-mm"))
+		_, _ = fmt.Fprintf(out, "      --require-probe         Only report amplicons that contain the probe [%s]\n", def("require-probe"))
 	})
 	return fs
 }

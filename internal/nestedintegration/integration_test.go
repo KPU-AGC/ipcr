@@ -2,15 +2,14 @@ package nestedintegration
 
 import (
 	"bytes"
+	"ipcr/internal/nestedapp"
 	"os"
 	"testing"
-
-	"ipcr/internal/nestedapp"
 )
 
 func write(t *testing.T, name, data string) string {
 	t.Helper()
-	if err := os.WriteFile(name, []byte(data), 0644); err != nil {
+	if err := os.WriteFile(name, []byte(data), 0o644); err != nil {
 		t.Fatalf("write %s: %v", name, err)
 	}
 	return name
@@ -18,7 +17,7 @@ func write(t *testing.T, name, data string) string {
 
 func TestNestedText_EndToEnd(t *testing.T) {
 	fa := write(t, "n_itest.fa", ">s\nACGTACGTACGT\n")
-	defer os.Remove(fa)
+	defer func() { _ = os.Remove(fa) }()
 
 	var out, errB bytes.Buffer
 	code := nestedapp.Run([]string{

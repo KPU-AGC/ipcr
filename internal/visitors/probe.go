@@ -1,11 +1,10 @@
 package visitors
 
 import (
-	"strings"
-
 	"ipcr-core/engine"
 	"ipcr-core/probe"
 	"ipcr/internal/probeoutput"
+	"strings"
 )
 
 // Probe annotates with an internal oligo and returns an AnnotatedProduct.

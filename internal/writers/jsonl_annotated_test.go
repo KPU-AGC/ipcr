@@ -4,18 +4,17 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"testing"
-
 	"ipcr-core/engine"
 	"ipcr/internal/probeoutput"
 	"ipcr/pkg/api"
+	"testing"
 )
 
 func TestAnnotatedJSONL_StreamsValidV1(t *testing.T) {
 	var buf bytes.Buffer
 	in, done := StartAnnotatedJSONLWriter(&buf, 2)
 	in <- probeoutput.AnnotatedProduct{
-		Product: engine.Product{ExperimentID: "x", SequenceID: "s:0-4", Start: 0, End: 4, Length: 4, Type: "forward"},
+		Product:   engine.Product{ExperimentID: "x", SequenceID: "s:0-4", Start: 0, End: 4, Length: 4, Type: "forward"},
 		ProbeName: "p", ProbeSeq: "ACG", ProbeFound: true, ProbeStrand: "+", ProbePos: 1, ProbeMM: 0, ProbeSite: "CGT",
 	}
 	close(in)

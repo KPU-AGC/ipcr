@@ -2,11 +2,10 @@ package writers
 
 import (
 	"bytes"
-	"strings"
-	"testing"
-
 	"ipcr-core/engine"
 	"ipcr/internal/probeoutput"
+	"strings"
+	"testing"
 )
 
 func TestStartAnnotatedWriter_TextHeader(t *testing.T) {

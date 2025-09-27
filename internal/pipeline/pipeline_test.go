@@ -2,18 +2,17 @@ package pipeline
 
 import (
 	"context"
-	"os"
-	"testing"
-
 	"ipcr-core/engine"
 	"ipcr-core/primer"
+	"os"
+	"testing"
 )
 
 func TestForEachProduct_NoChunking(t *testing.T) {
 	// Make a tiny FASTA
 	fn := "pipe_test.fa"
-	defer os.Remove(fn)
-	if err := os.WriteFile(fn, []byte(">s\nACGTACGTACGT\n"), 0644); err != nil {
+	defer func() { _ = os.Remove(fn) }()
+	if err := os.WriteFile(fn, []byte(">s\nACGTACGTACGT\n"), 0o644); err != nil {
 		t.Fatalf("write: %v", err)
 	}
 	pairs := []primer.Pair{{

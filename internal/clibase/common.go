@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-
 	"ipcr/internal/cliutil"
 	"ipcr/internal/output"
 )
@@ -49,9 +48,12 @@ type Common struct {
 type sliceValue struct{ dst *[]string }
 
 func (s *sliceValue) String() string {
-	if s.dst == nil { return "" }
+	if s.dst == nil {
+		return ""
+	}
 	return fmt.Sprint(*s.dst)
 }
+
 func (s *sliceValue) Set(v string) error {
 	*s.dst = append(*s.dst, v)
 	return nil

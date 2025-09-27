@@ -1,10 +1,12 @@
 run:
   timeout: 5m
   issues-exit-code: 1
+  tests: true
 
 linters:
   enable:
     - depguard
+    - errcheck
     - gofumpt
     - govet
     - gocritic
@@ -15,11 +17,24 @@ linters:
 linters-settings:
   gofumpt:
     extra-rules: true
+
   depguard:
     rules:
+      app-hygiene:
+        files: ["**/*.go", "!core/**"]
+        allow:
+          - $gostd
+          - "^ipcr/"               # app packages (incl. ipcr/internal/**)
+          - "^ipcr-core/"          # new core module
+          - "^github.com/"
+          - "^golang.org/"
+          - "^gopkg.in/"
+        deny:
+          - pkg: "^ipcr/internal/(engine|primer|probe|oligo|fasta)(/|$)"
+            desc: "use ipcr-core/* instead of ipcr/internal/*"
+
       core-boundary:
-        files:
-          - "**/*.go"
+        files: ["core/**"]
         allow:
           - $gostd
           - "^ipcr-core/"
@@ -28,4 +43,22 @@ linters-settings:
           - "^gopkg.in/"
         deny:
           - pkg: "^ipcr(/|$)"
-            desc: "ipcr-core must not import ipcr/*"
+            desc: "ipcr-core must not import app-side packages (ipcr/*)"
+
+
+  errcheck:
+    exclude-functions:
+      - fmt.Fprint
+      - fmt.Fprintf
+      - fmt.Fprintln
+      - os.Remove
+      - (*bufio.Writer).Flush
+
+issues:
+  exclude-use-default: false
+  exclude-rules:
+    - path: _test\.go$
+      linters: [typecheck]
+
+    - path: ^pkg/api/
+      linters: [gofumpt]

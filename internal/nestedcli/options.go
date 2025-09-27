@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-
 	"ipcr/internal/clibase"
 	"ipcr/internal/cliutil"
 )
@@ -22,15 +21,15 @@ type Options struct {
 func NewFlagSet(name string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	clibase.UsageCommon(fs, name, func(out io.Writer, def func(string) string) {
-		fmt.Fprintln(out, "Usage:")
-		fmt.Fprintf(out, "  %s --forward AAA --reverse TTT --inner-forward CCC --inner-reverse GGG ref.fa\n", name)
-		fmt.Fprintf(out, "  %s --primers outer.tsv --inner-primers inner.tsv ref*.fa.gz\n", name)
+		_, _ = fmt.Fprintln(out, "Usage:")
+		_, _ = fmt.Fprintf(out, "  %s --forward AAA --reverse TTT --inner-forward CCC --inner-reverse GGG ref.fa\n", name)
+		_, _ = fmt.Fprintf(out, "  %s --primers outer.tsv --inner-primers inner.tsv ref*.fa.gz\n", name)
 
-		fmt.Fprintln(out, "\nInner:")
-		fmt.Fprintln(out, "      --inner-forward string   Inner forward primer (5'→3')")
-		fmt.Fprintln(out, "      --inner-reverse string   Inner reverse primer (5'→3')")
-		fmt.Fprintln(out, "      --inner-primers string   Inner primer TSV (id fwd rev [min] [max])")
-		fmt.Fprintf(out, "      --require-inner          Only keep outer amplicons that contain an inner product [%s]\n", def("require-inner"))
+		_, _ = fmt.Fprintln(out, "\nInner:")
+		_, _ = fmt.Fprintln(out, "      --inner-forward string   Inner forward primer (5'→3')")
+		_, _ = fmt.Fprintln(out, "      --inner-reverse string   Inner reverse primer (5'→3')")
+		_, _ = fmt.Fprintln(out, "      --inner-primers string   Inner primer TSV (id fwd rev [min] [max])")
+		_, _ = fmt.Fprintf(out, "      --require-inner          Only keep outer amplicons that contain an inner product [%s]\n", def("require-inner"))
 	})
 	return fs
 }
@@ -58,14 +57,20 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.BoolVar(&help, "h", false, "show this help [false]")
 
 	flagArgs, posArgs := cliutil.SplitFlagsAndPositionals(fs, argv)
-	if err := fs.Parse(flagArgs); err != nil { return o, err }
-	if help { return o, flag.ErrHelp }
+	if err := fs.Parse(flagArgs); err != nil {
+		return o, err
+	}
+	if help {
+		return o, flag.ErrHelp
+	}
 	if c.Version {
 		o.Common = c
 		return o, nil
 	}
 
-	if err := clibase.AfterParse(fs, &c, noHeader, posArgs); err != nil { return o, err }
+	if err := clibase.AfterParse(fs, &c, noHeader, posArgs); err != nil {
+		return o, err
+	}
 
 	// Validate inner
 	usingFile := o.InnerPrimerFile != ""

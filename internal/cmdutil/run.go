@@ -2,10 +2,9 @@ package cmdutil
 
 import (
 	"context"
-
 	"ipcr-core/engine"
-	"ipcr/internal/pipeline"
 	"ipcr-core/primer"
+	"ipcr/internal/pipeline"
 )
 
 // RunStream runs the shared pipeline, applies a visitor, and streams results via send.

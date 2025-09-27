@@ -3,7 +3,6 @@ package output
 
 import (
 	"io"
-
 	"ipcr-core/engine"
 )
 
@@ -13,7 +12,7 @@ func writeRowTSV(w io.Writer, p engine.Product) error {
 }
 
 // New: renderer-capable streaming writer for text mode
-func StreamTextWithRenderer(w io.Writer, in <-chan engine.Product, header bool, prettyMode bool, render func(engine.Product) string) error {
+func StreamTextWithRenderer(w io.Writer, in <-chan engine.Product, header, prettyMode bool, render func(engine.Product) string) error {
 	if header {
 		if _, err := io.WriteString(w, TSVHeader+"\n"); err != nil {
 			return err
@@ -33,7 +32,7 @@ func StreamTextWithRenderer(w io.Writer, in <-chan engine.Product, header bool, 
 }
 
 // New: renderer-capable buffered writer for text mode
-func WriteTextWithRenderer(w io.Writer, list []engine.Product, header bool, prettyMode bool, render func(engine.Product) string) error {
+func WriteTextWithRenderer(w io.Writer, list []engine.Product, header, prettyMode bool, render func(engine.Product) string) error {
 	if header {
 		if _, err := io.WriteString(w, TSVHeader+"\n"); err != nil {
 			return err
@@ -53,10 +52,10 @@ func WriteTextWithRenderer(w io.Writer, list []engine.Product, header bool, pret
 }
 
 // Backward-compat wrappers (use default renderer wired in output package)
-func StreamText(w io.Writer, in <-chan engine.Product, header bool, prettyMode bool) error {
+func StreamText(w io.Writer, in <-chan engine.Product, header, prettyMode bool) error {
 	return StreamTextWithRenderer(w, in, header, prettyMode, func(p engine.Product) string { return "" })
 }
 
-func WriteText(w io.Writer, list []engine.Product, header bool, prettyMode bool) error {
+func WriteText(w io.Writer, list []engine.Product, header, prettyMode bool) error {
 	return WriteTextWithRenderer(w, list, header, prettyMode, func(p engine.Product) string { return "" })
 }

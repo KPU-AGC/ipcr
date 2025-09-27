@@ -4,7 +4,6 @@ package output
 import (
 	"encoding/json"
 	"io"
-
 	"ipcr-core/engine"
 	"ipcr/pkg/api"
 )

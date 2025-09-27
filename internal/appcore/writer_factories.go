@@ -3,7 +3,6 @@ package appcore
 
 import (
 	"io"
-
 	"ipcr-core/engine"
 	"ipcr/internal/nestedoutput"
 	"ipcr/internal/output"
@@ -14,10 +13,10 @@ import (
 // ---------------- Product writer ----------------
 
 type ProductWriterFactory struct {
-	Format  string
-	Sort    bool
-	Header  bool
-	Pretty  bool
+	Format   string
+	Sort     bool
+	Header   bool
+	Pretty   bool
 	Products bool
 }
 

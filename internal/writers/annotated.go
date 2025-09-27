@@ -3,7 +3,6 @@ package writers
 
 import (
 	"io"
-
 	"ipcr/internal/common"
 	"ipcr/internal/output"
 	"ipcr/internal/pretty"
@@ -103,11 +102,11 @@ func init() {
 }
 
 // Public API (unchanged)
-func StartAnnotatedWriter(out io.Writer, format string, sort bool, header bool, prettyMode bool, bufSize int) (chan<- probeoutput.AnnotatedProduct, <-chan error) {
+func StartAnnotatedWriter(out io.Writer, format string, sort, header, prettyMode bool, bufSize int) (chan<- probeoutput.AnnotatedProduct, <-chan error) {
 	return StartAnnotatedWriterWithPrettyOptions(out, format, sort, header, prettyMode, pretty.DefaultOptions, bufSize)
 }
 
-func StartAnnotatedWriterWithPrettyOptions(out io.Writer, format string, sort bool, header bool, prettyMode bool, popt pretty.Options, bufSize int) (chan<- probeoutput.AnnotatedProduct, <-chan error) {
+func StartAnnotatedWriterWithPrettyOptions(out io.Writer, format string, sort, header, prettyMode bool, popt pretty.Options, bufSize int) (chan<- probeoutput.AnnotatedProduct, <-chan error) {
 	if bufSize <= 0 {
 		bufSize = 64
 	}

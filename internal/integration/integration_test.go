@@ -5,21 +5,20 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"ipcr-core/engine"
+	"ipcr/internal/app"
+	"ipcr/internal/output"
+	"ipcr/pkg/api"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
 	"testing"
-
-	"ipcr/internal/app"
-	"ipcr-core/engine"
-	"ipcr/internal/output"
-	"ipcr/pkg/api"
 )
 
 func write(t *testing.T, fn, data string) string {
 	t.Helper()
-	if err := os.WriteFile(fn, []byte(data), 0644); err != nil {
+	if err := os.WriteFile(fn, []byte(data), 0o644); err != nil {
 		t.Fatalf("write %s: %v", fn, err)
 	}
 	return fn
@@ -27,7 +26,7 @@ func write(t *testing.T, fn, data string) string {
 
 func TestEndToEnd(t *testing.T) {
 	fa := write(t, "itest.fa", ">s\nACGTACGTACGT\n")
-	defer os.Remove(fa)
+	defer func() { _ = os.Remove(fa) }()
 
 	var out, errBuf bytes.Buffer
 	code := app.Run([]string{
@@ -46,7 +45,7 @@ func TestEndToEnd(t *testing.T) {
 
 func TestParallelMatchesEqualSerial(t *testing.T) {
 	fa := write(t, "par.fa", ">s\nACGTACGTACGT\n")
-	defer os.Remove(fa)
+	defer func() { _ = os.Remove(fa) }()
 
 	run := func(threads int) string {
 		var out, errB bytes.Buffer
@@ -82,7 +81,9 @@ func TestTextVsTSVParity(t *testing.T) {
 	var textB, tsvB bytes.Buffer
 
 	ch := make(chan engine.Product, len(list))
-	for _, p := range list { ch <- p }
+	for _, p := range list {
+		ch <- p
+	}
 	close(ch)
 	if err := output.StreamText(&textB, ch, false, false); err != nil {
 		t.Fatalf("stream text: %v", err)
@@ -101,10 +102,14 @@ func TestTextVsTSVParity(t *testing.T) {
 
 func baseAndOffset(id string) (string, int) {
 	colon := strings.LastIndex(id, ":")
-	if colon == -1 || colon == len(id)-1 { return id, 0 }
+	if colon == -1 || colon == len(id)-1 {
+		return id, 0
+	}
 	suffix := id[colon+1:]
 	dash := strings.IndexByte(suffix, '-')
-	if dash == -1 { return id, 0 }
+	if dash == -1 {
+		return id, 0
+	}
 	startStr := suffix[:dash]
 	if start, err := strconv.Atoi(startStr); err == nil {
 		return id[:colon], start
@@ -136,7 +141,7 @@ func canonicalizeJSON(js string) ([]string, error) {
 
 func TestChunkingKeepsBoundaryHits(t *testing.T) {
 	fa := write(t, "chunk.fa", ">s\nACGTACGTACGTACGTACGTACGTACGT\n")
-	defer os.Remove(fa)
+	defer func() { _ = os.Remove(fa) }()
 
 	runJSON := func(chunk int) string {
 		var out, errB bytes.Buffer
@@ -162,9 +167,13 @@ func TestChunkingKeepsBoundaryHits(t *testing.T) {
 	chunkedJSON := runJSON(16)
 
 	nc, err := canonicalizeJSON(noChunkJSON)
-	if err != nil { t.Fatalf("canonicalize no-chunk (json): %v", err) }
+	if err != nil {
+		t.Fatalf("canonicalize no-chunk (json): %v", err)
+	}
 	ck, err := canonicalizeJSON(chunkedJSON)
-	if err != nil { t.Fatalf("canonicalize chunked (json): %v", err) }
+	if err != nil {
+		t.Fatalf("canonicalize chunked (json): %v", err)
+	}
 
 	if strings.Join(nc, "\n") != strings.Join(ck, "\n") {
 		var rawNo, rawCh bytes.Buffer

@@ -7,6 +7,8 @@ import (
 )
 
 func Warnf(dst io.Writer, quiet bool, format string, a ...any) {
-	if quiet { return }
-	fmt.Fprintf(dst, "WARN: "+format+"\n", a...)
+	if quiet {
+		return
+	}
+	_, _ = fmt.Fprintf(dst, "WARN: "+format+"\n", a...)
 }

@@ -2,10 +2,9 @@ package nestedoutput
 
 import (
 	"bytes"
+	"ipcr-core/engine"
 	"strings"
 	"testing"
-
-	"ipcr-core/engine"
 )
 
 func TestWriteText_InnerAtZero_PrintsZero(t *testing.T) {

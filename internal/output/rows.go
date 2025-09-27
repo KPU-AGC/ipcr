@@ -9,9 +9,13 @@ import (
 )
 
 func IntsCSV(a []int) string {
-	if len(a) == 0 { return "" }
+	if len(a) == 0 {
+		return ""
+	}
 	ss := make([]string, len(a))
-	for i, v := range a { ss[i] = strconv.Itoa(v) }
+	for i, v := range a {
+		ss[i] = strconv.Itoa(v)
+	}
 	return strings.Join(ss, ",")
 }
 

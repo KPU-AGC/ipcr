@@ -1,4 +1,4 @@
-// internal/primer/match_test.go
+// core/primer/match_test.go
 package primer
 
 import "testing"

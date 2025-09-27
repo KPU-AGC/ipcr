@@ -9,7 +9,7 @@ import (
 	"ipcr/internal/output"
 )
 
-// Common holds CLI fields shared by ipcr and ipcr-probe.
+// Common holds CLI fields shared by ipcr/ipcr-probe/ipcr-nested/ipcr-multiplex.
 type Common struct {
 	// Input
 	PrimerFile string
@@ -24,6 +24,7 @@ type Common struct {
 	HitCap         int
 	TerminalWindow int
 	Mode           string
+	Self           bool // allow single-oligo amplification (A×rc(A), B×rc(B))
 
 	// Performance
 	Threads    int
@@ -53,11 +54,7 @@ func (s *sliceValue) String() string {
 	}
 	return fmt.Sprint(*s.dst)
 }
-
-func (s *sliceValue) Set(v string) error {
-	*s.dst = append(*s.dst, v)
-	return nil
-}
+func (s *sliceValue) Set(v string) error { *s.dst = append(*s.dst, v); return nil }
 
 // Modes (single source of truth)
 const (
@@ -65,8 +62,7 @@ const (
 	ModeDebug     = "debug"
 )
 
-// Register wires shared flags onto fs and returns a pointer to the “no-header” bool
-// that the caller can use to set Common.Header = !noHeader after parsing.
+// Register wires shared flags onto fs and returns a pointer to the “no-header” bool.
 func Register(fs *flag.FlagSet, c *Common) *bool {
 	// Inputs
 	fs.StringVar(&c.PrimerFile, "primers", "", "TSV primer file")
@@ -86,6 +82,7 @@ func Register(fs *flag.FlagSet, c *Common) *bool {
 	fs.IntVar(&c.HitCap, "hit-cap", 10000, "max matches stored per primer/window (0=unlimited) [10000]")
 	fs.IntVar(&c.TerminalWindow, "terminal-window", -1, "3' terminal window (0=allow, -1=auto) [-1]")
 	fs.StringVar(&c.Mode, "mode", ModeRealistic, "matching mode: realistic | debug")
+	fs.BoolVar(&c.Self, "self", true, "allow single-oligo amplification (A×rc(A), B×rc(B)) [true]")
 	fs.IntVar(&c.Mismatches, "m", 0, "alias of --mismatches")
 
 	// Performance
@@ -115,10 +112,8 @@ func Register(fs *flag.FlagSet, c *Common) *bool {
 	return &noHeader
 }
 
-// AfterParse finalizes header and expands positionals, then runs shared validation.
 func AfterParse(fs *flag.FlagSet, c *Common, noHeader *bool, posArgs []string) error {
 	c.Header = !*noHeader
-
 	if len(posArgs) > 0 {
 		exp, err := cliutil.ExpandPositionals(posArgs)
 		if err != nil {
@@ -129,7 +124,6 @@ func AfterParse(fs *flag.FlagSet, c *Common, noHeader *bool, posArgs []string) e
 	return Validate(c)
 }
 
-// Validate runs shared validation on the parsed flags.
 func Validate(c *Common) error {
 	usingFile := c.PrimerFile != ""
 	usingInline := c.Fwd != "" || c.Rev != ""
@@ -155,7 +149,6 @@ func Validate(c *Common) error {
 	}
 	switch c.Output {
 	case output.FormatText, output.FormatJSON, output.FormatJSONL, output.FormatFASTA:
-		// ok
 	default:
 		return fmt.Errorf("invalid --output %q", c.Output)
 	}

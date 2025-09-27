@@ -1,4 +1,4 @@
-// internal/primer/mismatch_test.go
+// core/primer/mismatch_test.go
 package primer
 
 import "testing"

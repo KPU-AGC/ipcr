@@ -1,4 +1,4 @@
-// internal/primer/iupac_test.go
+// core/primer/iupac_test.go
 package primer
 
 import "testing"
@@ -9,9 +9,9 @@ func TestBaseMatch(t *testing.T) {
 		want bool
 	}{
 		{'A', 'A', true},
-		{'G', 'R', true},  // R = A/G
+		{'G', 'R', true}, // R = A/G
 		{'C', 'R', false},
-		{'T', 'N', true},  // N = any
+		{'T', 'N', true}, // N = any
 		{'G', 'N', true},
 		{'A', 'B', false}, // B = C/G/T  (not A)
 		{'C', 'B', true},
@@ -23,4 +23,5 @@ func TestBaseMatch(t *testing.T) {
 		}
 	}
 }
+
 // ===

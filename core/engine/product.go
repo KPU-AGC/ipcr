@@ -1,3 +1,4 @@
+// core/engine/product.go
 package engine
 
 type Product struct {

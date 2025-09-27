@@ -1,4 +1,4 @@
-// internal/fasta/stream.go
+// core/fasta/stream.go
 package fasta
 
 import (

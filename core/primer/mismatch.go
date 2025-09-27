@@ -1,4 +1,4 @@
-// internal/primer/mismatch.go
+// core/primer/mismatch.go
 package primer
 
 func MismatchCount(g, p []byte) int {
@@ -13,4 +13,5 @@ func MismatchCount(g, p []byte) int {
 	}
 	return mm
 }
+
 // ===

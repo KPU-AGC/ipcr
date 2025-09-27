@@ -1,3 +1,4 @@
+// internal/probeapp/app.go  (REPLACE)
 package probeapp
 
 import (
@@ -16,6 +17,24 @@ import (
 	"ipcr/internal/writers"
 	"strings"
 )
+
+func addSelfPairs(pairs []primer.Pair) []primer.Pair {
+	out := make([]primer.Pair, 0, len(pairs)+2*len(pairs))
+	out = append(out, pairs...)
+	for _, p := range pairs {
+		if p.Forward != "" {
+			out = append(out, primer.Pair{
+				ID: p.ID + "+A:self", Forward: strings.ToUpper(p.Forward), Reverse: strings.ToUpper(p.Forward),
+			})
+		}
+		if p.Reverse != "" {
+			out = append(out, primer.Pair{
+				ID: p.ID + "+B:self", Forward: strings.ToUpper(p.Reverse), Reverse: strings.ToUpper(p.Reverse),
+			})
+		}
+	}
+	return out
+}
 
 // RunContext is the ipcr-probe app entrypoint used by cmd/ipcr-probe.
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
@@ -74,7 +93,6 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		return 0
 	}
 
-	// Primer pairs
 	var pairs []primer.Pair
 	if opts.PrimerFile != "" {
 		pairs, err = primer.LoadTSV(opts.PrimerFile)
@@ -83,45 +101,26 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 			return 2
 		}
 	} else {
-		pairs = []primer.Pair{{
-			ID:         "manual",
-			Forward:    opts.Fwd,
-			Reverse:    opts.Rev,
-			MinProduct: opts.MinLen,
-			MaxProduct: opts.MaxLen,
-		}}
+		pairs = []primer.Pair{{ID: "manual", Forward: opts.Fwd, Reverse: opts.Rev, MinProduct: opts.MinLen, MaxProduct: opts.MaxLen}}
+	}
+	if opts.Self {
+		pairs = addSelfPairs(pairs)
 	}
 
 	termWin := runutil.ComputeTerminalWindow(opts.Mode, opts.TerminalWindow)
 	coreOpts := appcore.Options{
-		SeqFiles:        opts.SeqFiles,
-		MaxMM:           opts.Mismatches,
-		TerminalWindow:  termWin,
-		MinLen:          opts.MinLen,
-		MaxLen:          opts.MaxLen,
-		HitCap:          opts.HitCap,
-		SeedLength:      opts.SeedLength,
-		Circular:        opts.Circular,
-		Threads:         opts.Threads,
-		ChunkSize:       opts.ChunkSize,
-		Quiet:           opts.Quiet,
-		NoMatchExitCode: opts.NoMatchExitCode,
+		SeqFiles: opts.SeqFiles, MaxMM: opts.Mismatches, TerminalWindow: termWin,
+		MinLen: opts.MinLen, MaxLen: opts.MaxLen, HitCap: opts.HitCap, SeedLength: opts.SeedLength,
+		Circular: opts.Circular, Threads: opts.Threads, ChunkSize: opts.ChunkSize,
+		Quiet: opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
 	}
-
 	writer := appcore.NewAnnotatedWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty)
-
 	visitor := visitors.Probe{
-		Name:    opts.ProbeName,
-		Seq:     strings.ToUpper(opts.Probe),
-		MaxMM:   opts.ProbeMaxMM,
-		Require: opts.RequireProbe,
+		Name: opts.ProbeName, Seq: strings.ToUpper(opts.Probe), MaxMM: opts.ProbeMaxMM, Require: opts.RequireProbe,
 	}
-
 	return appcore.Run(parent, stdout, stderr, coreOpts, pairs, visitor.Visit, writer)
 }
 
-// Compatibility shim for older tests and callers.
-// Signature matches previous probeapp.Run(argv, stdout, stderr) style.
 func Run(argv []string, stdout, stderr io.Writer) int {
 	return RunContext(context.Background(), argv, stdout, stderr)
 }

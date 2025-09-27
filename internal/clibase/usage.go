@@ -1,3 +1,4 @@
+// internal/clibase/usage.go
 package clibase
 
 import (
@@ -17,18 +18,15 @@ func UsageCommon(fs *flag.FlagSet, name string, extra func(out io.Writer, def fu
 			return ""
 		}
 
-		// Header
 		_, _ = fmt.Fprintf(out, "%s – in-silico PCR toolkit\n\n", name)
 		_, _ = fmt.Fprintln(out, "Author:  Erick Samera (erick.samera@kpu.ca)")
 		_, _ = fmt.Fprintln(out, "License: MIT")
 		_, _ = fmt.Fprintf(out, "Version: %s\n\n", version.Version)
 
-		// Tool-specific additions (usage examples, extra sections)
 		if extra != nil {
 			extra(out, def)
 		}
 
-		// Shared blocks
 		_, _ = fmt.Fprintln(out, "\nInput:")
 		_, _ = fmt.Fprintln(out, "  -f, --forward string        Forward primer sequence (5'→3') [*]")
 		_, _ = fmt.Fprintln(out, "  -r, --reverse string        Reverse primer sequence (5'→3') [*]")
@@ -42,6 +40,7 @@ func UsageCommon(fs *flag.FlagSet, name string, extra func(out io.Writer, def fu
 		_, _ = fmt.Fprintf(out, "      --hit-cap int           Max matches stored per primer/window (0=unlimited) [%s]\n", def("hit-cap"))
 		_, _ = fmt.Fprintf(out, "      --terminal-window int   3' terminal window (0=allow, -1=auto) [%s]\n", def("terminal-window"))
 		_, _ = fmt.Fprintf(out, "      --mode string           Matching mode: realistic | debug [%s]\n", def("mode"))
+		_, _ = fmt.Fprintf(out, "      --self                  Allow single-oligo amplification (A×rc(A), B×rc(B)) [%s]\n", def("self"))
 
 		_, _ = fmt.Fprintln(out, "\nPerformance:")
 		_, _ = fmt.Fprintf(out, "  -t, --threads int           Worker threads (0=all CPUs) [%s]\n", def("threads"))

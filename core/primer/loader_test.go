@@ -1,4 +1,4 @@
-// internal/primer/loader_test.go
+// core/primer/loader_test.go
 package primer
 
 import (

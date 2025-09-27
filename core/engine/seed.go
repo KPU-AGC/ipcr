@@ -1,4 +1,4 @@
-// internal/engine/seed.go
+// core/engine/seed.go
 package engine
 
 import (

@@ -1,4 +1,4 @@
-// ./internal/nestedapp/app.go
+// internal/nestedapp/app.go  (REPLACE)
 package nestedapp
 
 import (
@@ -18,6 +18,24 @@ import (
 	"ipcr/internal/writers"
 	"strings"
 )
+
+func addSelfPairs(pairs []primer.Pair) []primer.Pair {
+	out := make([]primer.Pair, 0, len(pairs)+2*len(pairs))
+	out = append(out, pairs...)
+	for _, p := range pairs {
+		if p.Forward != "" {
+			out = append(out, primer.Pair{
+				ID: p.ID + "+A:self", Forward: strings.ToUpper(p.Forward), Reverse: strings.ToUpper(p.Forward),
+			})
+		}
+		if p.Reverse != "" {
+			out = append(out, primer.Pair{
+				ID: p.ID + "+B:self", Forward: strings.ToUpper(p.Reverse), Reverse: strings.ToUpper(p.Reverse),
+			})
+		}
+	}
+	return out
+}
 
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
 	outw := bufio.NewWriter(stdout)
@@ -75,7 +93,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		return 0
 	}
 
-	// Outer primer pairs
+	// Outer
 	var outer []primer.Pair
 	if opts.PrimerFile != "" {
 		outer, err = primer.LoadTSV(opts.PrimerFile)
@@ -84,16 +102,13 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 			return 2
 		}
 	} else {
-		outer = []primer.Pair{{
-			ID:         "outer",
-			Forward:    opts.Fwd,
-			Reverse:    opts.Rev,
-			MinProduct: opts.MinLen,
-			MaxProduct: opts.MaxLen,
-		}}
+		outer = []primer.Pair{{ID: "outer", Forward: opts.Fwd, Reverse: opts.Rev, MinProduct: opts.MinLen, MaxProduct: opts.MaxLen}}
+	}
+	if opts.Self {
+		outer = addSelfPairs(outer)
 	}
 
-	// Inner primer pairs
+	// Inner
 	var inner []primer.Pair
 	if opts.InnerPrimerFile != "" {
 		inner, err = primer.LoadTSV(opts.InnerPrimerFile)
@@ -102,43 +117,28 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 			return 2
 		}
 	} else {
-		inner = []primer.Pair{{
-			ID:      "inner",
-			Forward: strings.ToUpper(opts.InnerFwd),
-			Reverse: strings.ToUpper(opts.InnerRev),
-		}}
+		inner = []primer.Pair{{ID: "inner", Forward: strings.ToUpper(opts.InnerFwd), Reverse: strings.ToUpper(opts.InnerRev)}}
+	}
+	if opts.Self {
+		inner = addSelfPairs(inner)
 	}
 
 	termWin := runutil.ComputeTerminalWindow(opts.Mode, opts.TerminalWindow)
 	coreOpts := appcore.Options{
-		SeqFiles:        opts.SeqFiles,
-		MaxMM:           opts.Mismatches,
-		TerminalWindow:  termWin,
-		MinLen:          opts.MinLen,
-		MaxLen:          opts.MaxLen,
-		HitCap:          opts.HitCap,
-		SeedLength:      opts.SeedLength,
-		Circular:        opts.Circular,
-		Threads:         opts.Threads,
-		ChunkSize:       opts.ChunkSize,
-		Quiet:           opts.Quiet,
-		NoMatchExitCode: opts.NoMatchExitCode,
+		SeqFiles: opts.SeqFiles, MaxMM: opts.Mismatches, TerminalWindow: termWin,
+		MinLen: opts.MinLen, MaxLen: opts.MaxLen, HitCap: opts.HitCap, SeedLength: opts.SeedLength,
+		Circular: opts.Circular, Threads: opts.Threads, ChunkSize: opts.ChunkSize,
+		Quiet: opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
 	}
-
 	writer := appcore.NewNestedWriterFactory(opts.Output, opts.Sort, opts.Header)
 
 	visitor := visitors.Nested{
 		InnerPairs: inner,
 		EngineCfg: engine.Config{
-			MaxMM:          opts.Mismatches,
-			TerminalWindow: termWin,
-			SeedLen:        opts.SeedLength,
-			Circular:       false, // inner stage scans linear amplicon strings
-			NeedSites:      false,
+			MaxMM: opts.Mismatches, TerminalWindow: termWin, SeedLen: opts.SeedLength, Circular: false, NeedSites: false,
 		},
 		RequireInner: opts.RequireInner,
 	}
-
 	return appcore.Run(parent, stdout, stderr, coreOpts, outer, visitor.Visit, writer)
 }
 

@@ -1,4 +1,4 @@
-// internal/primer/match.go
+// core/primer/match.go
 package primer
 
 import "bytes"

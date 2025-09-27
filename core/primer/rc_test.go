@@ -1,4 +1,4 @@
-// internal/primer/rc_test.go
+// core/primer/rc_test.go
 package primer
 
 import (
@@ -15,9 +15,9 @@ func TestRevCompSimple(t *testing.T) {
 }
 
 func TestRevCompAmbiguous(t *testing.T) {
-	in  := []byte("RYSWKMBDHVN")
+	in := []byte("RYSWKMBDHVN")
 	want := []byte("NBDHVKMWSRY")
-	got  := RevComp(in)
+	got := RevComp(in)
 	if !bytes.Equal(got, want) {
 		t.Errorf("RevComp(%s) = %s, want %s", in, got, want)
 	}
@@ -31,4 +31,5 @@ func TestRevCompEmpty(t *testing.T) {
 		t.Errorf("RevComp(\"\") length = %d, want 0", len(out))
 	}
 }
+
 // ===

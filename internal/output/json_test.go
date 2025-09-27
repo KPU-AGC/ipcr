@@ -1,10 +1,10 @@
-// internal/output/json_test.go
 package output
 
 import (
 	"bytes"
 	"encoding/json"
 	"ipcr/internal/engine"
+	"ipcr/pkg/api"
 	"testing"
 )
 
@@ -16,9 +16,8 @@ func TestWriteJSON(t *testing.T) {
 	if err := WriteJSON(buf, list); err != nil {
 		t.Fatalf("json write: %v", err)
 	}
-	var got []engine.Product
+	var got []api.ProductV1
 	if err := json.Unmarshal(buf.Bytes(), &got); err != nil || len(got) != 1 || got[0].ExperimentID != "p1" {
 		t.Fatalf("json round-trip failed: %v %v", err, got)
 	}
 }
-// ===

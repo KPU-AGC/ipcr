@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"ipcr/internal/probeapp"
-	"ipcr/internal/probeoutput"
+	"ipcr/pkg/api"
 )
 
 func write(t *testing.T, fn, data string) string {
@@ -36,7 +36,7 @@ func TestProbeEndToEndJSON(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d err=%s", code, errB.String())
 	}
-	var got []probeoutput.AnnotatedProduct
+	var got []api.AnnotatedProductV1
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("json parse: %v", err)
 	}

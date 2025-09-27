@@ -1,4 +1,3 @@
-# core/.golangci.yml  (REPLACE)
 run:
   timeout: 5m
   issues-exit-code: 1
@@ -6,7 +5,6 @@ run:
 
 linters:
   enable:
-    # depguard disabled in core to stop false-positives on ipcr-core/*
     - errcheck
     - gofumpt
     - govet
@@ -14,6 +12,7 @@ linters:
     - misspell
     - prealloc
     - exportloopref
+    # depguard disabled here to avoid false positives on ipcr-core/* imports
 
 linters-settings:
   gofumpt:

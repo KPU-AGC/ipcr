@@ -2,12 +2,9 @@ run:
   timeout: 5m
   issues-exit-code: 1
   tests: true
-  skip-dirs:
-    - core   # linted in a separate job with its own config
 
 linters:
   enable:
-    - depguard
     - errcheck
     - gofumpt
     - govet
@@ -15,16 +12,11 @@ linters:
     - misspell
     - prealloc
     - exportloopref
+    # depguard intentionally NOT enabled at root; core is linted separately
 
 linters-settings:
   gofumpt:
     extra-rules: true
-
-  # Only keep a boundary rule here if you really need one for root code.
-  # (Core has its own config; root should NOT police core/.)
-  depguard:
-    rules: {}
-
   errcheck:
     exclude-functions:
       - fmt.Fprint
@@ -36,5 +28,6 @@ linters-settings:
 issues:
   exclude-use-default: false
   exclude-rules:
+    # keep tests linted, but silence rare typecheck flakiness
     - path: _test\.go$
       linters: [typecheck]

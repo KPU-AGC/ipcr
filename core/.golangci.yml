@@ -1,0 +1,31 @@
+run:
+  timeout: 5m
+  issues-exit-code: 1
+
+linters:
+  enable:
+    - depguard
+    - gofumpt
+    - govet
+    - gocritic
+    - misspell
+    - prealloc
+    - exportloopref
+
+linters-settings:
+  gofumpt:
+    extra-rules: true
+  depguard:
+    rules:
+      core-boundary:
+        files:
+          - "**/*.go"
+        allow:
+          - $gostd
+          - "^ipcr-core/"
+          - "^github.com/"
+          - "^golang.org/"
+          - "^gopkg.in/"
+        deny:
+          - pkg: "^ipcr(/|$)"
+            desc: "ipcr-core must not import ipcr/*"

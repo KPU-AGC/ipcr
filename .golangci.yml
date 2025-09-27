@@ -1,4 +1,3 @@
-# .golangci.yml
 run:
   timeout: 5m
   issues-exit-code: 1
@@ -19,34 +18,35 @@ linters-settings:
 
   depguard:
     rules:
-      # Core must NOT depend on the app module.
-      core-boundary:
-        packages:
-          - "^ipcr-core(/|$)"
-        deny:
-          - pkg: "^ipcr(/|$)"
-            desc: "ipcr-core must not import app-side packages (ipcr/*)"
+      # Enforce app hygiene (runs on repo root; excludes core/)
+      app-hygiene:
+        files:
+          - "**/*.go"
+          - "!core/**"
         allow:
           - $gostd
           - "^ipcr-core/"
+          - "^ipcr/"
           - "^github.com/"
           - "^golang.org/"
           - "^gopkg.in/"
-
-      # App must NOT import the old, now-deleted internals for engine/primer/oligo/probe/fasta.
-      app-hygiene:
-        packages:
-          - "^ipcr(/|$)"
         deny:
           - pkg: "^ipcr/internal/(engine|primer|probe|oligo|fasta)(/|$)"
             desc: "use ipcr-core/* instead of ipcr/internal/*"
+
+      # Enforce boundary when linting the repo root (targets core/ files)
+      core-boundary:
+        files:
+          - "core/**"
         allow:
           - $gostd
           - "^ipcr-core/"
-          - "^ipcr/internal/"   # allow other internal packages in this repo
           - "^github.com/"
           - "^golang.org/"
           - "^gopkg.in/"
+        deny:
+          - pkg: "^ipcr(/|$)"
+            desc: "ipcr-core must not import app-side packages (ipcr/*)"
 
 issues:
   exclude-use-default: false

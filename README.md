@@ -2,6 +2,7 @@
 
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/ipcr/README.html)
 [![Go](https://img.shields.io/badge/go-%3E=1.19-blue)](https://golang.org)
+[![CI](https://github.com/KPU-AGC/ipcr/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/KPU-AGC/ipcr/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
 
 **`ipcr`** is a fast, parallel, in‑silico PCR tool written in Go.  

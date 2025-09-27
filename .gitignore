@@ -33,3 +33,4 @@ go.work.sum
 *.fna*
 
 *codebase*
+*commit*

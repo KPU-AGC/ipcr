@@ -50,7 +50,7 @@ func TestStreamGzip(t *testing.T) {
 		t.Fatalf("stream gz: %v", err)
 	}
 
-	var ids []string
+	ids := make([]string, 0, 2)
 	for r := range ch {
 		ids = append(ids, r.ID)
 	}

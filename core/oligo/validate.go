@@ -36,7 +36,7 @@ var complement = map[rune]rune{
 
 // Normalize removes spaces/quotes and uppercases bases.
 func Normalize(s string) string {
-	var out []rune
+	out := make([]rune, 0, len(s))
 	for _, r := range s {
 		if unicode.IsSpace(r) || r == '\'' || r == '"' {
 			continue

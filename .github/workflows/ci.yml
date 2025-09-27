@@ -7,23 +7,23 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build-and-test:
+  test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Go
+      - name: Setup Go (tests)
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21.x'
+          go-version: '1.22.x'
           check-latest: true
           cache: true
 
       - name: Go workspace sync
         run: |
           cat > go.work <<'EOF'
-          go 1.21
+          go 1.22
           use (
             .
             ./core
@@ -36,7 +36,7 @@ jobs:
           (cd core && go mod tidy)
           go mod tidy
 
-      - name: Test (app module)
+      - name: Test (root module)
         run: go test ./...
 
       - name: Test (core module)
@@ -44,16 +44,50 @@ jobs:
           cd core
           go test ./...
 
-      - name: Lint (app)
+  lint-root:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go (lint)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          check-latest: true
+
+      - name: Lint (root)
         uses: golangci/golangci-lint-action@v6
+        env:
+          GOWORK: off          # avoid workspace/toolchain upshift
+          GOTOOLCHAIN: local   # pin to setup-go's toolchain
         with:
           version: v1.59.1
           working-directory: .
           args: --timeout=5m
+          skip-cache: true     # don't reuse export data from newer Go
+          verify: true
+
+  lint-core:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go (lint)
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22.x'
+          check-latest: true
 
       - name: Lint (core)
         uses: golangci/golangci-lint-action@v6
+        env:
+          GOWORK: off
+          GOTOOLCHAIN: local
         with:
           version: v1.59.1
           working-directory: core
           args: --timeout=5m
+          skip-cache: true
+          verify: true

@@ -43,7 +43,8 @@ func writeGz(t *testing.T, data string) string {
 
 func TestStreamGzip(t *testing.T) {
 	gzPath := writeGz(t, plain)
-	defer func(){ _ = os.Remove(gzPath) }()
+	
+    defer func() { _ = os.Remove(gzPath) }()
 
 	ch, err := StreamChunks(gzPath, 0, 0)
 	if err != nil {
@@ -69,8 +70,7 @@ func TestStreamStdin(t *testing.T) {
 
 	// Write sample then close writer to signal EOF
 	go func() {
-	_, _ = io.WriteString(w, plain)
-	_ = w.Close()
+	go func() { _, _ = io.WriteString(w, plain); _ = w.Close() }()
 	}()
 
 	ch, err := StreamChunks("-", 0, 0)

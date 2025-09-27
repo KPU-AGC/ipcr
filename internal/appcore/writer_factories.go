@@ -1,4 +1,4 @@
-// internal/appcore/writer_factories.go
+// ./internal/appcore/writer_factories.go
 package appcore
 
 import (
@@ -7,6 +7,7 @@ import (
 	"ipcr/internal/engine"
 	"ipcr/internal/probeoutput"
 	"ipcr/internal/writers"
+	"ipcr/internal/nestedoutput"
 )
 
 // ---------------- Product writer ----------------
@@ -24,21 +25,13 @@ func NewProductWriterFactory(format string, sort, header, pretty, products bool)
 }
 
 func (w ProductWriterFactory) NeedSites() bool {
-	// Pretty blocks require sites in the Product.
 	return w.Format == "text" && w.Pretty
 }
 
 func (w ProductWriterFactory) NeedSeq() bool {
-	// We need amplicon sequences if --products, FASTA output, or pretty text.
-	if w.Products {
-		return true
-	}
-	if w.Format == "fasta" {
-		return true
-	}
-	if w.Format == "text" && w.Pretty {
-		return true
-	}
+	if w.Products { return true }
+	if w.Format == "fasta" { return true }
+	if w.Format == "text" && w.Pretty { return true }
 	return false
 }
 
@@ -59,16 +52,31 @@ func NewAnnotatedWriterFactory(format string, sort, header, pretty bool) Annotat
 	return AnnotatedWriterFactory{Format: format, Sort: sort, Header: header, Pretty: pretty}
 }
 
-func (w AnnotatedWriterFactory) NeedSites() bool {
-	// Pretty-annotated text requires sites for the primer bars.
-	return w.Pretty
-}
-
-func (w AnnotatedWriterFactory) NeedSeq() bool {
-	// Probe annotation requires the amplicon sequence to search the probe.
-	return true
-}
+func (w AnnotatedWriterFactory) NeedSites() bool { return w.Pretty }
+func (w AnnotatedWriterFactory) NeedSeq() bool  { return true }
 
 func (w AnnotatedWriterFactory) Start(out io.Writer, bufSize int) (chan<- probeoutput.AnnotatedProduct, <-chan error) {
 	return writers.StartAnnotatedWriter(out, w.Format, w.Sort, w.Header, w.Pretty, bufSize)
+}
+
+// ---------------- Nested writer ----------------
+
+type NestedWriterFactory struct {
+	Format string
+	Sort   bool
+	Header bool
+}
+
+func NewNestedWriterFactory(format string, sort, header bool) NestedWriterFactory {
+	return NestedWriterFactory{Format: format, Sort: sort, Header: header}
+}
+
+// Pretty rendering for nested isn’t implemented (sites aren’t needed here).
+func (w NestedWriterFactory) NeedSites() bool { return false }
+
+// IMPORTANT: visitor needs Product.Seq to rescan inner primers.
+func (w NestedWriterFactory) NeedSeq() bool { return true }
+
+func (w NestedWriterFactory) Start(out io.Writer, bufSize int) (chan<- nestedoutput.NestedProduct, <-chan error) {
+	return writers.StartNestedWriter(out, w.Format, w.Sort, w.Header, bufSize)
 }

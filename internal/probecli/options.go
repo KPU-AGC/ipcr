@@ -1,3 +1,4 @@
+// internal/probecli/options.go
 package probecli
 
 import (
@@ -72,6 +73,7 @@ func NewFlagSet(name string) *flag.FlagSet {
 		fmt.Fprintf(out, "      --require-probe         Only report amplicons that contain the probe [%s]\n", def("require-probe"))
 
 		fmt.Fprintln(out, "\nPCR / Performance / Output / Misc: (same as ipcr)")
+		fmt.Fprintln(out, "      --output text | json | jsonl | fasta")
 	}
 	return fs
 }

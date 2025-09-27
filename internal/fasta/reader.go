@@ -122,7 +122,6 @@ func (m *multiReadCloser) Close() error {
 	return err
 }
 
-// openReader opens a file (possibly gzip) or stdin for streaming.
 func openReader(path string) (io.ReadCloser, error) {
 	if path == "-" {
 		return io.NopCloser(os.Stdin), nil
@@ -131,16 +130,17 @@ func openReader(path string) (io.ReadCloser, error) {
 	if err != nil {
 		return nil, err
 	}
-	if strings.HasSuffix(path, ".gz") {
+	// Detect gzip by magic number (1F 8B), but also allow .gz by suffix
+	var sig [2]byte
+	n, _ := fh.Read(sig[:])
+	_, _ = fh.Seek(0, io.SeekStart)
+	if n == 2 && sig[0] == 0x1f && sig[1] == 0x8b || strings.HasSuffix(path, ".gz") {
 		gr, err := gzip.NewReader(fh)
 		if err != nil {
 			fh.Close()
 			return nil, err
 		}
-		return &multiReadCloser{
-			Reader:  gr,
-			closers: []io.Closer{gr, fh},
-		}, nil
+		return &multiReadCloser{Reader: gr, closers: []io.Closer{gr, fh}}, nil
 	}
 	return fh, nil
 }

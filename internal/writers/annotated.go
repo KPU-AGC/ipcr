@@ -29,6 +29,12 @@ func StartAnnotatedWriterWithPrettyOptions(out io.Writer, format string, sort bo
 			if sort { common.SortAnnotated(buf) }
 			err = probeoutput.WriteJSON(out, buf)
 
+		case "jsonl":
+			jsonlIn, done := StartAnnotatedJSONLWriter(out, bufSize)
+			for ap := range in { jsonlIn <- ap }
+			close(jsonlIn)
+			err = <-done
+
 		case "fasta":
 			if sort {
 				var buf []probeoutput.AnnotatedProduct

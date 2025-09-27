@@ -32,7 +32,7 @@ type Common struct {
 	Circular   bool
 
 	// Output
-	Output          string // text|json|fasta
+	Output          string // text|json|jsonl|fasta
 	Products        bool
 	Pretty          bool
 	Sort            bool
@@ -88,7 +88,7 @@ func Register(fs *flag.FlagSet, c *Common) *bool {
 	fs.BoolVar(&c.Circular, "c", false, "alias of --circular")
 
 	// Output
-	fs.StringVar(&c.Output, "output", "text", "output: text | json | fasta [text]")
+	fs.StringVar(&c.Output, "output", "text", "output: text | json | jsonl | fasta [text]")
 	fs.StringVar(&c.Output, "o", "text", "alias of --output")
 	fs.BoolVar(&c.Products, "products", false, "emit product sequences [false]")
 	fs.BoolVar(&c.Pretty, "pretty", false, "pretty ASCII alignment block (text) [false]")
@@ -145,7 +145,7 @@ func Validate(c *Common) error {
 		return errors.New("--hit-cap must be ≥ 0")
 	}
 	switch c.Output {
-	case "text", "json", "fasta":
+	case "text", "json", "jsonl", "fasta":
 	default:
 		return fmt.Errorf("invalid --output %q", c.Output)
 	}

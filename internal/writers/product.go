@@ -37,6 +37,15 @@ func StartProductWriterWithPrettyOptions(out io.Writer, format string, sort bool
 			}
 			err = output.WriteJSON(out, buf)
 
+		case "jsonl":
+			// Stream each object per line
+			jsonlIn, done := StartProductJSONLWriter(out, bufSize)
+			for p := range in {
+				jsonlIn <- p
+			}
+			close(jsonlIn)
+			err = <-done
+
 		case "fasta":
 			if sort {
 				var buf []engine.Product

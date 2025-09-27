@@ -37,7 +37,7 @@ func ForEachProduct(
 	cfg Config,
 	seqFiles []string,
 	pairs []primer.Pair,
-	eng *engine.Engine,
+	sim Simulator, // <-- accept the minimal interface
 	visit func(engine.Product) error,
 ) error {
 	if cfg.Threads < 1 {
@@ -65,7 +65,7 @@ func ForEachProduct(
 					if !ok {
 						return
 					}
-					hits := eng.SimulateBatch(j.rec.ID, j.rec.Seq, pairs)
+					hits := sim.SimulateBatch(j.rec.ID, j.rec.Seq, pairs)
 
 					// Fill sequence and source file
 					if cfg.NeedSeq {
@@ -129,7 +129,6 @@ feed:
 	for _, fa := range seqFiles {
 		rch, err := fasta.StreamChunks(fa, cfg.ChunkSize, cfg.Overlap)
 		if err != nil {
-			// Keep scanning other files; first error will be returned.
 			if cerr == nil {
 				cerr = err
 			}

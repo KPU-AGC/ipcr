@@ -1,4 +1,3 @@
-// internal/integration/integration_test.go
 package integration
 
 import (
@@ -15,6 +14,7 @@ import (
 	"ipcr/internal/app"
 	"ipcr/internal/engine"
 	"ipcr/internal/output"
+	"ipcr/pkg/api"
 )
 
 func write(t *testing.T, fn, data string) string {
@@ -56,7 +56,7 @@ func TestParallelMatchesEqualSerial(t *testing.T) {
 			"--sequences", fa,
 			"--threads", fmt.Sprint(threads),
 			"--output", "json",
-			"--sort", // deterministic order
+			"--sort",
 		}, &out, &errB)
 		if code != 0 {
 			t.Fatalf("exit %d err %s", code, errB.String())
@@ -72,7 +72,7 @@ func TestParallelMatchesEqualSerial(t *testing.T) {
 	}
 }
 
-// text vs TSV should be byte-identical when header settings match
+// text vs TSV parity still uses engine.Product directly for the writer API
 func TestTextVsTSVParity(t *testing.T) {
 	list := []engine.Product{
 		{SequenceID: "s:0-12", ExperimentID: "x", Start: 0, End: 12, Length: 12, Type: "forward", FwdMM: 0, RevMM: 1, FwdMismatchIdx: nil, RevMismatchIdx: []int{2}},
@@ -81,17 +81,13 @@ func TestTextVsTSVParity(t *testing.T) {
 
 	var textB, tsvB bytes.Buffer
 
-	// StreamText with a channel (no header, no pretty)
 	ch := make(chan engine.Product, len(list))
-	for _, p := range list {
-		ch <- p
-	}
+	for _, p := range list { ch <- p }
 	close(ch)
 	if err := output.StreamText(&textB, ch, false, false); err != nil {
 		t.Fatalf("stream text: %v", err)
 	}
 
-	// WriteTSV (no header)
 	if err := output.WriteTSV(&tsvB, list, false); err != nil {
 		t.Fatalf("write tsv: %v", err)
 	}
@@ -101,20 +97,14 @@ func TestTextVsTSVParity(t *testing.T) {
 	}
 }
 
-/*** Canonicalization helpers (robust to output format changes) ***/
+// ---- helpers for JSON canonicalization (now using api.ProductV1) ----
 
-// parse base ID and chunk offset from IDs like "s:8-24".
-// Returns base="s", off=8 if present; else base=id, off=0.
 func baseAndOffset(id string) (string, int) {
 	colon := strings.LastIndex(id, ":")
-	if colon == -1 || colon == len(id)-1 {
-		return id, 0
-	}
+	if colon == -1 || colon == len(id)-1 { return id, 0 }
 	suffix := id[colon+1:]
 	dash := strings.IndexByte(suffix, '-')
-	if dash == -1 {
-		return id, 0
-	}
+	if dash == -1 { return id, 0 }
 	startStr := suffix[:dash]
 	if start, err := strconv.Atoi(startStr); err == nil {
 		return id[:colon], start
@@ -122,11 +112,9 @@ func baseAndOffset(id string) (string, int) {
 	return id, 0
 }
 
-// canonicalizeJSON parses the JSON array of products, normalizes chunked coords
-// to global coords, and returns a sorted, de-duplicated set of signature rows.
-// Using JSON avoids any brittleness from text/TSV column changes.
+// canonicalizeJSON parses the JSON array of v1 products and normalizes chunked coords.
 func canonicalizeJSON(js string) ([]string, error) {
-	var prods []engine.Product
+	var prods []api.ProductV1
 	if err := json.Unmarshal([]byte(js), &prods); err != nil {
 		return nil, err
 	}
@@ -134,7 +122,6 @@ func canonicalizeJSON(js string) ([]string, error) {
 	for _, p := range prods {
 		base, off := baseAndOffset(p.SequenceID)
 		gs, ge := p.Start+off, p.End+off
-		// Signature captures the amplicon identity invariant under chunking.
 		sig := fmt.Sprintf("%s\t%s\t%d\t%d\t%d\t%s",
 			base, p.ExperimentID, gs, ge, p.Length, p.Type)
 		uniq[sig] = struct{}{}
@@ -147,12 +134,7 @@ func canonicalizeJSON(js string) ([]string, error) {
 	return out, nil
 }
 
-/*** The chunking equivalence test (now using JSON output) ***/
-
-// Chunking large enough (and with safe overlap) should match no-chunking results
-// after canonicalization. We run in JSON to avoid dependence on text/TSV columns.
 func TestChunkingKeepsBoundaryHits(t *testing.T) {
-	// Sequence long enough that many products exist
 	fa := write(t, "chunk.fa", ">s\nACGTACGTACGTACGTACGTACGTACGT\n")
 	defer os.Remove(fa)
 
@@ -164,7 +146,7 @@ func TestChunkingKeepsBoundaryHits(t *testing.T) {
 			"--sequences", fa,
 			"--output", "json",
 			"--sort",
-			"--max-length", "8", // constrain to 8 so chunking can be exact
+			"--max-length", "8",
 		}
 		if chunk > 0 {
 			args = append(args, "--chunk-size", fmt.Sprint(chunk))
@@ -177,19 +159,14 @@ func TestChunkingKeepsBoundaryHits(t *testing.T) {
 	}
 
 	noChunkJSON := runJSON(0)
-	chunkedJSON := runJSON(16) // safe: > max-length; code uses overlap ≥ max-length
+	chunkedJSON := runJSON(16)
 
 	nc, err := canonicalizeJSON(noChunkJSON)
-	if err != nil {
-		t.Fatalf("canonicalize no-chunk (json): %v", err)
-	}
+	if err != nil { t.Fatalf("canonicalize no-chunk (json): %v", err) }
 	ck, err := canonicalizeJSON(chunkedJSON)
-	if err != nil {
-		t.Fatalf("canonicalize chunked (json): %v", err)
-	}
+	if err != nil { t.Fatalf("canonicalize chunked (json): %v", err) }
 
 	if strings.Join(nc, "\n") != strings.Join(ck, "\n") {
-		// For debugging, also dump the *text* versions alongside the normalized sets.
 		var rawNo, rawCh bytes.Buffer
 		_ = app.Run([]string{
 			"--forward", "ACGTAC", "--reverse", "ACGTAC",

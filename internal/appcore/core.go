@@ -17,14 +17,9 @@ import (
 	"ipcr/internal/writers"
 )
 
-// Options contains the normalized knobs the core runner needs.
-// - TerminalWindow should already be resolved (see runutil.ComputeTerminalWindow).
-// - Threads <= 0 means "use all CPUs".
 type Options struct {
-	// Input
 	SeqFiles []string
 
-	// Engine parameters
 	MaxMM          int
 	TerminalWindow int
 	MinLen         int
@@ -33,34 +28,21 @@ type Options struct {
 	SeedLength     int
 	Circular       bool
 
-	// Pipeline
 	Threads   int
 	ChunkSize int
 
-	// UX/Exit
 	Quiet           bool
 	NoMatchExitCode int
 }
 
-// VisitorFunc transforms an engine.Product into an output record of type T.
-// Return keep=false to drop the record. Return error to abort.
 type VisitorFunc[T any] func(engine.Product) (keep bool, out T, err error)
 
-// WriterFactory abstracts over product vs. annotated writers (and any future ones).
-// It also declares cross-cutting requirements so the core can enable optional
-// work (like site capture and amplicon sequences) only when needed.
 type WriterFactory[T any] interface {
-	// NeedSites indicates whether pretty/renderer requires Product.FwdSite/RevSite.
 	NeedSites() bool
-	// NeedSeq indicates whether the pipeline must populate Product.Seq.
 	NeedSeq() bool
-	// Start spins a writer goroutine, returning its input channel and an error channel.
-	// bufSize is a hint for the internal input buffer (0 means "use a sensible default").
 	Start(out io.Writer, bufSize int) (chan<- T, <-chan error)
 }
 
-// Run wires the common harness: chunking, engine, pipeline, visitor, and writer.
-// It returns a process exit code compatible with the existing apps.
 func Run[T any](
 	parent context.Context,
 	stdout, stderr io.Writer,
@@ -71,7 +53,7 @@ func Run[T any](
 ) int {
 	outw := bufio.NewWriter(stdout)
 
-	// Longest primer length (for chunking + sanity checks)
+	// longest primer
 	maxPLen := 0
 	for _, pr := range pairs {
 		if l := len(pr.Forward); l > maxPLen {
@@ -81,7 +63,6 @@ func Run[T any](
 			maxPLen = l
 		}
 	}
-
 	if o.MaxLen > 0 && o.MaxLen < maxPLen {
 		fmt.Fprintf(stderr, "error: --max-length (%d) is smaller than the longest primer length (%d)\n", o.MaxLen, maxPLen)
 		return 2
@@ -103,7 +84,7 @@ func Run[T any](
 		thr = runtime.NumCPU()
 	}
 
-	eng := engine.New(engine.Config{
+	sim := engine.New(engine.Config{
 		MaxMM:          o.MaxMM,
 		TerminalWindow: o.TerminalWindow,
 		MinLen:         o.MinLen,
@@ -130,7 +111,7 @@ func Run[T any](
 		},
 		o.SeqFiles,
 		pairs,
-		eng,
+		sim, // <— interface now
 		visit,
 		func(x T) error {
 			select {

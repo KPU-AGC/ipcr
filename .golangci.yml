@@ -1,0 +1,66 @@
+run:
+  timeout: 3m
+  tests: true
+  issues-exit-code: 1
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - gosimple
+    - errcheck
+    - ineffassign
+    - gofmt
+    - goimports
+    - revive
+    - depguard
+
+linters-settings:
+  depguard:
+    rules:
+      engine-no-up:
+        files:
+          - "internal/engine/**"
+        deny:
+          - pkg: "ipcr/internal/pipeline"
+            desc: "engine must not depend on pipeline"
+          - pkg: "ipcr/internal/writers"
+            desc: "engine must not depend on writers"
+          - pkg: "ipcr/internal/output"
+            desc: "engine must not depend on output"
+          - pkg: "ipcr/internal/probeoutput"
+            desc: "engine must not depend on probeoutput"
+          - pkg: "ipcr/internal/cli"
+            desc: "engine must not depend on cli"
+          - pkg: "ipcr/internal/probecli"
+            desc: "engine must not depend on probecli"
+          - pkg: "ipcr/internal/appcore"
+            desc: "engine must not depend on appcore/app"
+          - pkg: "ipcr/internal/app"
+            desc: "engine must not depend on appcore/app"
+      writers-no-up:
+        files:
+          - "internal/writers/**"
+        deny:
+          - pkg: "ipcr/internal/appcore"
+            desc: "writers must not depend on app/appcore"
+          - pkg: "ipcr/internal/app"
+            desc: "writers must not depend on app/appcore"
+          - pkg: "ipcr/internal/cli"
+            desc: "writers must not depend on cli"
+          - pkg: "ipcr/internal/probecli"
+            desc: "writers must not depend on probecli"
+          - pkg: "ipcr/internal/pipeline"
+            desc: "writers must not depend on pipeline"
+      pipeline-no-up:
+        files:
+          - "internal/pipeline/**"
+        deny:
+          - pkg: "ipcr/internal/appcore"
+            desc: "pipeline must not depend on app/appcore"
+          - pkg: "ipcr/internal/app"
+            desc: "pipeline must not depend on app/appcore"
+          - pkg: "ipcr/internal/cli"
+            desc: "pipeline must not depend on cli"
+          - pkg: "ipcr/internal/probecli"
+            desc: "pipeline must not depend on probecli"

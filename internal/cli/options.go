@@ -84,7 +84,7 @@ func NewFlagSet(name string) *flag.FlagSet {
 		fmt.Fprintf(out, "      --seed-length int       Seed length for multi-pattern scan (0=auto) [%s]\n", def("seed-length"))
 
 		fmt.Fprintln(out, "\nOutput:")
-		fmt.Fprintf(out, "  -o, --output string         Output format: text | json | fasta [%s]\n", def("output"))
+		fmt.Fprintf(out, "  -o, --output string         Output format: text | json | jsonl | fasta [%s]\n", def("output"))
 		fmt.Fprintf(out, "      --products              Emit product sequences [%s]\n", def("products"))
 		fmt.Fprintf(out, "      --pretty                Pretty ASCII alignment block (text mode) [%s]\n", def("pretty"))
 		fmt.Fprintf(out, "      --sort                  Sort outputs for determinism [%s]\n", def("sort"))

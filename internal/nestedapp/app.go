@@ -27,6 +27,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	fs := nestedcli.NewFlagSet("ipcr-nested")
 	fs.SetOutput(io.Discard)
 
+	// No args → show help and exit 0
 	if len(argv) == 0 {
 		_, _ = nestedcli.ParseArgs(fs, []string{"-h"})
 		fs.SetOutput(outw)
@@ -76,7 +77,9 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		return 0
 	}
 
-	// Outer
+	// ----- Build primer sets -----
+
+	// Outer pairs
 	var outer []primer.Pair
 	if opts.PrimerFile != "" {
 		outer, err = primer.LoadTSV(opts.PrimerFile)
@@ -85,13 +88,19 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 			return 2
 		}
 	} else {
-		outer = []primer.Pair{{ID: "outer", Forward: opts.Fwd, Reverse: opts.Rev, MinProduct: opts.MinLen, MaxProduct: opts.MaxLen}}
+		outer = []primer.Pair{{
+			ID:         "outer",
+			Forward:    strings.ToUpper(opts.Fwd),
+			Reverse:    strings.ToUpper(opts.Rev),
+			MinProduct: opts.MinLen,
+			MaxProduct: opts.MaxLen,
+		}}
 	}
 	if opts.Self {
 		outer = common.AddSelfPairs(outer)
 	}
 
-	// Inner
+	// Inner pairs
 	var inner []primer.Pair
 	if opts.InnerPrimerFile != "" {
 		inner, err = primer.LoadTSV(opts.InnerPrimerFile)
@@ -100,29 +109,52 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 			return 2
 		}
 	} else {
-		inner = []primer.Pair{{ID: "inner", Forward: strings.ToUpper(opts.InnerFwd), Reverse: strings.ToUpper(opts.InnerRev)}}
+		inner = []primer.Pair{{
+			ID:      "inner",
+			Forward: strings.ToUpper(opts.InnerFwd),
+			Reverse: strings.ToUpper(opts.InnerRev),
+		}}
 	}
 	if opts.Self {
 		inner = common.AddSelfPairs(inner)
 	}
 
-	termWin := runutil.ComputeTerminalWindow(opts.Mode, opts.TerminalWindow)
+	// ----- Core execution config -----
+
+	// If your tree already has EffectiveTerminalWindow, keep this call.
+	// Otherwise, replace with: termWin := runutil.ComputeTerminalWindow(opts.Mode, opts.TerminalWindow)
+	termWin := runutil.EffectiveTerminalWindow(opts.TerminalWindow)
+
 	coreOpts := appcore.Options{
-		SeqFiles: opts.SeqFiles, MaxMM: opts.Mismatches, TerminalWindow: termWin,
-		MinLen: opts.MinLen, MaxLen: opts.MaxLen, HitCap: opts.HitCap, SeedLength: opts.SeedLength,
-		Circular: opts.Circular, Threads: opts.Threads, ChunkSize: opts.ChunkSize,
-		DedupeCap: opts.DedupeCap,
-		Quiet:     opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
+		SeqFiles:        opts.SeqFiles,
+		MaxMM:           opts.Mismatches,
+		TerminalWindow:  termWin,
+		MinLen:          opts.MinLen,
+		MaxLen:          opts.MaxLen,
+		HitCap:          opts.HitCap,
+		SeedLength:      opts.SeedLength,
+		Circular:        opts.Circular,
+		Threads:         opts.Threads,
+		ChunkSize:       opts.ChunkSize,
+		DedupeCap:       opts.DedupeCap,
+		Quiet:           opts.Quiet,
+		NoMatchExitCode: opts.NoMatchExitCode,
 	}
+
 	writer := appcore.NewNestedWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty)
 
 	visitor := visitors.Nested{
 		InnerPairs: inner,
 		EngineCfg: engine.Config{
-			MaxMM: opts.Mismatches, TerminalWindow: termWin, SeedLen: opts.SeedLength, Circular: false, NeedSites: writer.NeedSites(),
+			MaxMM:          opts.Mismatches,
+			TerminalWindow: termWin,
+			SeedLen:        opts.SeedLength,
+			Circular:       false,       // inner scan runs on linearized outer products
+			NeedSites:      opts.Pretty, // only pretty mode needs per-base sites
 		},
 		RequireInner: opts.RequireInner,
 	}
+
 	return appcore.Run(parent, stdout, stderr, coreOpts, outer, visitor.Visit, writer)
 }
 

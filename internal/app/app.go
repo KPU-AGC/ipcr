@@ -1,4 +1,4 @@
-// internal/app/app.go 
+// internal/app/app.go
 package app
 
 import (
@@ -89,12 +89,12 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		pairs = common.AddSelfPairs(pairs)
 	}
 
-	termWin := runutil.ComputeTerminalWindow(opts.Mode, opts.TerminalWindow)
+	termWin := runutil.EffectiveTerminalWindow(opts.TerminalWindow)
 	coreOpts := appcore.Options{
 		SeqFiles: opts.SeqFiles, MaxMM: opts.Mismatches, TerminalWindow: termWin,
 		MinLen: opts.MinLen, MaxLen: opts.MaxLen, HitCap: opts.HitCap, SeedLength: opts.SeedLength,
 		Circular: opts.Circular, Threads: opts.Threads, ChunkSize: opts.ChunkSize,
-		DedupeCap: opts.DedupeCap, // NEW
+		DedupeCap: opts.DedupeCap,
 		Quiet:     opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
 	}
 	writer := appcore.NewProductWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty, opts.Products, false, false)

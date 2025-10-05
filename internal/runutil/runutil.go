@@ -3,21 +3,15 @@ package runutil
 
 import (
 	"fmt"
-	"strings"
 )
 
-// ComputeTerminalWindow picks the default 3' terminal-window length.
-// override >= 0 takes precedence; otherwise "realistic" => 3, "debug" => 0.
-func ComputeTerminalWindow(mode string, override int) int {
-	if override >= 0 {
-		return override
-	}
-	switch strings.ToLower(mode) {
-	case "debug":
+// EffectiveTerminalWindow returns the enforced 3' terminal-window length.
+// Rule: default is 3 (set by flag). Any value < 1 disables the clamp (returns 0).
+func EffectiveTerminalWindow(v int) int {
+	if v < 1 {
 		return 0
-	default: // realistic (or anything else) defaults to 3
-		return 3
 	}
+	return v
 }
 
 // ComputeOverlap returns the overlap used for chunking.

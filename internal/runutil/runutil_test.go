@@ -2,15 +2,18 @@ package runutil
 
 import "testing"
 
-func TestComputeTerminalWindow(t *testing.T) {
-	if got := ComputeTerminalWindow("realistic", -1); got != 3 {
-		t.Fatalf("realistic→3, got %d", got)
+func TestEffectiveTerminalWindow(t *testing.T) {
+	if got := EffectiveTerminalWindow(3); got != 3 {
+		t.Fatalf("want 3, got %d", got)
 	}
-	if got := ComputeTerminalWindow("debug", -1); got != 0 {
-		t.Fatalf("debug→0, got %d", got)
+	if got := EffectiveTerminalWindow(1); got != 1 {
+		t.Fatalf("want 1, got %d", got)
 	}
-	if got := ComputeTerminalWindow("realistic", 2); got != 2 {
-		t.Fatalf("override should win, got %d", got)
+	if got := EffectiveTerminalWindow(0); got != 0 {
+		t.Fatalf("0 disables → want 0, got %d", got)
+	}
+	if got := EffectiveTerminalWindow(-1); got != 0 {
+		t.Fatalf("-1 disables → want 0, got %d", got)
 	}
 }
 

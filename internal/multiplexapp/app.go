@@ -211,7 +211,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		}
 	}
 
-	termWin := runutil.ComputeTerminalWindow(opts.Mode, opts.TerminalWindow)
+	termWin := runutil.EffectiveTerminalWindow(opts.TerminalWindow)
 	coreOpts := appcore.Options{
 		SeqFiles:        opts.SeqFiles,
 		MaxMM:           opts.Mismatches,
@@ -223,7 +223,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		Circular:        opts.Circular,
 		Threads:         opts.Threads,
 		ChunkSize:       opts.ChunkSize,
-		DedupeCap:       opts.DedupeCap, // ✅ hook up dedupe window for multiplex
+		DedupeCap:       opts.DedupeCap,
 		Quiet:           opts.Quiet,
 		NoMatchExitCode: opts.NoMatchExitCode,
 	}

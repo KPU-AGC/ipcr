@@ -39,9 +39,8 @@ type Options struct {
 	ProbeMaxMM  int
 	ProbeWeight float64
 
-	// Ranking/output
-	Scores bool
-	Rank   string
+	// Ranking/output (NOTE: score is always included in ipcr-thermo)
+	Rank string
 
 	// NEW thermoaddons knobs (thermo-only)
 	ExtAlpha      float64
@@ -57,7 +56,7 @@ type Options struct {
 
 func NewFlagSet(name string) *flag.FlagSet {
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
-	clibase.UsageCommon(fs, name, func(out io.Writer, def func(string) string) {
+	clibase.UsageCommon(fs, name, func(out io.Writer, _ func(string) string) {
 		_, _ = fmt.Fprintln(out, "Usage:")
 		_, _ = fmt.Fprintf(out, "  %s [options] --forward AAA --reverse TTT ref.fa[.gz]\n", name)
 		_, _ = fmt.Fprintf(out, "  %s [options] --primers panel.tsv ref*.fa.gz\n", name)
@@ -74,6 +73,9 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintf(out, "      --mg string            Mg2+, e.g., 3mM [%s]\n", "3mM")
 		_, _ = fmt.Fprintf(out, "      --primer-conc string   Primer concentration, e.g., 250nM [%s]\n", "250nM")
 		_, _ = fmt.Fprintf(out, "      --allow-indels int     Allow up to N 1-nt gaps per primer [%s]\n", "0")
+		// New clarity: mismatches are a prefilter in thermo
+		_, _ = fmt.Fprintln(out, "      NOTE: In ipcr-thermo, --mismatches acts as a scanning prefilter;")
+		_, _ = fmt.Fprintln(out, "            thermodynamic scoring still ranks hits.")
 
 		_, _ = fmt.Fprintln(out, "\nProbe (optional):")
 		_, _ = fmt.Fprintf(out, "      --probe string         Internal probe (5'→3') [%s]\n", "")
@@ -86,15 +88,16 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintf(out, "      --length-knee-bp int   Soft-knee start (bp) for length bias [%s]\n", "550")
 		_, _ = fmt.Fprintf(out, "      --length-steep float   Soft-knee steepness [%s]\n", "0.003")
 		_, _ = fmt.Fprintf(out, "      --length-max-pen float Max °C-equivalent length penalty [%s]\n", "10")
-		_, _ = fmt.Fprintf(out, "      --struct-hairpin       Penalize hairpins [true]\n")
-		_, _ = fmt.Fprintf(out, "      --struct-dimer         Penalize primer-dimers [true]\n")
+		_, _ = fmt.Fprintln(out, "      --struct-hairpin       Penalize hairpins [true]")
+		_, _ = fmt.Fprintln(out, "      --struct-dimer         Penalize primer-dimers [true]")
 		_, _ = fmt.Fprintf(out, "      --struct-scale float   Structural penalties scale [%s]\n", "1.0")
 		_, _ = fmt.Fprintf(out, "      --bind-weight float    Reserved bind weight (logit occupancy) [%s]\n", "1.0")
 		_, _ = fmt.Fprintf(out, "      --ext-weight float     Weight for extension logit term [%s]\n", "1.0")
 
-		_, _ = fmt.Fprintln(out, "\nRanking & outputs:")
-		_, _ = fmt.Fprintf(out, "      --scores               Include 'score' field in outputs [%s]\n", "false")
-		_, _ = fmt.Fprintf(out, "      --rank string          Order by: score | coord [%s]\n", "coord")
+		_, _ = fmt.Fprintln(out, "\nRanking & outputs (thermo):")
+		_, _ = fmt.Fprintln(out, "      score field is always included in outputs (TSV/JSON/JSONL).")
+		_, _ = fmt.Fprintf(out, "      --rank string          Order by: score | coord [%s]\n", "score")
+		_, _ = fmt.Fprintln(out, "      (default is score; pass --rank coord to keep coordinate order.)")
 	})
 	return fs
 }
@@ -120,7 +123,7 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.IntVar(&o.ProbeMaxMM, "probe-max-mm", 0, "max probe mismatches [0]")
 	fs.Float64Var(&o.ProbeWeight, "probe-weight", 1.0, "blend [0..1]: 1 favors probe strongly")
 
-	fs.BoolVar(&o.Scores, "scores", true, "include 'score' in outputs")
+	// scores flag removed: score is always on in ipcr-thermo
 	fs.StringVar(&o.Rank, "rank", "score", "order by: score | coord")
 	fs.BoolVar(&help, "h", false, "show this help [false]")
 

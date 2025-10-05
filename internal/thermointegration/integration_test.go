@@ -27,7 +27,6 @@ func TestThermo_EndToEnd_TSVWithScore(t *testing.T) {
 		"--reverse", "GGTACC",
 		"--sequences", fa,
 		"--output", "text",
-		"--scores",
 		"--sort",
 		"--rank", "score",
 	}, &out, &errB)

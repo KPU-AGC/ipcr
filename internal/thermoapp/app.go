@@ -358,15 +358,16 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	coreOpts := appcore.Options{
 		SeqFiles:        opts.SeqFiles,
-		MaxMM:           prefMM, // prefilter cap (thermo-only)
-		TerminalWindow:  0,      // allow 3′ mismatches; scoring punishes them
+		MaxMM:           prefMM,
+		TerminalWindow:  0,
 		MinLen:          opts.MinLen,
 		MaxLen:          opts.MaxLen,
 		HitCap:          opts.HitCap,
-		SeedLength:      -1, // disable seeds (thermo-only)
+		SeedLength:      -1,
 		Circular:        opts.Circular,
 		Threads:         opts.Threads,
 		ChunkSize:       opts.ChunkSize,
+		DedupeCap:       opts.DedupeCap,
 		Quiet:           opts.Quiet,
 		NoMatchExitCode: opts.NoMatchExitCode,
 	}

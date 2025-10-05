@@ -18,6 +18,7 @@ type Config struct {
 	Overlap   int  // overlap between chunks (typically >= MaxLen or primerLen-1)
 	Circular  bool // treat sequences as circular
 	NeedSeq   bool // fill Product.Seq by slicing record sequence
+	DedupCap  int  // NEW: capacity for LRU de-dup window (0=default)
 }
 
 // Key uniquely identifies a product in reference-global coordinates to
@@ -28,16 +29,13 @@ type Key struct {
 	Type, Exp  string
 }
 
-// ForEachProduct streams deduplicated engine.Products to the caller via visit.
-// It reads chunks from seqFiles, runs SimulateBatch over all primer pairs, fills
-// Product.Seq if requested, normalizes IDs/coords, deduplicates, and calls visit.
-// It returns the first error encountered (including context cancellation).
+// ForEachProduct ...
 func ForEachProduct(
 	ctx context.Context,
 	cfg Config,
 	seqFiles []string,
 	pairs []primer.Pair,
-	sim Simulator, // <-- accept the minimal interface
+	sim Simulator,
 	visit func(engine.Product) error,
 ) error {
 	if cfg.Threads < 1 {
@@ -96,7 +94,7 @@ func ForEachProduct(
 	var (
 		cerr error
 		cwg  sync.WaitGroup
-		seen = runutil.NewLRUSet[Key](200_000) // capacity can be tuned
+		seen = runutil.NewLRUSet[Key](cfg.DedupCap) // NEW (defaulting inside NewLRUSet if <=0)
 	)
 	cwg.Add(1)
 	go func() {

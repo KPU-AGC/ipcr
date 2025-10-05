@@ -19,7 +19,6 @@ import (
 	"ipcr/internal/writers"
 )
 
-// RunContext is the ipcr app entrypoint used by cmd/ipcr.
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
 	outw := bufio.NewWriter(stdout)
 	defer func() { _ = outw.Flush() }()
@@ -95,7 +94,8 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		SeqFiles: opts.SeqFiles, MaxMM: opts.Mismatches, TerminalWindow: termWin,
 		MinLen: opts.MinLen, MaxLen: opts.MaxLen, HitCap: opts.HitCap, SeedLength: opts.SeedLength,
 		Circular: opts.Circular, Threads: opts.Threads, ChunkSize: opts.ChunkSize,
-		Quiet: opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
+		DedupeCap: opts.DedupeCap, // NEW
+		Quiet:     opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
 	}
 	writer := appcore.NewProductWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty, opts.Products, false, false)
 	return appcore.Run[engine.Product](parent, stdout, stderr, coreOpts, pairs, visitors.PassThrough{}.Visit, writer)

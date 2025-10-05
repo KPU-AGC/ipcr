@@ -111,7 +111,8 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		SeqFiles: opts.SeqFiles, MaxMM: opts.Mismatches, TerminalWindow: termWin,
 		MinLen: opts.MinLen, MaxLen: opts.MaxLen, HitCap: opts.HitCap, SeedLength: opts.SeedLength,
 		Circular: opts.Circular, Threads: opts.Threads, ChunkSize: opts.ChunkSize,
-		Quiet: opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
+		DedupeCap: opts.DedupeCap, // NEW
+		Quiet:     opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
 	}
 	writer := appcore.NewNestedWriterFactory(opts.Output, opts.Sort, opts.Header)
 

@@ -31,6 +31,7 @@ type Common struct {
 	ChunkSize  int
 	SeedLength int
 	Circular   bool
+	DedupeCap  int // NEW: LRU window capacity for cross-chunk de-duplication (0=default)
 
 	// Output
 	Output          string // text|json|jsonl|fasta
@@ -92,6 +93,7 @@ func Register(fs *flag.FlagSet, c *Common) *bool {
 	fs.IntVar(&c.Threads, "t", 0, "alias of --threads")
 	fs.BoolVar(&c.Circular, "circular", false, "treat each FASTA record as circular [false]")
 	fs.BoolVar(&c.Circular, "c", false, "alias of --circular")
+	fs.IntVar(&c.DedupeCap, "dedupe-cap", 200000, "dedupe window capacity for cross-chunk uniqueness [200000]")
 
 	// Output
 	fs.StringVar(&c.Output, "output", "text", "output: text | json | jsonl | fasta [text]")
@@ -146,6 +148,9 @@ func Validate(c *Common) error {
 	}
 	if c.HitCap < 0 {
 		return errors.New("--hit-cap must be ≥ 0")
+	}
+	if c.DedupeCap < 0 {
+		return errors.New("--dedupe-cap must be ≥ 0")
 	}
 	switch c.Output {
 	case output.FormatText, output.FormatJSON, output.FormatJSONL, output.FormatFASTA:

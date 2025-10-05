@@ -1,4 +1,4 @@
-// internal/nestedapp/app.go 
+// internal/nestedapp/app.go
 package nestedapp
 
 import (
@@ -111,15 +111,15 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		SeqFiles: opts.SeqFiles, MaxMM: opts.Mismatches, TerminalWindow: termWin,
 		MinLen: opts.MinLen, MaxLen: opts.MaxLen, HitCap: opts.HitCap, SeedLength: opts.SeedLength,
 		Circular: opts.Circular, Threads: opts.Threads, ChunkSize: opts.ChunkSize,
-		DedupeCap: opts.DedupeCap, // NEW
+		DedupeCap: opts.DedupeCap,
 		Quiet:     opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
 	}
-	writer := appcore.NewNestedWriterFactory(opts.Output, opts.Sort, opts.Header)
+	writer := appcore.NewNestedWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty)
 
 	visitor := visitors.Nested{
 		InnerPairs: inner,
 		EngineCfg: engine.Config{
-			MaxMM: opts.Mismatches, TerminalWindow: termWin, SeedLen: opts.SeedLength, Circular: false, NeedSites: false,
+			MaxMM: opts.Mismatches, TerminalWindow: termWin, SeedLen: opts.SeedLength, Circular: false, NeedSites: writer.NeedSites(),
 		},
 		RequireInner: opts.RequireInner,
 	}

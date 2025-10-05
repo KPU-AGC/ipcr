@@ -80,15 +80,16 @@ type NestedWriterFactory struct {
 	Format string
 	Sort   bool
 	Header bool
+	Pretty bool
 }
 
-func NewNestedWriterFactory(format string, sort, header bool) NestedWriterFactory {
-	return NestedWriterFactory{Format: format, Sort: sort, Header: header}
+func NewNestedWriterFactory(format string, sort, header, pretty bool) NestedWriterFactory {
+	return NestedWriterFactory{Format: format, Sort: sort, Header: header, Pretty: pretty}
 }
 
-func (w NestedWriterFactory) NeedSites() bool { return false }
-func (w NestedWriterFactory) NeedSeq() bool   { return true } // inner scan needs sequence
+func (w NestedWriterFactory) NeedSites() bool { return w.Pretty }
+func (w NestedWriterFactory) NeedSeq() bool   { return true }
 
 func (w NestedWriterFactory) Start(out io.Writer, bufSize int) (chan<- nestedoutput.NestedProduct, <-chan error) {
-	return writers.StartNestedWriter(out, w.Format, w.Sort, w.Header, bufSize)
+	return writers.StartNestedWriterWithPretty(out, w.Format, w.Sort, w.Header, w.Pretty, bufSize)
 }

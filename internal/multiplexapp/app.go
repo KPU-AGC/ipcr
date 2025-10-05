@@ -20,23 +20,6 @@ import (
 	"strings"
 )
 
-func uniqueUpper(a []string) []string {
-	seen := make(map[string]struct{}, len(a))
-	out := make([]string, 0, len(a))
-	for _, s := range a {
-		u := strings.ToUpper(strings.TrimSpace(s))
-		if u == "" {
-			continue
-		}
-		if _, ok := seen[u]; ok {
-			continue
-		}
-		seen[u] = struct{}{}
-		out = append(out, u)
-	}
-	return out
-}
-
 // collectPools scans argv to capture *all* occurrences of --forward/-f and --reverse/-r.
 func collectPools(argv []string) (fwds, revs []string) {
 	nextVal := func(i int) (string, int) {
@@ -76,7 +59,8 @@ func collectPools(argv []string) (fwds, revs []string) {
 			}
 		}
 	}
-	return uniqueUpper(fwds), uniqueUpper(revs)
+	// Normalize/unique using the shared helper.
+	return common.UniqueUpper(fwds), common.UniqueUpper(revs)
 }
 
 func expandPairsFromPools(fwds, revs []string, minLen, maxLen int) []primer.Pair {
@@ -201,7 +185,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		if len(rPool) == 0 && opts.Rev != "" {
 			rPool = []string{opts.Rev}
 		}
-		fPool, rPool = uniqueUpper(fPool), uniqueUpper(rPool)
+		fPool, rPool = common.UniqueUpper(fPool), common.UniqueUpper(rPool)
 
 		switch {
 		case len(fPool) > 0 && len(rPool) > 0:
@@ -239,9 +223,9 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		Circular:        opts.Circular,
 		Threads:         opts.Threads,
 		ChunkSize:       opts.ChunkSize,
+		DedupeCap:       opts.DedupeCap, // ✅ hook up dedupe window for multiplex
 		Quiet:           opts.Quiet,
 		NoMatchExitCode: opts.NoMatchExitCode,
-		// Step 2 below will add: DedupeCap: opts.DedupeCap,
 	}
 	vis := visitors.PassThrough{}
 	wf := appcore.NewProductWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty, opts.Products, false, false)

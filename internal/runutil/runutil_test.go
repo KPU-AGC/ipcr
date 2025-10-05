@@ -45,18 +45,3 @@ func TestValidateChunking(t *testing.T) {
 		t.Fatalf("enabled: cs=%d ov=%d warns=%v", cs, ov, w)
 	}
 }
-
-func TestComputeNeedSeq(t *testing.T) {
-	if ComputeNeedSeq("json", false, false) {
-		t.Fatalf("json without products/pretty should be false")
-	}
-	if !ComputeNeedSeq("fasta", false, false) {
-		t.Fatalf("fasta always needs sequences")
-	}
-	if !ComputeNeedSeq("text", false, true) {
-		t.Fatalf("pretty text needs sequences")
-	}
-	if !ComputeNeedSeq("json", true, false) {
-		t.Fatalf("--products true needs sequences")
-	}
-}

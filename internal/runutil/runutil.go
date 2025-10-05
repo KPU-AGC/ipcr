@@ -3,7 +3,6 @@ package runutil
 
 import (
 	"fmt"
-	"ipcr/internal/output"
 	"strings"
 )
 
@@ -59,19 +58,4 @@ func ValidateChunking(circular bool, chunkSize, maxLen, maxPrimerLen int) (int, 
 	}
 	ov := ComputeOverlap(maxLen, maxPrimerLen)
 	return chunkSize, ov, warns
-}
-
-// ComputeNeedSeq decides if the pipeline must materialize sequence strings.
-// True if: --products, FASTA output, or pretty rendering requested (any format).
-func ComputeNeedSeq(format string, pretty, products bool) bool {
-	if products {
-		return true
-	}
-	if format == output.FormatFASTA {
-		return true
-	}
-	if pretty { // treat pretty as “needs seq” even if format isn’t text (matches tests)
-		return true
-	}
-	return false
 }

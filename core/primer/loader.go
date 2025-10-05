@@ -25,7 +25,8 @@ func LoadTSV(path string) ([]Pair, error) {
 			continue
 		}
 		f := strings.Fields(line)
-		if len(f) < 3 || len(f) == 4 || len(f) > 5 {
+		// Accept 3 (id fwd rev), 4 (… min), or 5 (… min max) fields.
+		if len(f) < 3 || len(f) > 5 {
 			return nil, fmt.Errorf("%s:%d bad field count", path, ln)
 		}
 		p := Pair{

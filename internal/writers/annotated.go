@@ -3,6 +3,8 @@ package writers
 
 import (
 	"io"
+	"sort"
+
 	"ipcr/internal/common"
 	"ipcr/internal/output"
 	"ipcr/internal/pretty"
@@ -31,7 +33,9 @@ func init() {
 		args := payload.(annotatedArgs)
 		list := drainAnnotated(args.In)
 		if args.Sort {
-			common.SortAnnotated(list)
+			sort.Slice(list, func(i, j int) bool {
+				return common.LessProduct(list[i].Product, list[j].Product)
+			})
 		}
 		return probeoutput.WriteJSON(w, list)
 	})
@@ -52,13 +56,15 @@ func init() {
 		args := payload.(annotatedArgs)
 		if args.Sort {
 			list := drainAnnotated(args.In)
-			common.SortAnnotated(list)
+			sort.Slice(list, func(i, j int) bool {
+				return common.LessProduct(list[i].Product, list[j].Product)
+			})
 			return probeoutput.WriteFASTA(w, list)
 		}
 		return probeoutput.StreamFASTA(w, args.In)
 	})
 
-	// TEXT/TSV (+ optional pretty blocks) — now via renderer-capable helpers
+	// TEXT/TSV (+ optional pretty blocks)
 	RegisterAnnotated(output.FormatText, func(w io.Writer, payload interface{}) error {
 		args := payload.(annotatedArgs)
 		render := func(ap probeoutput.AnnotatedProduct) string {
@@ -70,7 +76,9 @@ func init() {
 
 		if args.Sort {
 			list := drainAnnotated(args.In)
-			common.SortAnnotated(list)
+			sort.Slice(list, func(i, j int) bool {
+				return common.LessProduct(list[i].Product, list[j].Product)
+			})
 			return probeoutput.WriteTextWithRenderer(w, list, args.Header, render)
 		}
 		return probeoutput.StreamTextWithRenderer(w, args.In, args.Header, render)

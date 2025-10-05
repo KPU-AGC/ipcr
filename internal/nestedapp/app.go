@@ -11,6 +11,7 @@ import (
 	"ipcr-core/engine"
 	"ipcr-core/primer"
 	"ipcr/internal/appcore"
+	"ipcr/internal/common"
 	"ipcr/internal/nestedcli"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
@@ -18,24 +19,6 @@ import (
 	"ipcr/internal/writers"
 	"strings"
 )
-
-func addSelfPairs(pairs []primer.Pair) []primer.Pair {
-	out := make([]primer.Pair, 0, len(pairs)+2*len(pairs))
-	out = append(out, pairs...)
-	for _, p := range pairs {
-		if p.Forward != "" {
-			out = append(out, primer.Pair{
-				ID: p.ID + "+A:self", Forward: strings.ToUpper(p.Forward), Reverse: strings.ToUpper(p.Forward),
-			})
-		}
-		if p.Reverse != "" {
-			out = append(out, primer.Pair{
-				ID: p.ID + "+B:self", Forward: strings.ToUpper(p.Reverse), Reverse: strings.ToUpper(p.Reverse),
-			})
-		}
-	}
-	return out
-}
 
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
 	outw := bufio.NewWriter(stdout)
@@ -105,7 +88,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		outer = []primer.Pair{{ID: "outer", Forward: opts.Fwd, Reverse: opts.Rev, MinProduct: opts.MinLen, MaxProduct: opts.MaxLen}}
 	}
 	if opts.Self {
-		outer = addSelfPairs(outer)
+		outer = common.AddSelfPairs(outer)
 	}
 
 	// Inner
@@ -120,7 +103,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		inner = []primer.Pair{{ID: "inner", Forward: strings.ToUpper(opts.InnerFwd), Reverse: strings.ToUpper(opts.InnerRev)}}
 	}
 	if opts.Self {
-		inner = addSelfPairs(inner)
+		inner = common.AddSelfPairs(inner)
 	}
 
 	termWin := runutil.ComputeTerminalWindow(opts.Mode, opts.TerminalWindow)

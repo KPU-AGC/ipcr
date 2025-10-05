@@ -16,6 +16,9 @@ type ProductV1 struct {
 	RevMismatchIdx []int  `json:"rev_mm_i,omitempty"`
 	Seq            string `json:"seq,omitempty"`
 	SourceFile     string `json:"source_file,omitempty"`
+
+	// NEW: optional score, used by ipcr-thermo; omitted otherwise
+	Score float64 `json:"score,omitempty"`
 }
 
 // AnnotatedProductV1 is the stable schema for probe-annotated outputs.
@@ -33,6 +36,9 @@ type AnnotatedProductV1 struct {
 	RevMismatchIdx []int  `json:"rev_mm_i,omitempty"`
 	Seq            string `json:"seq,omitempty"`
 	SourceFile     string `json:"source_file,omitempty"`
+
+	// NEW: surface base score when present
+	Score float64 `json:"score,omitempty"`
 
 	// Probe overlay
 	ProbeName   string `json:"probe_name"`

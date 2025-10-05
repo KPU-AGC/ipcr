@@ -10,6 +10,7 @@ import (
 	"io"
 	"ipcr-core/primer"
 	"ipcr/internal/appcore"
+	"ipcr/internal/common"
 	"ipcr/internal/probecli"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
@@ -17,24 +18,6 @@ import (
 	"ipcr/internal/writers"
 	"strings"
 )
-
-func addSelfPairs(pairs []primer.Pair) []primer.Pair {
-	out := make([]primer.Pair, 0, len(pairs)+2*len(pairs))
-	out = append(out, pairs...)
-	for _, p := range pairs {
-		if p.Forward != "" {
-			out = append(out, primer.Pair{
-				ID: p.ID + "+A:self", Forward: strings.ToUpper(p.Forward), Reverse: strings.ToUpper(p.Forward),
-			})
-		}
-		if p.Reverse != "" {
-			out = append(out, primer.Pair{
-				ID: p.ID + "+B:self", Forward: strings.ToUpper(p.Reverse), Reverse: strings.ToUpper(p.Reverse),
-			})
-		}
-	}
-	return out
-}
 
 // RunContext is the ipcr-probe app entrypoint used by cmd/ipcr-probe.
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
@@ -95,16 +78,17 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	var pairs []primer.Pair
 	if opts.PrimerFile != "" {
-		pairs, err = primer.LoadTSV(opts.PrimerFile)
-		if err != nil {
-			_, _ = fmt.Fprintln(stderr, err)
+		var e error
+		pairs, e = primer.LoadTSV(opts.PrimerFile)
+		if e != nil {
+			_, _ = fmt.Fprintln(stderr, e)
 			return 2
 		}
 	} else {
 		pairs = []primer.Pair{{ID: "manual", Forward: opts.Fwd, Reverse: opts.Rev, MinProduct: opts.MinLen, MaxProduct: opts.MaxLen}}
 	}
 	if opts.Self {
-		pairs = addSelfPairs(pairs)
+		pairs = common.AddSelfPairs(pairs)
 	}
 
 	termWin := runutil.ComputeTerminalWindow(opts.Mode, opts.TerminalWindow)

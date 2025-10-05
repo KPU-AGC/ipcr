@@ -1,4 +1,3 @@
-// internal/nestedoutput/api_conv.go  (NEW)
 package nestedoutput
 
 import (
@@ -8,7 +7,7 @@ import (
 // ToAPINested converts a NestedProduct into the public wire type.
 func ToAPINested(np NestedProduct) api.NestedProductV1 {
 	p := np.Product
-	return api.NestedProductV1{
+	v := api.NestedProductV1{
 		ExperimentID:   p.ExperimentID,
 		SequenceID:     p.SequenceID,
 		Start:          p.Start,
@@ -31,4 +30,7 @@ func ToAPINested(np NestedProduct) api.NestedProductV1 {
 		InnerFwdMM:  np.InnerFwdMM,
 		InnerRevMM:  np.InnerRevMM,
 	}
+	// Conditionally attach score (thermo-only; no-op otherwise).
+	applyScoreToNested(&v, p)
+	return v
 }

@@ -1,4 +1,3 @@
-// internal/output/rows.go  (NEW)
 package output
 
 import (
@@ -27,4 +26,10 @@ func FormatBaseRowTSV(p engine.Product) string {
 		p.FwdMM, p.RevMM,
 		IntsCSV(p.FwdMismatchIdx), IntsCSV(p.RevMismatchIdx),
 	)
+}
+
+// NEW: append score as a trailing column (no trailing newline).
+func FormatRowTSVWithScore(p engine.Product) string {
+	base := FormatBaseRowTSV(p)
+	return fmt.Sprintf("%s\t%g", base, p.Score)
 }

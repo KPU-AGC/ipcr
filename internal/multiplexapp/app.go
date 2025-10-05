@@ -282,8 +282,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		NoMatchExitCode: opts.NoMatchExitCode,
 	}
 	vis := visitors.PassThrough{}
-	wf := appcore.NewProductWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty, opts.Products)
-
+	wf := appcore.NewProductWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty, opts.Products, false, false)
 	return appcore.Run[engine.Product](parent, outw, stderr, coreOpts, pairs, vis.Visit, wf)
 }
 

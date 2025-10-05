@@ -14,6 +14,9 @@ type NestedProductV1 struct {
 	Seq            string `json:"seq,omitempty"`
 	SourceFile     string `json:"source_file,omitempty"`
 
+	// NEW: outer product score when available
+	Score float64 `json:"score,omitempty"`
+
 	InnerFound  bool   `json:"inner_found"`
 	InnerPairID string `json:"inner_experiment_id,omitempty"`
 	InnerStart  int    `json:"inner_start,omitempty"`

@@ -1,4 +1,3 @@
-// internal/appcore/writer_factories.go
 package appcore
 
 import (
@@ -13,15 +12,25 @@ import (
 // ---------------- Product writer ----------------
 
 type ProductWriterFactory struct {
-	Format   string
-	Sort     bool
-	Header   bool
-	Pretty   bool
-	Products bool
+	Format       string
+	Sort         bool
+	Header       bool
+	Pretty       bool
+	Products     bool
+	IncludeScore bool
+	RankByScore  bool
 }
 
-func NewProductWriterFactory(format string, sort, header, pretty, products bool) ProductWriterFactory {
-	return ProductWriterFactory{Format: format, Sort: sort, Header: header, Pretty: pretty, Products: products}
+func NewProductWriterFactory(format string, sort, header, pretty, products bool, includeScore bool, rankByScore bool) ProductWriterFactory {
+	return ProductWriterFactory{
+		Format:       format,
+		Sort:         sort,
+		Header:       header,
+		Pretty:       pretty,
+		Products:     products,
+		IncludeScore: includeScore,
+		RankByScore:  rankByScore,
+	}
 }
 
 func (w ProductWriterFactory) NeedSites() bool {
@@ -42,7 +51,7 @@ func (w ProductWriterFactory) NeedSeq() bool {
 }
 
 func (w ProductWriterFactory) Start(out io.Writer, bufSize int) (chan<- engine.Product, <-chan error) {
-	return writers.StartProductWriter(out, w.Format, w.Sort, w.Header, w.Pretty, bufSize)
+	return writers.StartProductWriter(out, w.Format, w.Sort, w.Header, w.Pretty, w.IncludeScore, w.RankByScore, bufSize)
 }
 
 // ---------------- Annotated writer ----------------
@@ -77,11 +86,8 @@ func NewNestedWriterFactory(format string, sort, header bool) NestedWriterFactor
 	return NestedWriterFactory{Format: format, Sort: sort, Header: header}
 }
 
-// Pretty rendering for nested isn’t implemented (sites aren’t needed here).
 func (w NestedWriterFactory) NeedSites() bool { return false }
-
-// IMPORTANT: visitor needs Product.Seq to rescan inner primers.
-func (w NestedWriterFactory) NeedSeq() bool { return true }
+func (w NestedWriterFactory) NeedSeq() bool   { return true } // inner scan needs sequence
 
 func (w NestedWriterFactory) Start(out io.Writer, bufSize int) (chan<- nestedoutput.NestedProduct, <-chan error) {
 	return writers.StartNestedWriter(out, w.Format, w.Sort, w.Header, bufSize)

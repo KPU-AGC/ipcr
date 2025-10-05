@@ -9,7 +9,7 @@ import (
 
 func TestStartProductWriter_JSON(t *testing.T) {
 	var buf bytes.Buffer
-	in, done := StartProductWriter(&buf, "json", true, false, false, 4)
+	in, done := StartProductWriter(&buf, "json", true, false, false, false, false, 4)
 	in <- engine.Product{ExperimentID: "x", SequenceID: "s", Start: 0, End: 4, Length: 4, Type: "forward"}
 	in <- engine.Product{ExperimentID: "y", SequenceID: "s", Start: 2, End: 6, Length: 4, Type: "revcomp"}
 	close(in)

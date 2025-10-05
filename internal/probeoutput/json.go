@@ -1,4 +1,3 @@
-// internal/probeoutput/json.go
 package probeoutput
 
 import (

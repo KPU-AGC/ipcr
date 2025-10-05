@@ -1,4 +1,3 @@
-// internal/common/sort.go
 package common
 
 import (
@@ -26,6 +25,18 @@ func LessProduct(a, b engine.Product) bool {
 
 func SortProducts(ps []engine.Product) {
 	sort.Slice(ps, func(i, j int) bool { return LessProduct(ps[i], ps[j]) })
+}
+
+// NEW: score-priority sort (descending), then fall back to coord order.
+func LessProductByScore(a, b engine.Product) bool {
+	if a.Score != b.Score {
+		return a.Score > b.Score // higher first
+	}
+	return LessProduct(a, b)
+}
+
+func SortProductsByScore(ps []engine.Product) {
+	sort.Slice(ps, func(i, j int) bool { return LessProductByScore(ps[i], ps[j]) })
 }
 
 func SortAnnotated(list []probeoutput.AnnotatedProduct) {

@@ -4,13 +4,15 @@ package output
 import (
 	"encoding/json"
 	"io"
+
 	"ipcr-core/engine"
 	"ipcr/pkg/api"
 )
 
 // ToAPIProduct converts a domain Product to the stable wire schema (v1).
+// Score is attached conditionally via applyScoreToAPI (build-tagged).
 func ToAPIProduct(p engine.Product) api.ProductV1 {
-	return api.ProductV1{
+	v := api.ProductV1{
 		ExperimentID:   p.ExperimentID,
 		SequenceID:     p.SequenceID,
 		Start:          p.Start,
@@ -24,19 +26,28 @@ func ToAPIProduct(p engine.Product) api.ProductV1 {
 		Seq:            p.Seq,
 		SourceFile:     p.SourceFile,
 	}
+	// Conditionally attach Score (thermo-only).
+	applyScoreToAPI(&v, p)
+	return v
 }
 
-func ToAPIProducts(list []engine.Product) []api.ProductV1 {
-	out := make([]api.ProductV1, 0, len(list))
-	for _, p := range list {
-		out = append(out, ToAPIProduct(p))
-	}
-	return out
-}
-
-// WriteJSON encodes Products using the stable wire schema (v1).
-func WriteJSON(w io.Writer, list []engine.Product) error {
+// WriteJSON writes a JSON array of products. (Uses ToAPIProduct.)
+func WriteJSON(w io.Writer, products []engine.Product) error {
 	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(ToAPIProducts(list))
+	// encode as a JSON array
+	if _, err := w.Write([]byte("[")); err != nil {
+		return err
+	}
+	for i, p := range products {
+		if i > 0 {
+			if _, err := w.Write([]byte(",")); err != nil {
+				return err
+			}
+		}
+		if err := enc.Encode(ToAPIProduct(p)); err != nil {
+			return err
+		}
+	}
+	_, err := w.Write([]byte("]"))
+	return err
 }

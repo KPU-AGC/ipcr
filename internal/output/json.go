@@ -31,23 +31,17 @@ func ToAPIProduct(p engine.Product) api.ProductV1 {
 	return v
 }
 
-// WriteJSON writes a JSON array of products. (Uses ToAPIProduct.)
-func WriteJSON(w io.Writer, products []engine.Product) error {
+func toAPIProducts(list []engine.Product) []api.ProductV1 {
+	out := make([]api.ProductV1, 0, len(list))
+	for _, p := range list {
+		out = append(out, ToAPIProduct(p))
+	}
+	return out
+}
+
+// WriteJSON writes a single JSON array of v1 products (pretty-indented).
+func WriteJSON(w io.Writer, list []engine.Product) error {
 	enc := json.NewEncoder(w)
-	// encode as a JSON array
-	if _, err := w.Write([]byte("[")); err != nil {
-		return err
-	}
-	for i, p := range products {
-		if i > 0 {
-			if _, err := w.Write([]byte(",")); err != nil {
-				return err
-			}
-		}
-		if err := enc.Encode(ToAPIProduct(p)); err != nil {
-			return err
-		}
-	}
-	_, err := w.Write([]byte("]"))
-	return err
+	enc.SetIndent("", "  ")
+	return enc.Encode(toAPIProducts(list))
 }

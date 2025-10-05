@@ -3,6 +3,7 @@ package pretty
 import (
 	"fmt"
 	"ipcr-core/engine"
+	"ipcr-core/primer"
 	"strings"
 )
 
@@ -42,7 +43,7 @@ type Options struct {
 	DotGlyph     string // default "."
 }
 
-// DefaultOptions keeps the current look & feel (matching what you already approved).
+// DefaultOptions keeps the current look & feel.
 var DefaultOptions = Options{
 	MaxGap:          95,
 	ShowProbeInline: true,
@@ -60,6 +61,7 @@ const (
 	linePrefix        = "# "
 )
 
+// reverseString reverses a string (rune-aware).
 func reverseString(s string) string {
 	rs := []rune(s)
 	for i, j := 0, len(rs)-1; i < j; i, j = i+1, j-1 {
@@ -68,52 +70,26 @@ func reverseString(s string) string {
 	return string(rs)
 }
 
-func complementString(s string) string {
-	out := make([]byte, len(s))
-	for i := range s {
-		switch s[i] {
-		case 'A':
-			out[i] = 'T'
-		case 'T':
-			out[i] = 'A'
-		case 'C':
-			out[i] = 'G'
-		case 'G':
-			out[i] = 'C'
-		case 'R':
-			out[i] = 'Y'
-		case 'Y':
-			out[i] = 'R'
-		case 'S':
-			out[i] = 'S'
-		case 'W':
-			out[i] = 'W'
-		case 'K':
-			out[i] = 'M'
-		case 'M':
-			out[i] = 'K'
-		case 'B':
-			out[i] = 'V'
-		case 'V':
-			out[i] = 'B'
-		case 'D':
-			out[i] = 'H'
-		case 'H':
-			out[i] = 'D'
-		case 'N':
-			out[i] = 'N'
-		default:
-			out[i] = s[i]
-		}
+// comp5to3 returns the **complement** (not reverse-complement) of a 5'→3' string.
+// Implementation: complement(s) == revcomp(reverse(s)).
+func comp5to3(s string) string {
+	if s == "" {
+		return s
 	}
-	return string(out)
+	// reverse bytes (not runes — primer alphabet is ASCII)
+	b := []byte(s)
+	for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
+		b[i], b[j] = b[j], b[i]
+	}
+	rc := primer.RevComp(b)
+	return string(rc)
 }
 
 func isACGT(b byte) bool { return b == 'A' || b == 'C' || b == 'G' || b == 'T' }
 
 // Primer bars under a site (ipcr semantics)
-func matchLineAmbig(primer, site string, mismIdx []int, exactGlyph, partialGlyph string) string {
-	n := len(primer)
+func matchLineAmbig(primerSeq, site string, mismIdx []int, exactGlyph, partialGlyph string) string {
+	n := len(primerSeq)
 	if n <= 0 {
 		return ""
 	}
@@ -131,7 +107,7 @@ func matchLineAmbig(primer, site string, mismIdx []int, exactGlyph, partialGlyph
 			b.WriteByte(' ')
 			continue
 		}
-		if isACGT(primer[i]) {
+		if isACGT(primerSeq[i]) {
 			b.WriteString(exactGlyph)
 		} else {
 			b.WriteString(partialGlyph)
@@ -140,7 +116,6 @@ func matchLineAmbig(primer, site string, mismIdx []int, exactGlyph, partialGlyph
 	return b.String()
 }
 
-// scale an interior offset into the capped printed width (endpoint-preserving)
 func scalePos(off, interior, inner int) int {
 	if interior <= 1 || inner <= 1 {
 		return 0
@@ -154,7 +129,6 @@ func scalePos(off, interior, inner int) int {
 	return (off * (inner - 1)) / (interior - 1)
 }
 
-// intsCSV for printing mismatch indexes in the summary.
 func intsCSV(a []int) string {
 	if len(a) == 0 {
 		return ""
@@ -237,8 +211,8 @@ func RenderProductWithOptions(p engine.Product, opt Options) string {
 		linePrefix, prefixPlus, p.FwdSite, strings.Repeat(dot, innerPlus), suffixPlus,
 	)
 
-	// 4) (−) genomic line
-	minusSite := complementString(p.RevSite)
+	// 4) (−) genomic line (complement, not reverse)
+	minusSite := comp5to3(p.RevSite)
 	_, _ = fmt.Fprintf(&b, "%s%s%s%s%s # (-)\n",
 		linePrefix, prefixMinus, strings.Repeat(dot, innerMinus), minusSite, suffixMinus,
 	)
@@ -425,8 +399,8 @@ func RenderAnnotatedWithOptions(p engine.Product, ann ProbeAnnotation, opt Optio
 		_, _ = fmt.Fprintf(&b, "%s%s%s\n", linePrefix, strings.Repeat(" ", startCol), strings.Repeat(g, len(ov.seg)))
 	}
 
-	// 4) (−) line (with overlay) — FIXED to use minusInterior
-	minusSite := complementString(p.RevSite)
+	// 4) (−) line (with overlay) — uses **minusInterior** and comp5to3
+	minusSite := comp5to3(p.RevSite)
 	_, _ = fmt.Fprintf(&b, "%s%s%s%s%s # (-)\n",
 		linePrefix, prefixMinus, minusInterior, minusSite, suffixMinus,
 	)

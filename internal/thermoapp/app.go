@@ -17,6 +17,7 @@ import (
 
 	"ipcr/internal/appcore"
 	"ipcr/internal/cmdutil"
+	"ipcr/internal/common"
 	"ipcr/internal/thermocli"
 	"ipcr/internal/thermovisitors"
 	"ipcr/internal/version"
@@ -24,30 +25,6 @@ import (
 )
 
 // ---- pairing helpers (oligo mode) ----
-
-func addSelfPairs(pairs []primer.Pair) []primer.Pair {
-	out := make([]primer.Pair, 0, len(pairs)+2*len(pairs))
-	out = append(out, pairs...)
-	seenA := make(map[string]struct{})
-	seenB := make(map[string]struct{})
-	for _, p := range pairs {
-		if p.Forward != "" {
-			u := strings.ToUpper(p.Forward)
-			if _, ok := seenA[u]; !ok {
-				seenA[u] = struct{}{}
-				out = append(out, primer.Pair{ID: p.ID + "+A:self", Forward: u, Reverse: u})
-			}
-		}
-		if p.Reverse != "" {
-			u := strings.ToUpper(p.Reverse)
-			if _, ok := seenB[u]; !ok {
-				seenB[u] = struct{}{}
-				out = append(out, primer.Pair{ID: p.ID + "+B:self", Forward: u, Reverse: u})
-			}
-		}
-	}
-	return out
-}
 
 func pairsFromOligos(oligs []primer.Oligo, minLen, maxLen int, includeSelf bool) []primer.Pair {
 	out := make([]primer.Pair, 0, len(oligs)*len(oligs))
@@ -298,7 +275,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 			}}
 		}
 		if opts.Self {
-			pairs = addSelfPairs(pairs)
+			pairs = common.AddSelfPairsUnique(pairs)
 		}
 	}
 

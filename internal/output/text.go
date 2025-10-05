@@ -1,4 +1,4 @@
-// internal/output/text.go  (REPLACE)
+// internal/output/text.go 
 package output
 
 import (

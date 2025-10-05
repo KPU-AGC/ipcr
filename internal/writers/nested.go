@@ -1,4 +1,4 @@
-// internal/writers/nested.go  (REPLACE)
+// internal/writers/nested.go
 package writers
 
 import (
@@ -45,15 +45,15 @@ func init() {
 		return <-done
 	})
 
-	// TEXT/TSV
+	// TEXT/TSV (parity stub: renderer kept nil for now)
 	RegisterNested(output.FormatText, func(w io.Writer, payload interface{}) error {
 		args := payload.(nestedArgs)
 		if args.Sort {
 			list := drainNested(args.In)
 			sort.Slice(list, func(i, j int) bool { return common.LessProduct(list[i].Product, list[j].Product) })
-			return nestedoutput.WriteText(w, list, args.Header)
+			return nestedoutput.WriteTextWithRenderer(w, list, args.Header, nil)
 		}
-		return nestedoutput.StreamText(w, args.In, args.Header)
+		return nestedoutput.StreamTextWithRenderer(w, args.In, args.Header, nil)
 	})
 }
 

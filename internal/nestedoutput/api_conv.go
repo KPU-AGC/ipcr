@@ -1,6 +1,7 @@
 package nestedoutput
 
 import (
+	"ipcr-core/engine"
 	"ipcr/pkg/api"
 )
 
@@ -34,3 +35,15 @@ func ToAPINested(np NestedProduct) api.NestedProductV1 {
 	applyScoreToNested(&v, p)
 	return v
 }
+
+// ToAPINestedSlice converts a slice of NestedProduct to the v1 wire schema.
+func ToAPINestedSlice(list []NestedProduct) []api.NestedProductV1 {
+	out := make([]api.NestedProductV1, 0, len(list))
+	for _, np := range list {
+		out = append(out, ToAPINested(np))
+	}
+	return out
+}
+
+// Make sure we keep a dependency to engine in this file for score gating signatures.
+var _ engine.Product

@@ -2,10 +2,10 @@
 package output
 
 import (
-	"encoding/json"
 	"io"
 
 	"ipcr-core/engine"
+	"ipcr/internal/jsonutil"
 	"ipcr/pkg/api"
 )
 
@@ -41,7 +41,5 @@ func toAPIProducts(list []engine.Product) []api.ProductV1 {
 
 // WriteJSON writes a single JSON array of v1 products (pretty-indented).
 func WriteJSON(w io.Writer, list []engine.Product) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(toAPIProducts(list))
+	return jsonutil.EncodePretty(w, toAPIProducts(list))
 }

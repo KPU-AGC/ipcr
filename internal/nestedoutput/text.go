@@ -29,7 +29,8 @@ func writeRowTSV(w io.Writer, np NestedProduct) error {
 	return err
 }
 
-func StreamText(w io.Writer, in <-chan NestedProduct, header bool) error {
+// New: renderer-capable streaming writer (keeps parity with products/probe)
+func StreamTextWithRenderer(w io.Writer, in <-chan NestedProduct, header bool, render func(NestedProduct) string) error {
 	if header {
 		if _, err := io.WriteString(w, TSVHeaderNested+"\n"); err != nil {
 			return err
@@ -39,11 +40,17 @@ func StreamText(w io.Writer, in <-chan NestedProduct, header bool) error {
 		if err := writeRowTSV(w, np); err != nil {
 			return err
 		}
+		if render != nil {
+			if _, err := io.WriteString(w, render(np)); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }
 
-func WriteText(w io.Writer, list []NestedProduct, header bool) error {
+// New: renderer-capable buffered writer
+func WriteTextWithRenderer(w io.Writer, list []NestedProduct, header bool, render func(NestedProduct) string) error {
 	if header {
 		if _, err := io.WriteString(w, TSVHeaderNested+"\n"); err != nil {
 			return err
@@ -53,8 +60,21 @@ func WriteText(w io.Writer, list []NestedProduct, header bool) error {
 		if err := writeRowTSV(w, np); err != nil {
 			return err
 		}
+		if render != nil {
+			if _, err := io.WriteString(w, render(np)); err != nil {
+				return err
+			}
+		}
 	}
 	return nil
+}
+
+// Back-compat wrappers
+func StreamText(w io.Writer, in <-chan NestedProduct, header bool) error {
+	return StreamTextWithRenderer(w, in, header, nil)
+}
+func WriteText(w io.Writer, list []NestedProduct, header bool) error {
+	return WriteTextWithRenderer(w, list, header, nil)
 }
 
 func emptyIf(cond bool, s string) string {

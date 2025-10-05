@@ -1,4 +1,4 @@
-// internal/app/app.go  (REPLACE)
+// internal/app/app.go 
 package app
 
 import (

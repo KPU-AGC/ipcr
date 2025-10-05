@@ -1,4 +1,4 @@
-// internal/probeoutput/types.go  (REPLACE)
+// internal/probeoutput/types.go 
 package probeoutput
 
 import (

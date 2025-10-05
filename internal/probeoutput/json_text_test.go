@@ -1,4 +1,4 @@
-// internal/probeoutput/json_text_test.go  (REPLACE)
+// internal/probeoutput/json_text_test.go 
 package probeoutput
 
 import (

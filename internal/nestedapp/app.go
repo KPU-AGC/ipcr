@@ -1,4 +1,4 @@
-// internal/nestedapp/app.go  (REPLACE)
+// internal/nestedapp/app.go 
 package nestedapp
 
 import (

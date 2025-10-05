@@ -1,4 +1,4 @@
-// internal/probeoutput/text.go  (REPLACE)
+// internal/probeoutput/text.go
 package probeoutput
 
 import (
@@ -50,6 +50,48 @@ func WriteText(w io.Writer, list []AnnotatedProduct, header bool) error {
 	for _, ap := range list {
 		if err := WriteRowTSV(w, ap); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// --- Renderer-capable helpers (analogous to output.Write/StreamTextWithRenderer) ---
+
+// StreamTextWithRenderer streams TSV rows and appends a pretty block per row (if render != nil).
+func StreamTextWithRenderer(w io.Writer, in <-chan AnnotatedProduct, header bool, render func(AnnotatedProduct) string) error {
+	if header {
+		if _, err := fmt.Fprintln(w, TSVHeaderProbe); err != nil {
+			return err
+		}
+	}
+	for ap := range in {
+		if err := WriteRowTSV(w, ap); err != nil {
+			return err
+		}
+		if render != nil {
+			if _, err := io.WriteString(w, render(ap)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// WriteTextWithRenderer writes a buffered slice of TSV rows then pretty blocks (if render != nil).
+func WriteTextWithRenderer(w io.Writer, list []AnnotatedProduct, header bool, render func(AnnotatedProduct) string) error {
+	if header {
+		if _, err := fmt.Fprintln(w, TSVHeaderProbe); err != nil {
+			return err
+		}
+	}
+	for _, ap := range list {
+		if err := WriteRowTSV(w, ap); err != nil {
+			return err
+		}
+		if render != nil {
+			if _, err := io.WriteString(w, render(ap)); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

@@ -1,4 +1,4 @@
-// internal/probeapp/app.go  (REPLACE)
+// internal/probeapp/app.go 
 package probeapp
 
 import (

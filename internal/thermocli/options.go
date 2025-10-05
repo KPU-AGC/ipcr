@@ -27,7 +27,7 @@ type Options struct {
 	NaSpec         string
 	MgSpec         string
 	PrimerConcSpec string
-	AllowIndels    int
+	AllowIndel     bool // ✅ store-true boolean
 
 	// Oligo input
 	OligoInline []string
@@ -42,7 +42,7 @@ type Options struct {
 	// Ranking/output (NOTE: score is always included in ipcr-thermo)
 	Rank string
 
-	// NEW thermoaddons knobs (thermo-only)
+	// Thermo addons (thermo-only)
 	ExtAlpha      float64
 	LenKneeBP     int
 	LenSteep      float64
@@ -72,8 +72,8 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintf(out, "      --na string            Monovalent salt, e.g., 50mM [%s]\n", "50mM")
 		_, _ = fmt.Fprintf(out, "      --mg string            Mg2+, e.g., 3mM [%s]\n", "3mM")
 		_, _ = fmt.Fprintf(out, "      --primer-conc string   Primer concentration, e.g., 250nM [%s]\n", "250nM")
-		_, _ = fmt.Fprintf(out, "      --allow-indels int     Allow up to N 1-nt gaps per primer [%s]\n", "0")
-		// New clarity: mismatches are a prefilter in thermo
+
+		_, _ = fmt.Fprintln(out, "      --allow-indel          Allow a single 1-nt gap (bulge) per primer [false]")
 		_, _ = fmt.Fprintln(out, "      NOTE: In ipcr-thermo, --mismatches acts as a scanning prefilter;")
 		_, _ = fmt.Fprintln(out, "            thermodynamic scoring still ranks hits.")
 
@@ -116,18 +116,18 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.StringVar(&o.NaSpec, "na", "50mM", "monovalent salt (e.g., 50mM)")
 	fs.StringVar(&o.MgSpec, "mg", "3mM", "Mg2+ (e.g., 3mM)")
 	fs.StringVar(&o.PrimerConcSpec, "primer-conc", "250nM", "primer concentration (e.g., 250nM)")
-	fs.IntVar(&o.AllowIndels, "allow-indels", 0, "allow up to N 1-nt gaps per primer [0]")
+
+	fs.BoolVar(&o.AllowIndel, "allow-indel", false, "allow a single 1-nt gap (bulge) per primer")
 
 	fs.StringVar(&o.Probe, "probe", "", "internal probe (5'→3') [optional]")
 	fs.StringVar(&o.ProbeName, "probe-name", "probe", "probe label")
 	fs.IntVar(&o.ProbeMaxMM, "probe-max-mm", 0, "max probe mismatches [0]")
 	fs.Float64Var(&o.ProbeWeight, "probe-weight", 1.0, "blend [0..1]: 1 favors probe strongly")
 
-	// scores flag removed: score is always on in ipcr-thermo
 	fs.StringVar(&o.Rank, "rank", "score", "order by: score | coord")
 	fs.BoolVar(&help, "h", false, "show this help [false]")
 
-	// NEW thermoaddons knobs (with defaults)
+	// Thermo addons (with defaults)
 	fs.Float64Var(&o.ExtAlpha, "ext-alpha", 0.45, "slope for extension prob vs margin")
 	fs.IntVar(&o.LenKneeBP, "length-knee-bp", 550, "soft-knee start (bp)")
 	fs.Float64Var(&o.LenSteep, "length-steep", 0.003, "soft-knee steepness")
@@ -155,6 +155,7 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 		}
 		o.Common.SeqFiles = append(o.Common.SeqFiles, exp...)
 	}
+
 	hasOligoMode := len(o.OligoInline) > 0 || o.OligosTSV != ""
 	hasPairMode := o.PrimerFile != "" || (o.Fwd != "" && o.Rev != "")
 	if !hasOligoMode && !hasPairMode {
@@ -163,13 +164,11 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	if len(o.SeqFiles) == 0 {
 		return o, fmt.Errorf("at least one sequence file is required (positional or --sequences)")
 	}
+
 	switch strings.ToLower(o.Rank) {
 	case "coord", "score":
 	default:
 		return o, fmt.Errorf("--rank must be 'coord' or 'score'")
-	}
-	if o.AllowIndels < 0 || o.AllowIndels > 1 {
-		return o, fmt.Errorf("--allow-indels must be 0 or 1")
 	}
 	if o.ProbeWeight < 0 || o.ProbeWeight > 1 {
 		return o, fmt.Errorf("--probe-weight must be in [0,1]")

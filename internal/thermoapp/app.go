@@ -302,7 +302,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		AnnealTempC:  opts.AnnealTempC,
 		Na_M:         naM,
 		PrimerConc_M: ctM,
-		AllowIndels:  opts.AllowIndels > 0,
+		AllowIndels:  opts.AllowIndel, // ✅ boolean passthrough
 		LengthBiasOn: true,
 
 		ProbeSeq:    strings.ToUpper(strings.TrimSpace(opts.Probe)),
@@ -327,7 +327,6 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	if prefMM <= 0 {
 		prefMM = 4 // sensible thermo default
 	}
-	// If user explicitly set -m, let them know this is a *prefilter* in thermo mode.
 	if opts.Mismatches > 0 {
 		cmdutil.Warnf(stderr, opts.Quiet,
 			"ipcr-thermo treats --mismatches=%d as a scanning prefilter; thermodynamic scoring still ranks hits", prefMM)
@@ -351,7 +350,6 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	// Force NeedSeq=true via local writer factory, so scoring can read amplicons
 	rankByScore := !strings.EqualFold(opts.Rank, "coord")
-
 	wf := thermoWF{
 		Format:       opts.Output,
 		Sort:         true, // default: sort ON for ipcr-thermo

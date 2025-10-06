@@ -22,12 +22,13 @@ It finds amplicons from primer pairs under a mismatch model with a **3′ termin
 
 ## Binaries (CLIs)
 
-| Binary           | Description                                      | Common use               |
-| ---------------- | ------------------------------------------------ | ------------------------ |
-| `ipcr`           | Standard in-silico PCR                           | general PCR              |
-| `ipcr-probe`     | ipcr + **internal probe** annotation & filtering | qPCR/TaqMan-style assays |
-| `ipcr-nested`    | **Nested PCR**: outer amplicon + inner scan      | Two-round/nested assays  |
-| `ipcr-multiplex` | Panels from TSV or **pooled inline** primers | Screens / large panels   |
+| Binary           | Description	              | Common use                   |
+| ---------------- | ------------------------------------------------ | ---------------------------- |
+| `ipcr`           | Standard in-silico PCR	   | general PCR                  |
+| `ipcr-probe`     | ipcr + **internal probe** annotation & filtering | qPCR/TaqMan-style assays     |
+| `ipcr-nested`    | **Nested PCR**: outer amplicon + inner scan      | Two-round/nested assays      |
+| `ipcr-multiplex` | Panels from TSV or **pooled inline** primers     | Screens / large panels       |
+| `ipcr-thermo`    | Thermodynamically-informed scoring & ranking     | Ranking / assay robustness   |
 
 ---
 
@@ -50,8 +51,8 @@ Escherichia-coli.fna.gz   NC_000913.3     manual  223777  225283  1506    forwar
 #    |||||||||||¦||||||||-->
 # 5'-AGAGTTTGATCATGGCTCAG.................................................................................................-3' # (+)
 # 3'-...............................................................................................ATGCCAATGGAACAATGCTGAA-5' # (-)
-#                                                                                                <--|||||¦||||||||||¦|||||
-#                                                                                                3'-TTCAGYATTGTTCCATYGGCAT-5'
+#				<--|||||¦||||||||||¦|||||
+#				3'-TTCAGYATTGTTCCATYGGCAT-5'
 #
 ...
 ```
@@ -99,12 +100,12 @@ ipcr-nested \
   Fusobacterium-nucleatum.fna.gz
 ```
 ```
-source_file     sequence_id     outer_experiment_id     outer_start     outer_end       outer_length    outer_type      inner_experiment_id     inner_found     inner_start     inner_end       inner_length    inner_type       inner_fwd_mm    inner_rev_mm
-Fusobacterium-nucleatum.fna.gz     NZ_CP028101.1   outer   534786  536270  1484    forward Fn-F517-R1214   true    541     1237    696     forward 0       0
-Fusobacterium-nucleatum.fna.gz     NZ_CP028101.1   outer   613679  615163  1484    forward Fn-F517-R1214   true    541     1237    696     forward 0       0
-Fusobacterium-nucleatum.fna.gz     NZ_CP028101.1   outer   1079673 1081157 1484    forward Fn-F517-R1214   true    541     1237    696     forward 0       0
-Fusobacterium-nucleatum.fna.gz     NZ_CP028101.1   outer   335297  336781  1484    revcomp Fn-F517-R1214   true    247     943     696     revcomp 0       0
-Fusobacterium-nucleatum.fna.gz     NZ_CP028101.1   outer   2054505 2055989 1484    revcomp Fn-F517-R1214   true    247     943     696     revcomp 0       0
+source_file	sequence_id	outer_experiment_id	outer_start	outer_end	outer_length	outer_type	inner_experiment_id	inner_found	inner_start	inner_end	inner_length	inner_type	inner_fwd_mm	inner_rev_mm
+Fusobacterium-nucleatum.fna.gz	NZ_CP028101.1	outer	534786	536270	1484	forward	Fn-F517-R1214	true	541	1237	696	forward	0	0
+Fusobacterium-nucleatum.fna.gz	NZ_CP028101.1	outer	613679	615163	1484	forward	Fn-F517-R1214	true	541	1237	696	forward	0	0
+Fusobacterium-nucleatum.fna.gz	NZ_CP028101.1	outer	1079673	1081157	1484	forward	Fn-F517-R1214	true	541	1237	696	forward	0	0
+Fusobacterium-nucleatum.fna.gz	NZ_CP028101.1	outer	335297	336781	1484	revcomp	Fn-F517-R1214	true	247	943	696	revcomp	0	0
+Fusobacterium-nucleatum.fna.gz	NZ_CP028101.1	outer	2054505	2055989	1484	revcomp	Fn-F517-R1214	true	247	943	696	revcomp	0	0
 ```
 
 ### Multiplex panel (TSV of many pairs):
@@ -116,10 +117,28 @@ ipcr-multiplex \
   --output jsonl \
   --products \
   --sort \
-  S-typhimurium.fna.gz
+  Salmonella-Typhimurium.fna.gz
 ```
 ```json
 {"experiment_id":"ST","sequence_id":"NC_003197.2","start":4750875,"end":4751186,"length":311,"type":"revcomp","seq":"ATGACAAACTCTTGATTCTGAAGATCGACTTTTTTTGCTATGTAATCCGCGATCTTTTTCTGATTCAATAAGCCAACGAGTTGTTTTTTCAGCGCTTCGGTACCGACTTTCACTTCCTGCTGACAGACGCGGTCAAATAACCCACGTTCAGTGAGCATGTCGACGATGATCTGAAAGATGTTGAGGTGCGCGAACTTGTGGTCCTTTTCCAGATTACGCAACAGATACTTCAGGTGTTCACGCACCTGCAGCTCATTCTGAGCAGGATAATCAAAAATCCAGAACCCAATCTCATTACCGGAGCCGTTGTT","source_file":"S-typhimurium.fna.gz"}
+```
+
+### Thermodynamically-informed :
+
+```bash
+# With multiplex primer pool described by Xiong (2017); DOI: 10.3389/fmicb.2017.00420
+ipcr-thermo \
+  --oligo ATGTCTATAAGCACCACAATG         --oligo TCATTTCAATAATGATTCAAGC \
+  --oligo CATTCTGACCTTTAAGCCGGTCAATGAG  --oligo CCAAAAAGCGAGACCTCAAACTTACTCAG \
+  --oligo GCGGACGTCATTGTCACTAACCCGACG   --oligo TCTAAAGTGGGAACCCGATGTTCAGCG \
+  --mismatches 3 --circular \
+  Salmonella-Enteritidis.fna.gz
+```
+```text
+source_file	sequence_id	experiment_id	start	end	length	type	fwd_mm	rev_mm	fwd_mm_i	rev_mm_i	score
+Salmonella-Enteritidis	NZ_CP025559.1	O3+O4	2446500	2446839	339	revcomp	0	0	-110.73864769266693
+Salmonella-Enteritidis	NZ_CP025559.1	O5+O6	2734882	2735037	155	revcomp	0	0	-120.79822631649216
+Salmonella-Enteritidis	NZ_CP025559.1	O1+O2	1853303	1854185	882	revcomp	0	0	-137.31230787351492
 ```
 
 ---
@@ -154,7 +173,6 @@ ipcr-multiplex \
 
 * `--mismatches N` — max mismatches per primer (default 0)
 * `--terminal-window N` — no mismatches allowed in the last *N* bases (3 nt by default in `realistic` mode)
-* `--mode realistic|debug` — controls default terminal window (3 vs 0)
 * `--min-length / --max-length` — product length bounds
 * `--circular` — permit wrap-around amplicons
 * `--output text|json|jsonl|fasta` — choose format; `--sort` for stable order; `--products` to emit sequences in text/json

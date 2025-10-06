@@ -31,3 +31,5 @@ issues:
     # keep tests linted, but silence rare typecheck flakiness
     - path: _test\.go$
       linters: [typecheck]
+  exclude-dirs:
+    - core

@@ -63,7 +63,7 @@ jobs:
         with:
           version: v1.59.1
           working-directory: .
-          args: --timeout=5m --skip-dirs core --fix
+          args: --timeout=5m --fix
           skip-cache: true
           verify: true
 

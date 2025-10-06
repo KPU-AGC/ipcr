@@ -79,7 +79,7 @@ func init() {
 			}
 			h := output.TSVHeader // canonical base header
 			if args.Scores {
-				h = h + "\tscore"
+				h += "\tscore" // <- assignOp fix (was: h = h + "\tscore")
 			}
 			_, err := io.WriteString(w, h+"\n")
 			return err

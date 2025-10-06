@@ -24,5 +24,8 @@ type Product struct {
 	// Optional amplicon sequence
 	Seq string `json:"seq,omitempty"`
 
+	// NEW: optional score (thermo / realistic mode)
+	Score float64 `json:"score,omitempty"`
+
 	SourceFile string `json:"source_file"`
 }

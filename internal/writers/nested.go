@@ -1,4 +1,4 @@
-// internal/writers/nested.go  (REPLACE)
+// internal/writers/nested.go
 package writers
 
 import (
@@ -6,12 +6,15 @@ import (
 	"ipcr/internal/common"
 	"ipcr/internal/nestedoutput"
 	"ipcr/internal/output"
+	"ipcr/internal/pretty"
 	"sort"
 )
 
 type nestedArgs struct {
 	Sort   bool
 	Header bool
+	Pretty bool
+	Opt    pretty.Options
 	In     <-chan nestedoutput.NestedProduct
 }
 
@@ -34,7 +37,7 @@ func init() {
 		return nestedoutput.WriteJSON(w, list)
 	})
 
-	// JSONL streaming (unified via StartNestedJSONLWriter)
+	// JSONL streaming
 	RegisterNested(output.FormatJSONL, func(w io.Writer, payload interface{}) error {
 		args := payload.(nestedArgs)
 		pipe, done := StartNestedJSONLWriter(w, 64)
@@ -45,20 +48,37 @@ func init() {
 		return <-done
 	})
 
-	// TEXT/TSV
+	// TEXT/TSV (+ optional pretty blocks) — now unified via renderer
 	RegisterNested(output.FormatText, func(w io.Writer, payload interface{}) error {
 		args := payload.(nestedArgs)
+		render := func(np nestedoutput.NestedProduct) string {
+			if !args.Pretty {
+				return ""
+			}
+			return nestedoutput.RenderPrettyWithOptions(np, args.Opt)
+		}
+
 		if args.Sort {
 			list := drainNested(args.In)
 			sort.Slice(list, func(i, j int) bool { return common.LessProduct(list[i].Product, list[j].Product) })
-			return nestedoutput.WriteText(w, list, args.Header)
+			return nestedoutput.WriteTextWithRenderer(w, list, args.Header, render)
 		}
-		return nestedoutput.StreamText(w, args.In, args.Header)
+		return nestedoutput.StreamTextWithRenderer(w, args.In, args.Header, render)
 	})
 }
 
-// Public API (unchanged)
+// Back-compat: original signature (pretty=false)
 func StartNestedWriter(out io.Writer, format string, sortOut, header bool, bufSize int) (chan<- nestedoutput.NestedProduct, <-chan error) {
+	return StartNestedWriterWithPretty(out, format, sortOut, header, false, bufSize)
+}
+
+// Convenience: pretty on/off with default glyphs
+func StartNestedWriterWithPretty(out io.Writer, format string, sortOut, header, prettyMode bool, bufSize int) (chan<- nestedoutput.NestedProduct, <-chan error) {
+	return StartNestedWriterWithPrettyOptions(out, format, sortOut, header, prettyMode, pretty.DefaultOptions, bufSize)
+}
+
+// Full control: pretty + options
+func StartNestedWriterWithPrettyOptions(out io.Writer, format string, sortOut, header, prettyMode bool, popt pretty.Options, bufSize int) (chan<- nestedoutput.NestedProduct, <-chan error) {
 	if bufSize <= 0 {
 		bufSize = 64
 	}
@@ -68,6 +88,8 @@ func StartNestedWriter(out io.Writer, format string, sortOut, header bool, bufSi
 		err := WriteNested(format, out, nestedArgs{
 			Sort:   sortOut,
 			Header: header,
+			Pretty: prettyMode,
+			Opt:    popt,
 			In:     in,
 		})
 		errCh <- err

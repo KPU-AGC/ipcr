@@ -2,15 +2,18 @@ package runutil
 
 import "testing"
 
-func TestComputeTerminalWindow(t *testing.T) {
-	if got := ComputeTerminalWindow("realistic", -1); got != 3 {
-		t.Fatalf("realistic→3, got %d", got)
+func TestEffectiveTerminalWindow(t *testing.T) {
+	if got := EffectiveTerminalWindow(3); got != 3 {
+		t.Fatalf("want 3, got %d", got)
 	}
-	if got := ComputeTerminalWindow("debug", -1); got != 0 {
-		t.Fatalf("debug→0, got %d", got)
+	if got := EffectiveTerminalWindow(1); got != 1 {
+		t.Fatalf("want 1, got %d", got)
 	}
-	if got := ComputeTerminalWindow("realistic", 2); got != 2 {
-		t.Fatalf("override should win, got %d", got)
+	if got := EffectiveTerminalWindow(0); got != 0 {
+		t.Fatalf("0 disables → want 0, got %d", got)
+	}
+	if got := EffectiveTerminalWindow(-1); got != 0 {
+		t.Fatalf("-1 disables → want 0, got %d", got)
 	}
 }
 
@@ -43,20 +46,5 @@ func TestValidateChunking(t *testing.T) {
 	cs, ov, w = ValidateChunking(false, 2000, 500, 25)
 	if cs != 2000 || ov != 500 || len(w) != 0 {
 		t.Fatalf("enabled: cs=%d ov=%d warns=%v", cs, ov, w)
-	}
-}
-
-func TestComputeNeedSeq(t *testing.T) {
-	if ComputeNeedSeq("json", false, false) {
-		t.Fatalf("json without products/pretty should be false")
-	}
-	if !ComputeNeedSeq("fasta", false, false) {
-		t.Fatalf("fasta always needs sequences")
-	}
-	if !ComputeNeedSeq("text", false, true) {
-		t.Fatalf("pretty text needs sequences")
-	}
-	if !ComputeNeedSeq("json", true, false) {
-		t.Fatalf("--products true needs sequences")
 	}
 }

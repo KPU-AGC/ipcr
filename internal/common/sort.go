@@ -1,9 +1,7 @@
-// internal/common/sort.go
 package common
 
 import (
 	"ipcr-core/engine"
-	"ipcr/internal/probeoutput"
 	"sort"
 )
 
@@ -28,8 +26,14 @@ func SortProducts(ps []engine.Product) {
 	sort.Slice(ps, func(i, j int) bool { return LessProduct(ps[i], ps[j]) })
 }
 
-func SortAnnotated(list []probeoutput.AnnotatedProduct) {
-	sort.Slice(list, func(i, j int) bool {
-		return LessProduct(list[i].Product, list[j].Product)
-	})
+// score-priority sort (descending), then fall back to coord order.
+func LessProductByScore(a, b engine.Product) bool {
+	if a.Score != b.Score {
+		return a.Score > b.Score // higher first
+	}
+	return LessProduct(a, b)
+}
+
+func SortProductsByScore(ps []engine.Product) {
+	sort.Slice(ps, func(i, j int) bool { return LessProductByScore(ps[i], ps[j]) })
 }

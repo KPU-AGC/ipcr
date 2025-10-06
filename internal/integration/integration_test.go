@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"ipcr-core/engine"
 	"ipcr/internal/app"
+	"ipcr/internal/common"
 	"ipcr/internal/output"
 	"ipcr/pkg/api"
 	"os"
 	"sort"
-	"strconv"
 	"strings"
 	"testing"
 )
@@ -98,24 +98,7 @@ func TestTextVsTSVParity(t *testing.T) {
 	}
 }
 
-// ---- helpers for JSON canonicalization (now using api.ProductV1) ----
-
-func baseAndOffset(id string) (string, int) {
-	colon := strings.LastIndex(id, ":")
-	if colon == -1 || colon == len(id)-1 {
-		return id, 0
-	}
-	suffix := id[colon+1:]
-	dash := strings.IndexByte(suffix, '-')
-	if dash == -1 {
-		return id, 0
-	}
-	startStr := suffix[:dash]
-	if start, err := strconv.Atoi(startStr); err == nil {
-		return id[:colon], start
-	}
-	return id, 0
-}
+// ---- helpers for JSON canonicalization (now using common.SplitChunkSuffix) ----
 
 // canonicalizeJSON parses the JSON array of v1 products and normalizes chunked coords.
 func canonicalizeJSON(js string) ([]string, error) {
@@ -125,7 +108,7 @@ func canonicalizeJSON(js string) ([]string, error) {
 	}
 	uniq := make(map[string]struct{}, len(prods))
 	for _, p := range prods {
-		base, off := baseAndOffset(p.SequenceID)
+		base, off, _ := common.SplitChunkSuffix(p.SequenceID)
 		gs, ge := p.Start+off, p.End+off
 		sig := fmt.Sprintf("%s\t%s\t%d\t%d\t%d\t%s",
 			base, p.ExperimentID, gs, ge, p.Length, p.Type)

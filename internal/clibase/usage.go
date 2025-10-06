@@ -38,8 +38,7 @@ func UsageCommon(fs *flag.FlagSet, name string, extra func(out io.Writer, def fu
 		_, _ = fmt.Fprintf(out, "      --min-length int        Minimum product length [%s]\n", def("min-length"))
 		_, _ = fmt.Fprintf(out, "      --max-length int        Maximum product length [%s]\n", def("max-length"))
 		_, _ = fmt.Fprintf(out, "      --hit-cap int           Max matches stored per primer/window (0=unlimited) [%s]\n", def("hit-cap"))
-		_, _ = fmt.Fprintf(out, "      --terminal-window int   3' terminal window (0=allow, -1=auto) [%s]\n", def("terminal-window"))
-		_, _ = fmt.Fprintf(out, "      --mode string           Matching mode: realistic | debug [%s]\n", def("mode"))
+		_, _ = fmt.Fprintf(out, "      --terminal-window int   3' terminal window (N<1 disables) [%s]\n", def("terminal-window"))
 		_, _ = fmt.Fprintf(out, "      --self                  Allow single-oligo amplification (A×rc(A), B×rc(B)) [%s]\n", def("self"))
 
 		_, _ = fmt.Fprintln(out, "\nPerformance:")
@@ -60,5 +59,6 @@ func UsageCommon(fs *flag.FlagSet, name string, extra func(out io.Writer, def fu
 		_, _ = fmt.Fprintf(out, "  -q, --quiet                 Suppress non-essential warnings [%s]\n", def("quiet"))
 		_, _ = fmt.Fprintln(out, "  -v, --version               Print version and exit")
 		_, _ = fmt.Fprintln(out, "  -h, --help                  Show this help and exit")
+		_, _ = fmt.Fprintln(out, "      --examples              Show quickstart examples and exit")
 	}
 }

@@ -23,7 +23,6 @@ type Common struct {
 	MaxLen         int
 	HitCap         int
 	TerminalWindow int
-	Mode           string
 	Self           bool // allow single-oligo amplification (A×rc(A), B×rc(B))
 
 	// Performance
@@ -31,6 +30,7 @@ type Common struct {
 	ChunkSize  int
 	SeedLength int
 	Circular   bool
+	DedupeCap  int // LRU window capacity for cross-chunk de-duplication (0=default)
 
 	// Output
 	Output          string // text|json|jsonl|fasta
@@ -56,12 +56,6 @@ func (s *sliceValue) String() string {
 }
 func (s *sliceValue) Set(v string) error { *s.dst = append(*s.dst, v); return nil }
 
-// Modes (single source of truth)
-const (
-	ModeRealistic = "realistic"
-	ModeDebug     = "debug"
-)
-
 // Register wires shared flags onto fs and returns a pointer to the “no-header” bool.
 func Register(fs *flag.FlagSet, c *Common) *bool {
 	// Inputs
@@ -80,8 +74,8 @@ func Register(fs *flag.FlagSet, c *Common) *bool {
 	fs.IntVar(&c.MinLen, "min-length", 0, "minimum product length [0]")
 	fs.IntVar(&c.MaxLen, "max-length", 2000, "maximum product length [2000]")
 	fs.IntVar(&c.HitCap, "hit-cap", 10000, "max matches stored per primer/window (0=unlimited) [10000]")
-	fs.IntVar(&c.TerminalWindow, "terminal-window", -1, "3' terminal window (0=allow, -1=auto) [-1]")
-	fs.StringVar(&c.Mode, "mode", ModeRealistic, "matching mode: realistic | debug")
+	// New semantics: default 3; N<1 disables the 3′ clamp.
+	fs.IntVar(&c.TerminalWindow, "terminal-window", 3, "3' terminal window (N<1 disables) [3]")
 	fs.BoolVar(&c.Self, "self", true, "allow single-oligo amplification (A×rc(A), B×rc(B)) [true]")
 	fs.IntVar(&c.Mismatches, "m", 0, "alias of --mismatches")
 
@@ -92,6 +86,7 @@ func Register(fs *flag.FlagSet, c *Common) *bool {
 	fs.IntVar(&c.Threads, "t", 0, "alias of --threads")
 	fs.BoolVar(&c.Circular, "circular", false, "treat each FASTA record as circular [false]")
 	fs.BoolVar(&c.Circular, "c", false, "alias of --circular")
+	fs.IntVar(&c.DedupeCap, "dedupe-cap", 200000, "dedupe window capacity for cross-chunk uniqueness [200000]")
 
 	// Output
 	fs.StringVar(&c.Output, "output", "text", "output: text | json | jsonl | fasta [text]")
@@ -101,7 +96,8 @@ func Register(fs *flag.FlagSet, c *Common) *bool {
 	fs.BoolVar(&c.Sort, "sort", false, "sort outputs deterministically [false]")
 	noHeader := false
 	fs.BoolVar(&noHeader, "no-header", false, "suppress header line [false]")
-	fs.IntVar(&c.NoMatchExitCode, "no-match-exit-code", 1, "exit code when no amplicons found [1]")
+	// Default is now 0 so “no matches” is not treated as an error unless requested.
+	fs.IntVar(&c.NoMatchExitCode, "no-match-exit-code", 0, "exit code when no amplicons found [0]")
 
 	// Misc
 	fs.BoolVar(&c.Quiet, "quiet", false, "suppress non-essential warnings [false]")
@@ -146,6 +142,9 @@ func Validate(c *Common) error {
 	}
 	if c.HitCap < 0 {
 		return errors.New("--hit-cap must be ≥ 0")
+	}
+	if c.DedupeCap < 0 {
+		return errors.New("--dedupe-cap must be ≥ 0")
 	}
 	switch c.Output {
 	case output.FormatText, output.FormatJSON, output.FormatJSONL, output.FormatFASTA:

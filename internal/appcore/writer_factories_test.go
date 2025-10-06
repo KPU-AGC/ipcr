@@ -3,7 +3,7 @@ package appcore
 import "testing"
 
 func TestProductWriterFactory_NeedSitesAndSeq(t *testing.T) {
-	w := NewProductWriterFactory("text", false, false, true, false)
+	w := NewProductWriterFactory("text", false, false, true, false, false, false)
 	if !w.NeedSites() {
 		t.Fatal("pretty text must NeedSites")
 	}
@@ -11,17 +11,17 @@ func TestProductWriterFactory_NeedSitesAndSeq(t *testing.T) {
 		t.Fatal("pretty text must NeedSeq")
 	}
 
-	w = NewProductWriterFactory("json", false, false, false, false)
+	w = NewProductWriterFactory("json", false, false, false, false, false, false)
 	if w.NeedSites() || w.NeedSeq() {
 		t.Fatal("json without products/pretty should not need sites/seq")
 	}
 
-	w = NewProductWriterFactory("fasta", false, false, false, false)
+	w = NewProductWriterFactory("fasta", false, false, false, false, false, false)
 	if !w.NeedSeq() {
 		t.Fatal("fasta must NeedSeq")
 	}
 
-	w = NewProductWriterFactory("json", false, false, false, true)
+	w = NewProductWriterFactory("json", false, false, false, true, true, false)
 	if !w.NeedSeq() {
 		t.Fatal("json + --products must NeedSeq")
 	}

@@ -2,15 +2,17 @@
 package output
 
 import (
-	"encoding/json"
 	"io"
+
 	"ipcr-core/engine"
+	"ipcr/internal/jsonutil"
 	"ipcr/pkg/api"
 )
 
 // ToAPIProduct converts a domain Product to the stable wire schema (v1).
+// Score is attached conditionally via applyScoreToAPI (build-tagged).
 func ToAPIProduct(p engine.Product) api.ProductV1 {
-	return api.ProductV1{
+	v := api.ProductV1{
 		ExperimentID:   p.ExperimentID,
 		SequenceID:     p.SequenceID,
 		Start:          p.Start,
@@ -24,9 +26,12 @@ func ToAPIProduct(p engine.Product) api.ProductV1 {
 		Seq:            p.Seq,
 		SourceFile:     p.SourceFile,
 	}
+	// Conditionally attach Score (thermo-only).
+	applyScoreToAPI(&v, p)
+	return v
 }
 
-func ToAPIProducts(list []engine.Product) []api.ProductV1 {
+func toAPIProducts(list []engine.Product) []api.ProductV1 {
 	out := make([]api.ProductV1, 0, len(list))
 	for _, p := range list {
 		out = append(out, ToAPIProduct(p))
@@ -34,9 +39,7 @@ func ToAPIProducts(list []engine.Product) []api.ProductV1 {
 	return out
 }
 
-// WriteJSON encodes Products using the stable wire schema (v1).
+// WriteJSON writes a single JSON array of v1 products (pretty-indented).
 func WriteJSON(w io.Writer, list []engine.Product) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(ToAPIProducts(list))
+	return jsonutil.EncodePretty(w, toAPIProducts(list))
 }

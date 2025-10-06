@@ -29,6 +29,7 @@ type Options struct {
 
 	Threads   int
 	ChunkSize int
+	DedupeCap int // NEW
 
 	Quiet           bool
 	NoMatchExitCode int
@@ -97,7 +98,7 @@ func Run[T any](
 	ctx, cancel := context.WithCancel(parent)
 	defer cancel()
 
-	total, perr := cmdutil.RunStream[T]( // ← qualify here
+	total, perr := cmdutil.RunStream[T](
 		ctx,
 		pipeline.Config{
 			Threads:   thr,
@@ -105,6 +106,7 @@ func Run[T any](
 			Overlap:   overlap,
 			Circular:  o.Circular,
 			NeedSeq:   wf.NeedSeq(),
+			DedupCap:  o.DedupeCap, // NEW
 		},
 		o.SeqFiles,
 		pairs,

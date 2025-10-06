@@ -36,9 +36,26 @@ func NewFlagSet(name string) *flag.FlagSet {
 
 func Parse() (Options, error) { return ParseArgs(NewFlagSet("ipcr-nested"), nil) }
 
+func PrintExamples(out io.Writer) {
+	clibase.PrintExamples(out, "ipcr-nested", func(w io.Writer) {
+		_, _ = fmt.Fprintln(out, "Nested PCR: two-layered amplification.")
+		_, _ = fmt.Fprintln(out, "Use -f/-r for outer primers, inner primers with --inner-forward/--inner-reverse.")
+		_, _ = fmt.Fprintln(out, "Use --require-inner to require an inner amplicon within each outer product.")
+		_, _ = fmt.Fprintln(out, "\nExample:")
+		_, _ = fmt.Fprintln(out, "  ipcr-nested \\")
+		_, _ = fmt.Fprintln(out, "    --outer-primers 27F-1492R.tsv \\")
+		_, _ = fmt.Fprintln(out, "    --inner-primers Fn_nested-primers \\")
+		_, _ = fmt.Fprintln(out, "    --output text \\")
+		_, _ = fmt.Fprintln(out, "    --mismatches 1 \\")
+		_, _ = fmt.Fprintln(out, "    --sort \\")
+		_, _ = fmt.Fprintln(out, "    Fusobacterium-nucleatum.fna.gz")
+	})
+}
+
 func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	var o Options
 	var help bool
+	var showExamples bool
 
 	var c clibase.Common
 	noHeader := clibase.Register(fs, &c)
@@ -53,12 +70,16 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.StringVar(&o.InnerFwd, "F", "", "alias of --inner-forward")
 	fs.StringVar(&o.InnerRev, "R", "", "alias of --inner-reverse")
 
-	// Help
+	// Help / examples
 	fs.BoolVar(&help, "h", false, "show this help [false]")
+	fs.BoolVar(&showExamples, "examples", false, "show quickstart examples and exit [false]")
 
 	flagArgs, posArgs := cliutil.SplitFlagsAndPositionals(fs, argv)
 	if err := fs.Parse(flagArgs); err != nil {
 		return o, err
+	}
+	if showExamples {
+		return o, clibase.ErrPrintedAndExitOK
 	}
 	if help {
 		return o, flag.ErrHelp

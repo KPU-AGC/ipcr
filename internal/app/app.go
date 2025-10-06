@@ -1,4 +1,4 @@
-// internal/app/app.go  (REPLACE)
+// internal/app/app.go
 package app
 
 import (
@@ -12,38 +12,14 @@ import (
 	"ipcr-core/primer"
 	"ipcr/internal/appcore"
 	"ipcr/internal/cli"
+	"ipcr/internal/clibase"
+	"ipcr/internal/common"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
 	"ipcr/internal/visitors"
 	"ipcr/internal/writers"
-	"strings"
 )
 
-func addSelfPairs(pairs []primer.Pair) []primer.Pair {
-	out := make([]primer.Pair, 0, len(pairs)+2*len(pairs))
-	out = append(out, pairs...)
-	for _, p := range pairs {
-		if p.Forward != "" {
-			out = append(out, primer.Pair{
-				ID:         p.ID + "+A:self",
-				Forward:    strings.ToUpper(p.Forward),
-				Reverse:    strings.ToUpper(p.Forward),
-				MinProduct: 0, MaxProduct: 0,
-			})
-		}
-		if p.Reverse != "" {
-			out = append(out, primer.Pair{
-				ID:         p.ID + "+B:self",
-				Forward:    strings.ToUpper(p.Reverse),
-				Reverse:    strings.ToUpper(p.Reverse),
-				MinProduct: 0, MaxProduct: 0,
-			})
-		}
-	}
-	return out
-}
-
-// RunContext is the ipcr app entrypoint used by cmd/ipcr.
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
 	outw := bufio.NewWriter(stdout)
 	defer func() { _ = outw.Flush() }()
@@ -66,6 +42,17 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	opts, err := cli.ParseArgs(fs, argv)
 	if err != nil {
+		if errors.Is(err, clibase.ErrPrintedAndExitOK) {
+			fs.SetOutput(outw)
+			cli.PrintExamples(outw, "ipcr")
+			if e := outw.Flush(); writers.IsBrokenPipe(e) {
+				return 0
+			} else if e != nil {
+				_, _ = fmt.Fprintln(stderr, e)
+				return 3
+			}
+			return 0
+		}
 		if errors.Is(err, flag.ErrHelp) {
 			fs.SetOutput(outw)
 			fs.Usage()
@@ -111,18 +98,18 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		pairs = []primer.Pair{{ID: "manual", Forward: opts.Fwd, Reverse: opts.Rev, MinProduct: opts.MinLen, MaxProduct: opts.MaxLen}}
 	}
 	if opts.Self {
-		pairs = addSelfPairs(pairs)
+		pairs = common.AddSelfPairs(pairs)
 	}
 
-	termWin := runutil.ComputeTerminalWindow(opts.Mode, opts.TerminalWindow)
+	termWin := runutil.EffectiveTerminalWindow(opts.TerminalWindow)
 	coreOpts := appcore.Options{
 		SeqFiles: opts.SeqFiles, MaxMM: opts.Mismatches, TerminalWindow: termWin,
 		MinLen: opts.MinLen, MaxLen: opts.MaxLen, HitCap: opts.HitCap, SeedLength: opts.SeedLength,
 		Circular: opts.Circular, Threads: opts.Threads, ChunkSize: opts.ChunkSize,
-		Quiet: opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
+		DedupeCap: opts.DedupeCap,
+		Quiet:     opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
 	}
-	writer := appcore.NewProductWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty, opts.Products)
-
+	writer := appcore.NewProductWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty, opts.Products, false, false)
 	return appcore.Run[engine.Product](parent, stdout, stderr, coreOpts, pairs, visitors.PassThrough{}.Visit, writer)
 }
 

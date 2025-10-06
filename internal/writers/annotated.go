@@ -3,6 +3,8 @@ package writers
 
 import (
 	"io"
+	"sort"
+
 	"ipcr/internal/common"
 	"ipcr/internal/output"
 	"ipcr/internal/pretty"
@@ -31,7 +33,9 @@ func init() {
 		args := payload.(annotatedArgs)
 		list := drainAnnotated(args.In)
 		if args.Sort {
-			common.SortAnnotated(list)
+			sort.Slice(list, func(i, j int) bool {
+				return common.LessProduct(list[i].Product, list[j].Product)
+			})
 		}
 		return probeoutput.WriteJSON(w, list)
 	})
@@ -52,7 +56,9 @@ func init() {
 		args := payload.(annotatedArgs)
 		if args.Sort {
 			list := drainAnnotated(args.In)
-			common.SortAnnotated(list)
+			sort.Slice(list, func(i, j int) bool {
+				return common.LessProduct(list[i].Product, list[j].Product)
+			})
 			return probeoutput.WriteFASTA(w, list)
 		}
 		return probeoutput.StreamFASTA(w, args.In)
@@ -61,43 +67,21 @@ func init() {
 	// TEXT/TSV (+ optional pretty blocks)
 	RegisterAnnotated(output.FormatText, func(w io.Writer, payload interface{}) error {
 		args := payload.(annotatedArgs)
-		if args.Pretty {
-			// Header once
-			if args.Header {
-				if _, err := io.WriteString(w, probeoutput.TSVHeaderProbe+"\n"); err != nil {
-					return err
-				}
+		render := func(ap probeoutput.AnnotatedProduct) string {
+			if !args.Pretty {
+				return ""
 			}
-			if args.Sort {
-				list := drainAnnotated(args.In)
-				common.SortAnnotated(list)
-				for _, ap := range list {
-					if err := probeoutput.WriteRowTSV(w, ap); err != nil {
-						return err
-					}
-					if _, err := io.WriteString(w, probeoutput.RenderPrettyWithOptions(ap, args.Opt)); err != nil {
-						return err
-					}
-				}
-				return nil
-			}
-			for ap := range args.In {
-				if err := probeoutput.WriteRowTSV(w, ap); err != nil {
-					return err
-				}
-				if _, err := io.WriteString(w, probeoutput.RenderPrettyWithOptions(ap, args.Opt)); err != nil {
-					return err
-				}
-			}
-			return nil
+			return probeoutput.RenderPrettyWithOptions(ap, args.Opt)
 		}
-		// Plain TSV
+
 		if args.Sort {
 			list := drainAnnotated(args.In)
-			common.SortAnnotated(list)
-			return probeoutput.WriteText(w, list, args.Header)
+			sort.Slice(list, func(i, j int) bool {
+				return common.LessProduct(list[i].Product, list[j].Product)
+			})
+			return probeoutput.WriteTextWithRenderer(w, list, args.Header, render)
 		}
-		return probeoutput.StreamText(w, args.In, args.Header)
+		return probeoutput.StreamTextWithRenderer(w, args.In, args.Header, render)
 	})
 }
 

@@ -1,4 +1,4 @@
-// core/engine/engine.go  (REPLACE)
+// core/engine/engine.go
 package engine
 
 import (
@@ -30,26 +30,10 @@ func New(c Config) *Engine { return &Engine{cfg: c} }
 // SetHitCap updates the hit cap after creation.
 func (e *Engine) SetHitCap(n int) { e.cfg.HitCap = n }
 
-// -------------------- Existing single-pair path (kept) ----------------------
+// -------------------- Existing single-pair path (now delegates) ------------
 func (e *Engine) Simulate(seqID string, seq []byte, p primer.Pair) []Product {
-
-	a := []byte(p.Forward)
-	b := []byte(p.Reverse)
-	ra := primer.RevComp(a)
-	rb := primer.RevComp(b)
-
-	hc := e.cfg.HitCap
-	tw := e.cfg.TerminalWindow
-
-	fwdA := primer.FindMatches(seq, a, e.cfg.MaxMM, hc, tw)
-	fwdB := primer.FindMatches(seq, b, e.cfg.MaxMM, hc, tw)
-	revAraw := primer.FindMatches(seq, ra, e.cfg.MaxMM, hc, 0)
-	revBraw := primer.FindMatches(seq, rb, e.cfg.MaxMM, hc, 0)
-
-	revA := filterLeftTW(revAraw, tw)
-	revB := filterLeftTW(revBraw, tw)
-
-	return e.joinProducts(seqID, seq, p, fwdA, fwdB, revA, revB)
+	// Single source of truth: reuse the seeded batch path for one pair.
+	return e.SimulateBatch(seqID, seq, []primer.Pair{p})
 }
 
 // -------------------- Seeded batch path (all pairs per chunk) --------------
@@ -105,7 +89,10 @@ func (e *Engine) SimulateBatch(seqID string, seq []byte, pairs []primer.Pair) []
 		s := seeds[h.SeedIdx]
 		switch s.Which {
 		case 'A':
-			start := h.Pos - s.SeedOffset
+			// AC reports 'i' as the index of the last byte of the seed.
+			// For a 3'-anchored suffix seed (length = len(s.Pat)), the primer start is:
+			//   i - (len(seed)-1) - (primerLen - len(seed))  ==  i - SeedOffset - (len(seed)-1)
+			start := h.Pos - s.SeedOffset - (len(s.Pat) - 1)
 			if _, dup := seenA[s.PairIdx][start]; dup {
 				break
 			}
@@ -116,7 +103,7 @@ func (e *Engine) SimulateBatch(seqID string, seq []byte, pairs []primer.Pair) []
 				}
 			}
 		case 'B':
-			start := h.Pos - s.SeedOffset
+			start := h.Pos - s.SeedOffset - (len(s.Pat) - 1)
 			if _, dup := seenB[s.PairIdx][start]; dup {
 				break
 			}
@@ -126,8 +113,8 @@ func (e *Engine) SimulateBatch(seqID string, seq []byte, pairs []primer.Pair) []
 					per[s.PairIdx].fwdB = append(per[s.PairIdx].fwdB, m)
 				}
 			}
-		case 'a': // rc(A) verified on forward genome; original 3' window is LEFT end here
-			start := h.Pos
+		case 'a': // rc(A) prefix seed: primer start is i-(len(seed)-1)
+			start := h.Pos - (len(s.Pat) - 1)
 			if _, dup := seena[s.PairIdx][start]; dup {
 				break
 			}
@@ -137,8 +124,8 @@ func (e *Engine) SimulateBatch(seqID string, seq []byte, pairs []primer.Pair) []
 					per[s.PairIdx].revA = append(per[s.PairIdx].revA, m)
 				}
 			}
-		case 'b': // rc(B)
-			start := h.Pos
+		case 'b': // rc(B) prefix seed
+			start := h.Pos - (len(s.Pat) - 1)
 			if _, dup := seenb[s.PairIdx][start]; dup {
 				break
 			}

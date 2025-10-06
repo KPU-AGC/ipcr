@@ -1,9 +1,8 @@
-// internal/probeoutput/json.go
 package probeoutput
 
 import (
-	"encoding/json"
 	"io"
+	"ipcr/internal/jsonutil"
 	"ipcr/pkg/api"
 )
 
@@ -43,7 +42,5 @@ func ToAPIAnnotatedSlice(list []AnnotatedProduct) []api.AnnotatedProductV1 {
 
 // WriteJSON encodes AnnotatedProducts using the stable wire schema (v1).
 func WriteJSON(w io.Writer, list []AnnotatedProduct) error {
-	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
-	return enc.Encode(ToAPIAnnotatedSlice(list))
+	return jsonutil.EncodePretty(w, ToAPIAnnotatedSlice(list))
 }

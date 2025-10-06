@@ -36,6 +36,7 @@ build:
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/ipcr-probe ./cmd/ipcr-probe
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/ipcr-multiplex ./cmd/ipcr-multiplex
 	$(GO) build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/ipcr-nested ./cmd/ipcr-nested
+	$(GO) build $(GOFLAGS) -tags "thermo" -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/ipcr-thermo ./cmd/ipcr-thermo
 
 # Force a race build; fails with a helpful message if unsupported.
 build-race:
@@ -49,6 +50,7 @@ build-race:
 	$(GO) build $(GOFLAGS) -race -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/ipcr-probe ./cmd/ipcr-probe
 	$(GO) build $(GOFLAGS) -race -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/ipcr-multiplex ./cmd/ipcr-multiplex
 	$(GO) build $(GOFLAGS) -race -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/ipcr-nested ./cmd/ipcr-nested
+	$(GO) build $(GOFLAGS) -race -tags "thermo" -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/ipcr-thermo ./cmd/ipcr-thermo
 
 # Auto: uses -race when supported; otherwise skips it with a note.
 test:

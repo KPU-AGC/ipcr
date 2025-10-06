@@ -1,4 +1,4 @@
-// internal/probeapp/app.go  (REPLACE)
+// internal/probeapp/app.go
 package probeapp
 
 import (
@@ -10,6 +10,8 @@ import (
 	"io"
 	"ipcr-core/primer"
 	"ipcr/internal/appcore"
+	"ipcr/internal/clibase"
+	"ipcr/internal/common"
 	"ipcr/internal/probecli"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
@@ -18,25 +20,6 @@ import (
 	"strings"
 )
 
-func addSelfPairs(pairs []primer.Pair) []primer.Pair {
-	out := make([]primer.Pair, 0, len(pairs)+2*len(pairs))
-	out = append(out, pairs...)
-	for _, p := range pairs {
-		if p.Forward != "" {
-			out = append(out, primer.Pair{
-				ID: p.ID + "+A:self", Forward: strings.ToUpper(p.Forward), Reverse: strings.ToUpper(p.Forward),
-			})
-		}
-		if p.Reverse != "" {
-			out = append(out, primer.Pair{
-				ID: p.ID + "+B:self", Forward: strings.ToUpper(p.Reverse), Reverse: strings.ToUpper(p.Reverse),
-			})
-		}
-	}
-	return out
-}
-
-// RunContext is the ipcr-probe app entrypoint used by cmd/ipcr-probe.
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
 	outw := bufio.NewWriter(stdout)
 	defer outw.Flush()
@@ -59,6 +42,16 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	opts, err := probecli.ParseArgs(fs, argv)
 	if err != nil {
+		if errors.Is(err, clibase.ErrPrintedAndExitOK) {
+			probecli.PrintExamples(outw)
+			if e := outw.Flush(); writers.IsBrokenPipe(e) {
+				return 0
+			} else if e != nil {
+				_, _ = fmt.Fprintln(stderr, e)
+				return 3
+			}
+			return 0
+		}
 		if errors.Is(err, flag.ErrHelp) {
 			fs.SetOutput(outw)
 			fs.Usage()
@@ -95,24 +88,26 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	var pairs []primer.Pair
 	if opts.PrimerFile != "" {
-		pairs, err = primer.LoadTSV(opts.PrimerFile)
-		if err != nil {
-			_, _ = fmt.Fprintln(stderr, err)
+		var e error
+		pairs, e = primer.LoadTSV(opts.PrimerFile)
+		if e != nil {
+			_, _ = fmt.Fprintln(stderr, e)
 			return 2
 		}
 	} else {
 		pairs = []primer.Pair{{ID: "manual", Forward: opts.Fwd, Reverse: opts.Rev, MinProduct: opts.MinLen, MaxProduct: opts.MaxLen}}
 	}
 	if opts.Self {
-		pairs = addSelfPairs(pairs)
+		pairs = common.AddSelfPairs(pairs)
 	}
 
-	termWin := runutil.ComputeTerminalWindow(opts.Mode, opts.TerminalWindow)
+	termWin := runutil.EffectiveTerminalWindow(opts.TerminalWindow)
 	coreOpts := appcore.Options{
 		SeqFiles: opts.SeqFiles, MaxMM: opts.Mismatches, TerminalWindow: termWin,
 		MinLen: opts.MinLen, MaxLen: opts.MaxLen, HitCap: opts.HitCap, SeedLength: opts.SeedLength,
 		Circular: opts.Circular, Threads: opts.Threads, ChunkSize: opts.ChunkSize,
-		Quiet: opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
+		DedupeCap: opts.DedupeCap,
+		Quiet:     opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
 	}
 	writer := appcore.NewAnnotatedWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty)
 	visitor := visitors.Probe{

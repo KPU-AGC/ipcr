@@ -9,11 +9,12 @@ import (
 
 func TestUnknownProductFormatError(t *testing.T) {
 	var b bytes.Buffer
-	in, done := StartProductWriter(&b, "nope-format", false, false, false, 1)
+	//                    out   format        sort header pretty includeScore rankByScore bufSize
+	in, done := StartProductWriter(&b, "nope-format", false, false, false, false,      false,      1)
 	close(in) // no payload; writer should error out immediately on dispatch
 	err := <-done
 	if err == nil {
-		t.Fatalf("expected error for unknown format")
+		t.Fatalf("expected error for unknown product format")
 	}
 	if !strings.Contains(err.Error(), "unknown product format") {
 		t.Fatalf("unexpected error message: %v", err)

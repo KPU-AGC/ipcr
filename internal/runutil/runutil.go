@@ -3,22 +3,15 @@ package runutil
 
 import (
 	"fmt"
-	"ipcr/internal/output"
-	"strings"
 )
 
-// ComputeTerminalWindow picks the default 3' terminal-window length.
-// override >= 0 takes precedence; otherwise "realistic" => 3, "debug" => 0.
-func ComputeTerminalWindow(mode string, override int) int {
-	if override >= 0 {
-		return override
-	}
-	switch strings.ToLower(mode) {
-	case "debug":
+// EffectiveTerminalWindow returns the enforced 3' terminal-window length.
+// Rule: default is 3 (set by flag). Any value < 1 disables the clamp (returns 0).
+func EffectiveTerminalWindow(v int) int {
+	if v < 1 {
 		return 0
-	default: // realistic (or anything else) defaults to 3
-		return 3
 	}
+	return v
 }
 
 // ComputeOverlap returns the overlap used for chunking.
@@ -59,19 +52,4 @@ func ValidateChunking(circular bool, chunkSize, maxLen, maxPrimerLen int) (int, 
 	}
 	ov := ComputeOverlap(maxLen, maxPrimerLen)
 	return chunkSize, ov, warns
-}
-
-// ComputeNeedSeq decides if the pipeline must materialize sequence strings.
-// True if: --products, FASTA output, or pretty rendering requested (any format).
-func ComputeNeedSeq(format string, pretty, products bool) bool {
-	if products {
-		return true
-	}
-	if format == output.FormatFASTA {
-		return true
-	}
-	if pretty { // treat pretty as “needs seq” even if format isn’t text (matches tests)
-		return true
-	}
-	return false
 }

@@ -16,6 +16,7 @@ import (
 	"ipcr-core/primer"
 
 	"ipcr/internal/appcore"
+	"ipcr/internal/clibase"
 	"ipcr/internal/cmdutil"
 	"ipcr/internal/common"
 	"ipcr/internal/thermocli"
@@ -115,7 +116,7 @@ func parseMolar(spec string) (float64, error) {
 	for _, u := range []string{"nm", "um", "mm", "m"} {
 		if strings.HasSuffix(s, u) {
 			unit = u
-			num = strings.TrimSpace(strings.TrimSuffix(s, u))
+			num = strings.TrimSuffix(s, u)
 			break
 		}
 	}
@@ -180,6 +181,16 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	opts, err := thermocli.ParseArgs(fs, argv)
 	if err != nil {
+		if errors.Is(err, clibase.ErrPrintedAndExitOK) {
+			thermocli.PrintExamples(outw)
+			if e := outw.Flush(); writers.IsBrokenPipe(e) {
+				return 0
+			} else if e != nil {
+				_, _ = fmt.Fprintln(stderr, e)
+				return 3
+			}
+			return 0
+		}
 		if errors.Is(err, flag.ErrHelp) {
 			fs.SetOutput(outw)
 			fs.Usage()

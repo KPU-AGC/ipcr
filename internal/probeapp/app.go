@@ -10,6 +10,7 @@ import (
 	"io"
 	"ipcr-core/primer"
 	"ipcr/internal/appcore"
+	"ipcr/internal/clibase"
 	"ipcr/internal/common"
 	"ipcr/internal/probecli"
 	"ipcr/internal/runutil"
@@ -41,6 +42,16 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	opts, err := probecli.ParseArgs(fs, argv)
 	if err != nil {
+		if errors.Is(err, clibase.ErrPrintedAndExitOK) {
+			probecli.PrintExamples(outw)
+			if e := outw.Flush(); writers.IsBrokenPipe(e) {
+				return 0
+			} else if e != nil {
+				_, _ = fmt.Fprintln(stderr, e)
+				return 3
+			}
+			return 0
+		}
 		if errors.Is(err, flag.ErrHelp) {
 			fs.SetOutput(outw)
 			fs.Usage()

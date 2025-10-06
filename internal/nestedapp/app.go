@@ -11,6 +11,7 @@ import (
 	"ipcr-core/engine"
 	"ipcr-core/primer"
 	"ipcr/internal/appcore"
+	"ipcr/internal/clibase"
 	"ipcr/internal/common"
 	"ipcr/internal/nestedcli"
 	"ipcr/internal/runutil"
@@ -43,6 +44,16 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	opts, err := nestedcli.ParseArgs(fs, argv)
 	if err != nil {
+		if errors.Is(err, clibase.ErrPrintedAndExitOK) {
+			nestedcli.PrintExamples(outw)
+			if e := outw.Flush(); writers.IsBrokenPipe(e) {
+				return 0
+			} else if e != nil {
+				_, _ = fmt.Fprintln(stderr, e)
+				return 3
+			}
+			return 0
+		}
 		if errors.Is(err, flag.ErrHelp) {
 			fs.SetOutput(outw)
 			fs.Usage()
@@ -81,10 +92,11 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	// Outer pairs
 	var outer []primer.Pair
+	var e error
 	if opts.PrimerFile != "" {
-		outer, err = primer.LoadTSV(opts.PrimerFile)
-		if err != nil {
-			_, _ = fmt.Fprintln(stderr, err)
+		outer, e = primer.LoadTSV(opts.PrimerFile)
+		if e != nil {
+			_, _ = fmt.Fprintln(stderr, e)
 			return 2
 		}
 	} else {
@@ -103,9 +115,9 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	// Inner pairs
 	var inner []primer.Pair
 	if opts.InnerPrimerFile != "" {
-		inner, err = primer.LoadTSV(opts.InnerPrimerFile)
-		if err != nil {
-			_, _ = fmt.Fprintln(stderr, err)
+		inner, e = primer.LoadTSV(opts.InnerPrimerFile)
+		if e != nil {
+			_, _ = fmt.Fprintln(stderr, e)
 			return 2
 		}
 	} else {
@@ -120,9 +132,6 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	}
 
 	// ----- Core execution config -----
-
-	// If your tree already has EffectiveTerminalWindow, keep this call.
-	// Otherwise, replace with: termWin := runutil.ComputeTerminalWindow(opts.Mode, opts.TerminalWindow)
 	termWin := runutil.EffectiveTerminalWindow(opts.TerminalWindow)
 
 	coreOpts := appcore.Options{

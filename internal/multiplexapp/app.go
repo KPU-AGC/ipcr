@@ -12,6 +12,7 @@ import (
 	"ipcr-core/primer"
 	"ipcr/internal/appcore"
 	"ipcr/internal/cli"
+	"ipcr/internal/clibase"
 	"ipcr/internal/common"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
@@ -129,6 +130,17 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	opts, err := cli.ParseArgs(fs, argv)
 	if err != nil {
+		if errors.Is(err, clibase.ErrPrintedAndExitOK) {
+			fs.SetOutput(outw)
+			cli.PrintExamples(outw, "ipcr-multiplex")
+			if e := outw.Flush(); writers.IsBrokenPipe(e) {
+				return 0
+			} else if e != nil {
+				_, _ = fmt.Fprintln(stderr, e)
+				return 3
+			}
+			return 0
+		}
 		if errors.Is(err, flag.ErrHelp) {
 			fs.SetOutput(outw)
 			fs.Usage()
@@ -168,9 +180,10 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	switch {
 	case opts.PrimerFile != "":
 		// TSV mode: keep row semantics; add A:self/B:self once per unique primer across file.
-		pairs, err = primer.LoadTSV(opts.PrimerFile)
-		if err != nil {
-			_, _ = fmt.Fprintln(stderr, err)
+		var e error
+		pairs, e = primer.LoadTSV(opts.PrimerFile)
+		if e != nil {
+			_, _ = fmt.Fprintln(stderr, e)
 			return 2
 		}
 		if opts.Self {

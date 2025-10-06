@@ -27,7 +27,7 @@ type Options struct {
 	NaSpec         string
 	MgSpec         string
 	PrimerConcSpec string
-	AllowIndel     bool // ✅ store-true boolean
+	AllowIndel     bool
 
 	// Oligo input
 	OligoInline []string
@@ -102,9 +102,24 @@ func NewFlagSet(name string) *flag.FlagSet {
 	return fs
 }
 
+func PrintExamples(out io.Writer) {
+	clibase.PrintExamples(out, "ipcr-thermo", func(w io.Writer) {
+		_, _ = fmt.Fprintln(w, "in-silico PCR with thermodynamic considerations.")
+		_, _ = fmt.Fprintln(w, "Realistically, agnostically, add oligos with --oligo.")
+		_, _ = fmt.Fprintln(w, "\nExample:")
+		_, _ = fmt.Fprintln(w, "  ipcr-thermo \\")
+		_, _ = fmt.Fprintln(w, "    --oligo ATGTCTATAAGCACCACAATG        --oligo TCATTTCAATAATGATTCAAGC \\")
+		_, _ = fmt.Fprintln(w, "    --oligo CATTCTGACCTTTAAGCCGGTCAATGAG --oligo CCAAAAAGCGAGACCTCAAACTTACTCAG \\")
+		_, _ = fmt.Fprintln(w, "    --oligo GCGGACGTCATTGTCACTAACCCGACG  --oligo TCTAAAGTGGGAACCCGATGTTCAGCG \\")
+		_, _ = fmt.Fprintln(w, "    --mismatches 3 --circular --anneal-temp 60 \\")
+		_, _ = fmt.Fprintln(w, "    Salmonella-Enteritidis.fna.gz ")
+	})
+}
+
 func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	var o Options
 	var help bool
+	var showExamples bool
 
 	noHeader := clibase.Register(fs, &o.Common)
 
@@ -126,6 +141,7 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 
 	fs.StringVar(&o.Rank, "rank", "score", "order by: score | coord")
 	fs.BoolVar(&help, "h", false, "show this help [false]")
+	fs.BoolVar(&showExamples, "examples", false, "show quickstart examples and exit [false]")
 
 	// Thermo addons (with defaults)
 	fs.Float64Var(&o.ExtAlpha, "ext-alpha", 0.45, "slope for extension prob vs margin")
@@ -141,6 +157,9 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	flagArgs, posArgs := cliutil.SplitFlagsAndPositionals(fs, argv)
 	if err := fs.Parse(flagArgs); err != nil {
 		return o, err
+	}
+	if showExamples {
+		return o, clibase.ErrPrintedAndExitOK
 	}
 	if help {
 		return o, flag.ErrHelp

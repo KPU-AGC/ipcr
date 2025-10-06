@@ -37,9 +37,25 @@ func NewFlagSet(name string) *flag.FlagSet {
 
 func Parse() (Options, error) { return ParseArgs(NewFlagSet("ipcr-probe"), nil) }
 
+// PrintExamples prints a tiny, focused quickstart for ipcr-probe.
+func PrintExamples(out io.Writer) {
+	clibase.PrintExamples(out, "ipcr-probe", func(w io.Writer) {
+		_, _ = fmt.Fprintln(out, "PCR + Probe: amplification with primer pools.")
+		_, _ = fmt.Fprintln(out, "Add a probe with --probe.")
+		_, _ = fmt.Fprintln(out, "\nExample:")
+		_, _ = fmt.Fprintln(out, "  ipcr-probe \\")
+		_, _ = fmt.Fprintln(out, "    -f TCTAATTTTTTCATCATCGCTAATGC \\")
+		_, _ = fmt.Fprintln(out, "    -r TCAGGCCTTTGCTACAATGAAC  \\")
+		_, _ = fmt.Fprintln(out, "    --circular \\ ")
+		_, _ = fmt.Fprintln(out, "    --output json \\ ")
+		_, _ = fmt.Fprintln(out, "    Mycoplasmopsis-bovis.fna.gz")
+	})
+}
+
 func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	var o Options
 	var help bool
+	var showExamples bool
 
 	// Shared flags via clibase
 	var c clibase.Common
@@ -53,19 +69,22 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.IntVar(&o.ProbeMaxMM, "M", 0, "alias of --probe-max-mm")
 	fs.StringVar(&o.Probe, "P", "", "alias of --probe")
 
-	// Help flag (so -h returns flag.ErrHelp like before)
+	// Help / examples
 	fs.BoolVar(&help, "h", false, "show this help [false]")
+	fs.BoolVar(&showExamples, "examples", false, "show quickstart examples and exit [false]")
 
 	// Split & parse
 	flagArgs, posArgs := cliutil.SplitFlagsAndPositionals(fs, argv)
 	if err := fs.Parse(flagArgs); err != nil {
 		return o, err
 	}
+	if showExamples {
+		return o, clibase.ErrPrintedAndExitOK
+	}
 	if help {
 		return o, flag.ErrHelp
 	}
 	if c.Version {
-		// avoid promoted-field write; just copy Common and return
 		o.Common = c
 		return o, nil
 	}

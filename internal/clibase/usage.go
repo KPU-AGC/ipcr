@@ -59,5 +59,6 @@ func UsageCommon(fs *flag.FlagSet, name string, extra func(out io.Writer, def fu
 		_, _ = fmt.Fprintf(out, "  -q, --quiet                 Suppress non-essential warnings [%s]\n", def("quiet"))
 		_, _ = fmt.Fprintln(out, "  -v, --version               Print version and exit")
 		_, _ = fmt.Fprintln(out, "  -h, --help                  Show this help and exit")
+		_, _ = fmt.Fprintln(out, "      --examples              Show quickstart examples and exit")
 	}
 }

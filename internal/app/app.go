@@ -12,6 +12,7 @@ import (
 	"ipcr-core/primer"
 	"ipcr/internal/appcore"
 	"ipcr/internal/cli"
+	"ipcr/internal/clibase"
 	"ipcr/internal/common"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
@@ -41,6 +42,17 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	opts, err := cli.ParseArgs(fs, argv)
 	if err != nil {
+		if errors.Is(err, clibase.ErrPrintedAndExitOK) {
+			fs.SetOutput(outw)
+			cli.PrintExamples(outw, "ipcr")
+			if e := outw.Flush(); writers.IsBrokenPipe(e) {
+				return 0
+			} else if e != nil {
+				_, _ = fmt.Fprintln(stderr, e)
+				return 3
+			}
+			return 0
+		}
 		if errors.Is(err, flag.ErrHelp) {
 			fs.SetOutput(outw)
 			fs.Usage()

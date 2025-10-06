@@ -1,4 +1,3 @@
-# .github/workflows/ci.yml  (REPLACE)
 name: ci
 
 on:
@@ -10,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -37,12 +37,61 @@ jobs:
           go mod tidy
 
       - name: Test (root module)
-        run: go test ./...
+        shell: bash
+        env:
+          # Keep memory modest so the runner doesn’t OOM-kill the process.
+          GOMEMLIMIT: 1GiB
+          GOMAXPROCS: 2
+          CGO_ENABLED: 0
+        run: |
+          set -Eeuo pipefail
+          trap 'echo "::error::go test (root) received SIGTERM (likely job cancelled or OOM). Exit 143." ; exit 143' TERM
+          echo "::group::go env"
+          go env
+          echo "::endgroup::"
+          echo "::group::go test ./... (root)"
+          # -count=1 avoids stale cache; -vet=off keeps it lean
+          go test -count=1 -vet=off ./... | tee test-root.log
+          echo "::endgroup::"
+
+      - name: Upload root test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-root.log
+          path: test-root.log
 
       - name: Test (core module)
+        working-directory: core
+        shell: bash
+        env:
+          GOMEMLIMIT: 1GiB
+          GOMAXPROCS: 2
+          CGO_ENABLED: 0
         run: |
-          cd core
-          go test ./...
+          set -Eeuo pipefail
+          trap 'echo "::error::go test (core) received SIGTERM (likely job cancelled or OOM). Exit 143." ; exit 143' TERM
+          echo "::group::go test ./... (core)"
+          go test -count=1 -vet=off ./... | tee ../test-core.log
+          echo "::endgroup::"
+
+      - name: Upload core test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-core.log
+          path: test-core.log
+
+      - name: System snapshot (if failed)
+        if: failure()
+        run: |
+          echo "::group::system snapshot"
+          uname -a || true
+          free -h || true
+          df -h || true
+          ulimit -a || true
+          ps -eo pid,ppid,cmd,%mem,%cpu --sort=-%mem | head -n 30 || true
+          echo "::endgroup::"
 
   lint-root:
     runs-on: ubuntu-latest

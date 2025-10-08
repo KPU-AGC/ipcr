@@ -1,3 +1,4 @@
+// internal/thermoapp/app.go
 package thermoapp
 
 import (
@@ -14,6 +15,7 @@ import (
 	"ipcr-core/engine"
 	"ipcr-core/oligo"
 	"ipcr-core/primer"
+	"ipcr-core/thermoaddons"
 
 	"ipcr/internal/appcore"
 	"ipcr/internal/clibase"
@@ -25,26 +27,7 @@ import (
 	"ipcr/internal/writers"
 )
 
-// ---- pairing helpers (oligo mode) ----
-
-func pairsFromOligos(oligs []primer.Oligo, minLen, maxLen int, includeSelf bool) []primer.Pair {
-	out := make([]primer.Pair, 0, len(oligs)*len(oligs))
-	for i := 0; i < len(oligs); i++ {
-		for j := i + 1; j < len(oligs); j++ {
-			out = append(out, primer.Pair{
-				ID:         fmt.Sprintf("%s+%s", oligs[i].ID, oligs[j].ID),
-				Forward:    strings.ToUpper(oligs[i].Seq),
-				Reverse:    strings.ToUpper(oligs[j].Seq),
-				MinProduct: minLen,
-				MaxProduct: maxLen,
-			})
-		}
-	}
-	if includeSelf {
-		out = append(out, primer.SelfPairs(oligs)...)
-	}
-	return out
-}
+/* ---------- small helpers (local, no external deps) ---------- */
 
 func parseOligoInline(spec string, idx int) (primer.Oligo, error) {
 	spec = strings.TrimSpace(spec)
@@ -107,8 +90,26 @@ func loadOligosTSV(path string) ([]primer.Oligo, error) {
 	return list, nil
 }
 
-// ---- tiny helpers ----
+func pairsFromOligos(oligs []primer.Oligo, minLen, maxLen int, includeSelf bool) []primer.Pair {
+	out := make([]primer.Pair, 0, len(oligs)*len(oligs))
+	for i := 0; i < len(oligs); i++ {
+		for j := i + 1; j < len(oligs); j++ {
+			out = append(out, primer.Pair{
+				ID:         fmt.Sprintf("%s+%s", oligs[i].ID, oligs[j].ID),
+				Forward:    strings.ToUpper(oligs[i].Seq),
+				Reverse:    strings.ToUpper(oligs[j].Seq),
+				MinProduct: minLen,
+				MaxProduct: maxLen,
+			})
+		}
+	}
+	if includeSelf {
+		out = append(out, primer.SelfPairs(oligs)...)
+	}
+	return out
+}
 
+// parseMolar: "250nM" → 2.5e-7; "50mM" → 5e-2
 func parseMolar(spec string) (float64, error) {
 	s := strings.TrimSpace(strings.ToLower(spec))
 	unit := ""
@@ -141,7 +142,8 @@ func parseMolar(spec string) (float64, error) {
 	}
 }
 
-// NeedSeq-forcing writer factory (only ipcr-thermo uses this)
+/* ---------- writer (forces NeedSeq + score column + rank-by-score) ---------- */
+
 type thermoWF struct {
 	Format       string
 	Sort         bool
@@ -157,7 +159,7 @@ func (w thermoWF) Start(out io.Writer, bufSize int) (chan<- engine.Product, <-ch
 	return writers.StartProductWriter(out, w.Format, w.Sort, w.Header, w.Pretty, w.IncludeScore, w.RankByScore, bufSize)
 }
 
-// ---- main app ----
+/* ----------------------------- main app ----------------------------- */
 
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
 	outw := bufio.NewWriter(stdout)
@@ -226,9 +228,9 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		return 0
 	}
 
-	// Primer/oligo input
+	// Input: either oligo mode or classic primer mode
 	hasOligoMode := len(opts.OligoInline) > 0 || opts.OligosTSV != ""
-	hasPairMode := opts.PrimerFile != "" || (opts.Fwd != "" || opts.Rev != "")
+	hasPairMode := opts.PrimerFile != "" || (opts.Fwd != "" && opts.Rev != "")
 
 	if hasOligoMode && hasPairMode {
 		_, _ = fmt.Fprintln(stderr, "error: --oligo/--oligos cannot be combined with --primers or --forward/--reverse")
@@ -240,7 +242,6 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	}
 
 	var pairs []primer.Pair
-
 	if hasOligoMode {
 		var oligs []primer.Oligo
 		if opts.OligosTSV != "" {
@@ -270,9 +271,10 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		}
 	} else {
 		if opts.PrimerFile != "" {
-			pairs, err = primer.LoadTSV(opts.PrimerFile)
-			if err != nil {
-				_, _ = fmt.Fprintln(stderr, err)
+			var e error
+			pairs, e = primer.LoadTSV(opts.PrimerFile)
+			if e != nil {
+				_, _ = fmt.Fprintln(stderr, e)
 				return 2
 			}
 		} else {
@@ -280,19 +282,18 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 				_, _ = fmt.Fprintln(stderr, "error: --forward and --reverse must be supplied together")
 				return 2
 			}
-			pairs = []primer.Pair{{
-				ID: "manual", Forward: strings.ToUpper(opts.Fwd), Reverse: strings.ToUpper(opts.Rev),
-				MinProduct: opts.MinLen, MaxProduct: opts.MaxLen,
-			}}
+			pairs = []primer.Pair{
+				{ID: "manual", Forward: strings.ToUpper(opts.Fwd), Reverse: strings.ToUpper(opts.Rev), MinProduct: opts.MinLen, MaxProduct: opts.MaxLen},
+			}
 		}
 		if opts.Self {
 			pairs = common.AddSelfPairsUnique(pairs)
 		}
 	}
 
-	// Parse solution conditions (best-effort; warn and fall back to defaults on error).
+	// Parse solution conditions (warn and default on errors)
 	naM, errNa := parseMolar(opts.NaSpec)
-	mgM, errMg := parseMolar(opts.MgSpec) // reserved for future divalent correction
+	mgM, errMg := parseMolar(opts.MgSpec)
 	ctM, errCt := parseMolar(opts.PrimerConcSpec)
 	if errNa != nil {
 		cmdutil.Warnf(stderr, opts.Quiet, "bad --na %q: %v (using 50mM)", opts.NaSpec, errNa)
@@ -302,55 +303,43 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		cmdutil.Warnf(stderr, opts.Quiet, "bad --mg %q: %v (using 3mM)", opts.MgSpec, errMg)
 		mgM = 0.003
 	}
-	_ = mgM // not used in monovalent-only model yet
 	if errCt != nil {
 		cmdutil.Warnf(stderr, opts.Quiet, "bad --primer-conc %q: %v (using 250nM)", opts.PrimerConcSpec, errCt)
 		ctM = 2.5e-7
 	}
 
-	// Thermo scoring visitor (thermo-only)
-	visitor := &thermovisitors.Score{
+	// Effective monovalent (optional Owczarzy-lite via env)
+	naEff := thermoaddons.EffectiveMonovalent(naM, mgM)
+
+	// Expose ssDNA mode (BS-PCR) to the scorer via env (keeps thermovisitors simple)
+	if opts.SingleStranded {
+		_ = os.Setenv("IPCR_SINGLE_STRANDED", "1")
+	} else {
+		_ = os.Unsetenv("IPCR_SINGLE_STRANDED")
+	}
+
+	// Build scorer (visitor)
+	scorer := thermovisitors.Score{
 		AnnealTempC:  opts.AnnealTempC,
-		Na_M:         naM,
+		Na_M:         naEff,
 		PrimerConc_M: ctM,
-		AllowIndels:  opts.AllowIndel, // ✅ boolean passthrough
-		LengthBiasOn: true,
-
-		ProbeSeq:    strings.ToUpper(strings.TrimSpace(opts.Probe)),
-		ProbeMaxMM:  opts.ProbeMaxMM,
-		ProbeWeight: opts.ProbeWeight,
-
-		// thermoaddons knobs
-		ExtAlpha:      opts.ExtAlpha,
-		LenKneeBP:     opts.LenKneeBP,
-		LenSteep:      opts.LenSteep,
-		LenMaxPenC:    opts.LenMaxPenC,
-		StructHairpin: opts.StructHairpin,
-		StructDimer:   opts.StructDimer,
-		StructScale:   opts.StructScale,
-		BindWeight:    opts.BindWeight,
-		ExtWeight:     opts.ExtWeight,
+		AllowIndels:  opts.AllowIndel,
+		LengthBiasOn: false, // reserved; keep behavior stable
 	}
 
-	// Prefilter gating for thermo: keep 3′ mismatches allowed (TW=0), disable seeds,
-	// but limit prefilter mismatches so we don't enumerate the whole genome.
-	prefMM := opts.Mismatches
-	if prefMM <= 0 {
-		prefMM = 4 // sensible thermo default
+	// Core pipeline
+	termWin := opts.TerminalWindow
+	if termWin < 1 {
+		termWin = 0
 	}
-	if opts.Mismatches > 0 {
-		cmdutil.Warnf(stderr, opts.Quiet,
-			"ipcr-thermo treats --mismatches=%d as a scanning prefilter; thermodynamic scoring still ranks hits", prefMM)
-	}
-
 	coreOpts := appcore.Options{
 		SeqFiles:        opts.SeqFiles,
-		MaxMM:           prefMM,
-		TerminalWindow:  0,
+		MaxMM:           opts.Mismatches,
+		TerminalWindow:  termWin,
 		MinLen:          opts.MinLen,
 		MaxLen:          opts.MaxLen,
 		HitCap:          opts.HitCap,
-		SeedLength:      -1,
+		SeedLength:      opts.SeedLength,
 		Circular:        opts.Circular,
 		Threads:         opts.Threads,
 		ChunkSize:       opts.ChunkSize,
@@ -359,18 +348,18 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		NoMatchExitCode: opts.NoMatchExitCode,
 	}
 
-	// Force NeedSeq=true via local writer factory, so scoring can read amplicons
-	rankByScore := !strings.EqualFold(opts.Rank, "coord")
+	// Writer: always include score; rank-by-score if requested
+	rankByScore := strings.ToLower(opts.Rank) != "coord"
 	wf := thermoWF{
 		Format:       opts.Output,
-		Sort:         true, // default: sort ON for ipcr-thermo
+		Sort:         true,
 		Header:       opts.Header,
 		Pretty:       opts.Pretty,
-		IncludeScore: true,        // default: score column ON
-		RankByScore:  rankByScore, // default: score; --rank coord flips to coord
+		IncludeScore: true,
+		RankByScore:  rankByScore,
 	}
 
-	return appcore.Run[engine.Product](parent, stdout, stderr, coreOpts, pairs, visitor.Visit, wf)
+	return appcore.Run[engine.Product](parent, outw, stderr, coreOpts, pairs, scorer.Visit, wf)
 }
 
 func Run(argv []string, stdout, stderr io.Writer) int {

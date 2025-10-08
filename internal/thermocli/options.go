@@ -29,6 +29,9 @@ type Options struct {
 	PrimerConcSpec string
 	AllowIndel     bool
 
+	// NEW: ssDNA mode (BS-PCR)
+	SingleStranded bool
+
 	// Oligo input
 	OligoInline []string
 	OligosTSV   string
@@ -72,10 +75,8 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintf(out, "      --na string            Monovalent salt, e.g., 50mM [%s]\n", "50mM")
 		_, _ = fmt.Fprintf(out, "      --mg string            Mg2+, e.g., 3mM [%s]\n", "3mM")
 		_, _ = fmt.Fprintf(out, "      --primer-conc string   Primer concentration, e.g., 250nM [%s]\n", "250nM")
-
 		_, _ = fmt.Fprintln(out, "      --allow-indel          Allow a single 1-nt gap (bulge) per primer [false]")
-		_, _ = fmt.Fprintln(out, "      NOTE: In ipcr-thermo, --mismatches acts as a scanning prefilter;")
-		_, _ = fmt.Fprintln(out, "            thermodynamic scoring still ranks hits.")
+		_, _ = fmt.Fprintln(out, "      --single-stranded      Treat target as ssDNA (BS-PCR): tiny dangling-end bonus + target-hairpin penalty [false]")
 
 		_, _ = fmt.Fprintln(out, "\nProbe (optional):")
 		_, _ = fmt.Fprintf(out, "      --probe string         Internal probe (5'→3') [%s]\n", "")
@@ -110,7 +111,6 @@ func PrintExamples(out io.Writer) {
 		_, _ = fmt.Fprintln(w, "  ipcr-thermo \\")
 		_, _ = fmt.Fprintln(w, "    --oligo ATGTCTATAAGCACCACAATG        --oligo TCATTTCAATAATGATTCAAGC \\")
 		_, _ = fmt.Fprintln(w, "    --oligo CATTCTGACCTTTAAGCCGGTCAATGAG --oligo CCAAAAAGCGAGACCTCAAACTTACTCAG \\")
-		_, _ = fmt.Fprintln(w, "    --oligo GCGGACGTCATTGTCACTAACCCGACG  --oligo TCTAAAGTGGGAACCCGATGTTCAGCG \\")
 		_, _ = fmt.Fprintln(w, "    --mismatches 3 --circular --anneal-temp 60 \\")
 		_, _ = fmt.Fprintln(w, "    Salmonella-Enteritidis.fna.gz ")
 	})
@@ -133,6 +133,7 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.StringVar(&o.PrimerConcSpec, "primer-conc", "250nM", "primer concentration (e.g., 250nM)")
 
 	fs.BoolVar(&o.AllowIndel, "allow-indel", false, "allow a single 1-nt gap (bulge) per primer")
+	fs.BoolVar(&o.SingleStranded, "single-stranded", false, "target is ssDNA (BS-PCR mode)")
 
 	fs.StringVar(&o.Probe, "probe", "", "internal probe (5'→3') [optional]")
 	fs.StringVar(&o.ProbeName, "probe-name", "probe", "probe label")

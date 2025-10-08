@@ -1,19 +1,23 @@
+// core/thermoaddons/conditions.go
 package thermoaddons
 
 import (
 	"fmt"
 	"math"
+	"os"
 	"strings"
 )
 
+// Conditions is a lightweight holder for commonly tuned wet-lab knobs.
 type Conditions struct {
-	AnnealC           float64
-	NaM               float64
-	MgM               float64
-	PrimerTotalM      float64
+	AnnealC           float64 // °C
+	NaM               float64 // monovalent cations, mol/L
+	MgM               float64 // magnesium, mol/L
+	PrimerTotalM      float64 // total primer concentration, mol/L
 	SelfComplementary bool
 }
 
+// ParseConc parses "50mM", "250nM", "3uM" → mol/L.
 func ParseConc(s string) (float64, error) {
 	s = strings.TrimSpace(strings.ToLower(s))
 	unit := ""
@@ -36,7 +40,18 @@ func ParseConc(s string) (float64, error) {
 	}
 }
 
-// Simple effective monovalent estimate; you can swap Owczarzy later.
+// EffectiveMonovalent returns a single “Na+-equivalent” to feed into salt
+// corrections. By default, we *do not* add Mg2+ (keeps current behavior),
+// but you can enable an Owczarzy-lite transform via env:
+//
+//   IPCR_MG_EQ=owczarzy-lite  →  Na_eff = Na + 3.8*sqrt(Mg)
+//
+// This keeps us conservative and avoids silently changing users’ results.
+// You can swap the transform later without touching thermodynamic tables.
 func EffectiveMonovalent(naM, mgM float64) float64 {
-	return naM + 120.0*math.Sqrt(math.Max(0, mgM))
+	mode := strings.TrimSpace(strings.ToLower(os.Getenv("IPCR_MG_EQ")))
+	if mode == "owczarzy-lite" && mgM > 0 {
+		return naM + 3.8*math.Sqrt(mgM)
+	}
+	return naM
 }

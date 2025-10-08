@@ -28,13 +28,18 @@ type Score struct {
 	PrimerConc_M   float64
 	AllowIndels    bool
 	LengthBiasOn   bool
-	SingleStranded bool // env toggle actually used; keep for compatibility
+	SingleStranded bool // read (OR'd with env) to enable ssDNA tweaks
 	StructScale    float64
+
+	// Opt-in: compute ΔΔG→ΔTm denominator from solution conditions.
+	// Default false keeps the historical fixed D=200 path.
+	UseAutoDenom bool
 }
 
 // Public helper used by tests/tools.
 func (v *Score) Penalty(primer5to3, tgt3to5 string, denom float64) float64 {
-	return alignPenaltyC_contextualD(primer5to3, tgt3to5, v.AllowIndels, denom)
+	ssOn := v.SingleStranded || singleStrandedMode()
+	return alignPenaltyC_contextualD_ss(primer5to3, tgt3to5, v.AllowIndels, denom, ssOn)
 }
 
 func toUpperACGT(s string) string {
@@ -123,7 +128,7 @@ func comp5to3(top string) string {
 	return string(out)
 }
 
-// Env-based ssDNA toggle.
+// Env-based ssDNA toggle (kept for backwards compatibility).
 func singleStrandedMode() bool {
 	v := strings.TrimSpace(strings.ToLower(os.Getenv("IPCR_SINGLE_STRANDED")))
 	return v == "1" || v == "true" || v == "yes"
@@ -141,10 +146,17 @@ func ssEndBonusApprox(top, bot byte) float64 {
 	}
 }
 
-// ---------------- DP with contextual mismatch penalties ----------------
+// -------------- DP with contextual mismatch penalties --------------
 //
 // denom = effective denominator D (cal/K/mol) used only for ΔΔG→ΔTm fallback.
+
+// Back-compat wrapper: keeps existing callers/tests working.
 func alignPenaltyC_contextualD(primer5to3, tgt3to5 string, allowGap bool, denom float64) float64 {
+	return alignPenaltyC_contextualD_ss(primer5to3, tgt3to5, allowGap, denom, singleStrandedMode())
+}
+
+// New: same DP, but ss behavior is data-driven via ssOn.
+func alignPenaltyC_contextualD_ss(primer5to3, tgt3to5 string, allowGap bool, denom float64, ssOn bool) float64 {
 	P := toUpperACGT(primer5to3)
 	T := toUpperACGTAllowN(tgt3to5)
 	n, m := len(P), len(T)
@@ -183,10 +195,10 @@ func alignPenaltyC_contextualD(primer5to3, tgt3to5 string, allowGap bool, denom 
 		for j := 0; j <= m; j++ {
 			for g := 0; g <= gapAllowed; g++ {
 				cur := dp[i][j][g]
-				if cur >= INF {
+				if cur >= INF/2 {
 					continue
 				}
-				// match / mismatch
+				// match/mismatch
 				if i < n && j < m {
 					pen := 0.0
 					if !wcACGT(P[i], T[j]) {
@@ -219,8 +231,8 @@ func alignPenaltyC_contextualD(primer5to3, tgt3to5 string, allowGap bool, denom 
 		return 0
 	}
 
-	// ssDNA adjustments (env toggle)
-	if singleStrandedMode() && n > 0 {
+	// ssDNA adjustments (data-driven)
+	if ssOn && n > 0 {
 		leftTop := P[0]
 		rightTop := P[n-1]
 		leftBot := compBase(leftTop)
@@ -241,26 +253,68 @@ func alignPenaltyC_contextualD(primer5to3, tgt3to5 string, allowGap bool, denom 
 	return best
 }
 
+// denomForPrimer computes D = ΔS_Na + R·ln(CT/X) using NN Tm on the
+// primer vs its perfect complement. X=4 (non-self) unless the primer is self-compl.
+func (v Score) denomForPrimer(primer5to3 string) float64 {
+	p := toUpperACGT(primer5to3)
+	if p == "" || v.Na_M <= 0 || v.PrimerConc_M <= 0 {
+		return 200.0
+	}
+	// Build 3'→5' complement for Tm()
+	t3 := comp5to3(p)
+
+	// Self-compl check: rc == p (5'→3')
+	rc := rev(comp5to3(p))
+	x := 4
+	if rc == p {
+		x = 1
+	}
+
+	res, err := thermo.Tm(p, t3, thermo.TmInput{
+		CT: v.PrimerConc_M,
+		Na: v.Na_M,
+		X:  x,
+	})
+	if err != nil {
+		return 200.0
+	}
+	// D matches the denominator term in the two-state Tm formula.
+	D := res.DS_Na + thermo.Rcal*math.Log(v.PrimerConc_M/float64(x))
+	// Go 1.22-safe "finite" check
+	if math.IsNaN(D) || math.IsInf(D, 0) || D <= 0 {
+		return 200.0
+	}
+	return D
+}
+
 // Visit implements the appcore visitor for ipcr-thermo.
 // It computes a small penalty for the forward end (and conservatively for the reverse end),
 // then sets Score = -penalty so that higher is better.
 func (v Score) Visit(p engine.Product) (bool, engine.Product, error) {
-	const denom = 200.0 // safe, matches tests’ fallback
+	// Default conservative fixed denominator
+	denomF, denomR := 200.0, 200.0
 
+	ssOn := v.SingleStranded || singleStrandedMode()
 	pen := 0.0
 
 	// Forward end (use leftmost |F| bases of the amplicon)
 	if f := toUpperACGT(p.FwdPrimer); f != "" && len(p.Seq) >= len(f) {
+		if v.UseAutoDenom {
+			denomF = v.denomForPrimer(f)
+		}
 		left := p.Seq[:len(f)]
 		t3 := comp5to3(left)
-		pen += alignPenaltyC_contextualD(f, t3, v.AllowIndels, denom)
+		pen += alignPenaltyC_contextualD_ss(f, t3, v.AllowIndels, denomF, ssOn)
 	}
 
 	// Reverse end (conservative: compare primer vs complement of rightmost |R| bases)
 	if r := toUpperACGT(p.RevPrimer); r != "" && len(p.Seq) >= len(r) {
+		if v.UseAutoDenom {
+			denomR = v.denomForPrimer(r)
+		}
 		right := p.Seq[len(p.Seq)-len(r):]
 		t3 := comp5to3(right)
-		pen += alignPenaltyC_contextualD(r, t3, v.AllowIndels, denom)
+		pen += alignPenaltyC_contextualD_ss(r, t3, v.AllowIndels, denomR, ssOn)
 	}
 
 	// Final score: higher is better.

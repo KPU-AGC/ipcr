@@ -1,4 +1,3 @@
-// internal/thermoapp/app.go
 package thermoapp
 
 import (
@@ -9,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strconv"
 	"strings"
 
 	"ipcr-core/engine"
@@ -110,36 +108,8 @@ func pairsFromOligos(oligs []primer.Oligo, minLen, maxLen int, includeSelf bool)
 }
 
 // parseMolar: "250nM" → 2.5e-7; "50mM" → 5e-2
-func parseMolar(spec string) (float64, error) {
-	s := strings.TrimSpace(strings.ToLower(spec))
-	unit := ""
-	num := s
-	for _, u := range []string{"nm", "um", "mm", "m"} {
-		if strings.HasSuffix(s, u) {
-			unit = u
-			num = strings.TrimSuffix(s, u)
-			break
-		}
-	}
-	if num == "" {
-		return 0, fmt.Errorf("empty concentration %q", spec)
-	}
-	f, err := strconv.ParseFloat(num, 64)
-	if err != nil {
-		return 0, fmt.Errorf("bad concentration %q", spec)
-	}
-	switch unit {
-	case "nm":
-		return f * 1e-9, nil
-	case "um":
-		return f * 1e-6, nil
-	case "mm":
-		return f * 1e-3, nil
-	case "m", "":
-		return f, nil
-	default:
-		return 0, fmt.Errorf("unknown unit in %q", spec)
-	}
+func parseMolar(s string) (float64, error) {
+	return thermoaddons.ParseConc(s)
 }
 
 /* ---------- writer (forces NeedSeq + score column + rank-by-score) ---------- */
@@ -311,20 +281,16 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	// Effective monovalent (optional Owczarzy-lite via env)
 	naEff := thermoaddons.EffectiveMonovalent(naM, mgM)
 
-	// Expose ssDNA mode (BS-PCR) to the scorer via env (keeps thermovisitors simple)
-	if opts.SingleStranded {
-		_ = os.Setenv("IPCR_SINGLE_STRANDED", "1")
-	} else {
-		_ = os.Unsetenv("IPCR_SINGLE_STRANDED")
-	}
-
 	// Build scorer (visitor)
 	scorer := thermovisitors.Score{
-		AnnealTempC:  opts.AnnealTempC,
-		Na_M:         naEff,
-		PrimerConc_M: ctM,
-		AllowIndels:  opts.AllowIndel,
-		LengthBiasOn: false, // reserved; keep behavior stable
+		AnnealTempC:    opts.AnnealTempC,
+		Na_M:           naEff,
+		PrimerConc_M:   ctM,
+		AllowIndels:    opts.AllowIndel,
+		LengthBiasOn:   false, // reserved; keep behavior stable
+		SingleStranded: opts.SingleStranded,
+		// NEW: enable auto-denominator when requested
+		UseAutoDenom: strings.ToLower(opts.DenomMode) == "auto",
 	}
 
 	// Core pipeline

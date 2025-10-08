@@ -1,3 +1,4 @@
+// internal/thermovisitors/score_test.go
 package thermovisitors
 
 import (
@@ -7,10 +8,10 @@ import (
 	"ipcr-core/engine"
 )
 
-// Small wrapper for tests: forward to the denom-aware DP with a constant D.
-// D=200.0 matches the conservative fallback used in the visitor when D is unavailable.
+// Small wrapper for tests: forward to the denom-aware DP with a constant D and ssDNA=false.
+// D=200.0 matches the conservative fallback used historically.
 func dpPenalty(pr, tgt string, allowGap bool) float64 {
-	return alignPenaltyC_contextualD(pr, tgt, allowGap, 200.0)
+	return alignPenaltyC_contextualD_ss(pr, tgt, allowGap, 200.0, false)
 }
 
 func TestAlignPenalty_PositionEffects(t *testing.T) {
@@ -23,19 +24,29 @@ func TestAlignPenalty_PositionEffects(t *testing.T) {
 	}
 	// 3' mismatch at last base (index 9)
 	t3 := []byte(tgtPerfect)
-	if t3[len(t3)-1] == 'A' { t3[len(t3)-1] = 'G' } else { t3[len(t3)-1] = 'A' }
+	if t3[len(t3)-1] == 'A' {
+		t3[len(t3)-1] = 'G'
+	} else {
+		t3[len(t3)-1] = 'A'
+	}
 	p3 := dpPenalty(pr, string(t3), false)
 
 	// 5' mismatch at first base (index 0)
 	t5 := []byte(tgtPerfect)
-	if t5[0] == 'T' { t5[0] = 'A' } else { t5[0] = 'T' }
+	if t5[0] == 'T' {
+		t5[0] = 'A'
+	} else {
+		t5[0] = 'T'
+	}
 	p5 := dpPenalty(pr, string(t5), false)
 
 	// Internal mismatch at index 4
 	ti := []byte(tgtPerfect)
 	switch ti[4] {
-	case 'A': ti[4] = 'G'
-	default:  ti[4] = 'A'
+	case 'A':
+		ti[4] = 'G'
+	default:
+		ti[4] = 'A'
 	}
 	pIn := dpPenalty(pr, string(ti), false)
 
@@ -68,11 +79,16 @@ func rc5to3(s string) string {
 	b := make([]byte, len(s))
 	for i := 0; i < len(s); i++ {
 		switch s[i] {
-		case 'A': b[len(s)-1-i] = 'T'
-		case 'C': b[len(s)-1-i] = 'G'
-		case 'G': b[len(s)-1-i] = 'C'
-		case 'T': b[len(s)-1-i] = 'A'
-		default:  b[len(s)-1-i] = 'N'
+		case 'A':
+			b[len(s)-1-i] = 'T'
+		case 'C':
+			b[len(s)-1-i] = 'G'
+		case 'G':
+			b[len(s)-1-i] = 'C'
+		case 'T':
+			b[len(s)-1-i] = 'A'
+		default:
+			b[len(s)-1-i] = 'N'
 		}
 	}
 	return string(b)
@@ -92,7 +108,11 @@ func TestScore_ImprovesWithPerfectEnds(t *testing.T) {
 
 	// 3' mismatch on forward end: mutate last base of left end
 	ampBad := []byte(amp)
-	if ampBad[len(fwd)-1] == 'A' { ampBad[len(fwd)-1] = 'C' } else { ampBad[len(fwd)-1] = 'A' }
+	if ampBad[len(fwd)-1] == 'A' {
+		ampBad[len(fwd)-1] = 'C'
+	} else {
+		ampBad[len(fwd)-1] = 'A'
+	}
 	pBad := p
 	pBad.Seq = string(ampBad)
 	_, p2, _ := v.Visit(pBad)

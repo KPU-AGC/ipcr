@@ -32,6 +32,9 @@ type Options struct {
 	// NEW: ssDNA mode (BS-PCR)
 	SingleStranded bool
 
+	// NEW: denominator mode for ΔΔG→ΔTm conversion: "fixed" (D=200) or "auto"
+	DenomMode string
+
 	// Oligo input
 	OligoInline []string
 	OligosTSV   string
@@ -77,6 +80,8 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintf(out, "      --primer-conc string   Primer concentration, e.g., 250nM [%s]\n", "250nM")
 		_, _ = fmt.Fprintln(out, "      --allow-indel          Allow a single 1-nt gap (bulge) per primer [false]")
 		_, _ = fmt.Fprintln(out, "      --single-stranded      Treat target as ssDNA (BS-PCR): tiny dangling-end bonus + target-hairpin penalty [false]")
+		// NEW:
+		_, _ = fmt.Fprintf(out, "      --denom string         ΔΔG→ΔTm denominator: fixed | auto [%s]\n", "fixed")
 
 		_, _ = fmt.Fprintln(out, "\nProbe (optional):")
 		_, _ = fmt.Fprintf(out, "      --probe string         Internal probe (5'→3') [%s]\n", "")
@@ -135,6 +140,9 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.BoolVar(&o.AllowIndel, "allow-indel", false, "allow a single 1-nt gap (bulge) per primer")
 	fs.BoolVar(&o.SingleStranded, "single-stranded", false, "target is ssDNA (BS-PCR mode)")
 
+	// NEW: denom mode
+	fs.StringVar(&o.DenomMode, "denom", "fixed", "ΔΔG→ΔTm denominator: fixed | auto")
+
 	fs.StringVar(&o.Probe, "probe", "", "internal probe (5'→3') [optional]")
 	fs.StringVar(&o.ProbeName, "probe-name", "probe", "probe label")
 	fs.IntVar(&o.ProbeMaxMM, "probe-max-mm", 0, "max probe mismatches [0]")
@@ -189,6 +197,12 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	case "coord", "score":
 	default:
 		return o, fmt.Errorf("--rank must be 'coord' or 'score'")
+	}
+	// NEW: validate denom
+	switch strings.ToLower(o.DenomMode) {
+	case "fixed", "auto":
+	default:
+		return o, fmt.Errorf("--denom must be 'fixed' or 'auto'")
 	}
 	if o.ProbeWeight < 0 || o.ProbeWeight > 1 {
 		return o, fmt.Errorf("--probe-weight must be in [0,1]")

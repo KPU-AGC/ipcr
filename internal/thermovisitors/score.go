@@ -255,6 +255,9 @@ func alignPenaltyC_contextualD_ss(primer5to3, tgt3to5 string, allowGap bool, den
 
 // denomForPrimer computes D = ΔS_Na + R·ln(CT/X) using NN Tm on the
 // primer vs its perfect complement. X=4 (non-self) unless the primer is self-compl.
+// denomForPrimer computes |ΔS_Na + R·ln(CT/X)| using NN Tm on the
+// primer vs its perfect complement. X=4 (non-self) unless the primer is self-compl.
+// We return the absolute value so ΔΔG→ΔTm scaling is a positive magnitude.
 func (v Score) denomForPrimer(primer5to3 string) float64 {
 	p := toUpperACGT(primer5to3)
 	if p == "" || v.Na_M <= 0 || v.PrimerConc_M <= 0 {
@@ -278,11 +281,13 @@ func (v Score) denomForPrimer(primer5to3 string) float64 {
 	if err != nil {
 		return 200.0
 	}
-	// D matches the denominator term in the two-state Tm formula.
 	D := res.DS_Na + thermo.Rcal*math.Log(v.PrimerConc_M/float64(x))
-	// Go 1.22-safe "finite" check
-	if math.IsNaN(D) || math.IsInf(D, 0) || D <= 0 {
+	// Go 1.22-safe "finite" check, then take magnitude
+	if math.IsNaN(D) || math.IsInf(D, 0) || D == 0 {
 		return 200.0
+	}
+	if D < 0 {
+		D = -D
 	}
 	return D
 }

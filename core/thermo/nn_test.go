@@ -119,7 +119,7 @@ func TestTm_MonotonicWithSalt(t *testing.T) {
 	salts := []float64{1e-6, 1e-3, 1e-1, 1.0}
 
 	const eps = 1e-9
-	var last = -math.MaxFloat64
+	last := -math.MaxFloat64
 	var first float64
 	for i, na := range salts {
 		in.Na = na
@@ -153,7 +153,7 @@ func TestTm_MonotonicWithCt(t *testing.T) {
 	cts := []float64{5e-8, 5e-7, 5e-6} // 50 nM → 0.5 µM → 5 µM
 
 	const eps = 1e-9
-	var last = -math.MaxFloat64
+	last := -math.MaxFloat64
 	var first float64
 	for i, ct := range cts {
 		in.CT = ct

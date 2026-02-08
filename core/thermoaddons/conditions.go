@@ -44,7 +44,7 @@ func ParseConc(s string) (float64, error) {
 // corrections. By default, we *do not* add Mg2+ (keeps current behavior),
 // but you can enable an Owczarzy-lite transform via env:
 //
-//   IPCR_MG_EQ=owczarzy-lite  →  Na_eff = Na + 3.8*sqrt(Mg)
+//	IPCR_MG_EQ=owczarzy-lite  →  Na_eff = Na + 3.8*sqrt(Mg)
 //
 // This keeps us conservative and avoids silently changing users’ results.
 // You can swap the transform later without touching thermodynamic tables.

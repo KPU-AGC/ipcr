@@ -2,14 +2,13 @@
 package thermovisitors
 
 import (
+	"ipcr-core/engine"
+	"ipcr-core/thermo"
+	"ipcr-core/thermoaddons"
 	"math"
 	"os"
 	"strings"
 	"unicode"
-
-	"ipcr-core/engine"
-	"ipcr-core/thermo"
-	"ipcr-core/thermoaddons"
 )
 
 const (
@@ -55,6 +54,7 @@ func toUpperACGT(s string) string {
 	}
 	return string(b)
 }
+
 func toUpperACGTAllowN(s string) string {
 	b := make([]byte, 0, len(s))
 	for i := 0; i < len(s); i++ {
@@ -68,6 +68,7 @@ func toUpperACGTAllowN(s string) string {
 	}
 	return string(b)
 }
+
 func wcACGT(a, b byte) bool {
 	switch a {
 	case 'A':
@@ -82,6 +83,7 @@ func wcACGT(a, b byte) bool {
 		return false
 	}
 }
+
 func posMultiplier(i, n int) float64 {
 	if i >= n-K3 {
 		return 2.0
@@ -91,12 +93,14 @@ func posMultiplier(i, n int) float64 {
 	}
 	return 1.0
 }
+
 func at(s string, idx int) byte {
 	if idx < 0 || idx >= len(s) {
 		return 'N'
 	}
 	return s[idx]
 }
+
 func rev(s string) string {
 	b := []byte(s)
 	for i, j := 0, len(b)-1; i < j; i, j = i+1, j-1 {
@@ -104,6 +108,7 @@ func rev(s string) string {
 	}
 	return string(b)
 }
+
 func compBase(b byte) byte {
 	switch b {
 	case 'A':
@@ -150,12 +155,6 @@ func ssEndBonusApprox(top, bot byte) float64 {
 //
 // denom = effective denominator D (cal/K/mol) used only for ΔΔG→ΔTm fallback.
 
-// Back-compat wrapper: keeps existing callers/tests working.
-func alignPenaltyC_contextualD(primer5to3, tgt3to5 string, allowGap bool, denom float64) float64 {
-	return alignPenaltyC_contextualD_ss(primer5to3, tgt3to5, allowGap, denom, singleStrandedMode())
-}
-
-// New: same DP, but ss behavior is data-driven via ssOn.
 func alignPenaltyC_contextualD_ss(primer5to3, tgt3to5 string, allowGap bool, denom float64, ssOn bool) float64 {
 	P := toUpperACGT(primer5to3)
 	T := toUpperACGTAllowN(tgt3to5)

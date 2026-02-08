@@ -2,7 +2,7 @@ package thermoaddons
 
 import "math"
 
-func LengthPenalty(bp int, knee int, steepness float64, maxPenalty float64) float64 {
+func LengthPenalty(bp, knee int, steepness, maxPenalty float64) float64 {
 	if bp <= knee {
 		return 0
 	}

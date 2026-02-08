@@ -9,14 +9,14 @@ import (
 
 type Seed struct {
 	PairIdx    int
-	Which      byte  // 'A','B','a','b'
+	Which      byte // 'A','B','a','b'
 	Pat        []byte
 	PrimerLen  int
 	SeedOffset int
 }
 
 // choose an exact 3'-anchored seed length (exact seeds only)
-func seedLenFor(primerLen int, cfg int) int {
+func seedLenFor(primerLen, cfg int) int {
 	// cfg == 0 => auto (min(12, primerLen))
 	if cfg <= 0 {
 		if primerLen < 12 {
@@ -47,7 +47,7 @@ func isUnambigBytes(p []byte) bool {
 // seedLen=0 => auto (min(12, primerLen)).
 // seedLen<0 => **disable seeding** (thermo mode): return no seeds so
 // SimulateBatch falls back to full FindMatches() verification for all orientations.
-func BuildSeeds(pairs []primer.Pair, seedLen int, _ int) (seeds []Seed, has map[int]map[byte]bool) {
+func BuildSeeds(pairs []primer.Pair, seedLen, _ int) (seeds []Seed, has map[int]map[byte]bool) {
 	seeds = make([]Seed, 0, 4*len(pairs))
 	has = make(map[int]map[byte]bool, len(pairs))
 

@@ -136,11 +136,11 @@ func init() {
 }
 
 // Public API (updated to carry scores & rank-by-score)
-func StartProductWriter(out io.Writer, format string, sort, header, prettyMode bool, includeScore bool, rankByScore bool, bufSize int) (chan<- engine.Product, <-chan error) {
+func StartProductWriter(out io.Writer, format string, sort, header, prettyMode, includeScore, rankByScore bool, bufSize int) (chan<- engine.Product, <-chan error) {
 	return StartProductWriterWithPrettyOptions(out, format, sort, header, prettyMode, includeScore, rankByScore, pretty.DefaultOptions, bufSize)
 }
 
-func StartProductWriterWithPrettyOptions(out io.Writer, format string, sort, header, prettyMode bool, includeScore bool, rankByScore bool, popt pretty.Options, bufSize int) (chan<- engine.Product, <-chan error) {
+func StartProductWriterWithPrettyOptions(out io.Writer, format string, sort, header, prettyMode, includeScore, rankByScore bool, popt pretty.Options, bufSize int) (chan<- engine.Product, <-chan error) {
 	if bufSize <= 0 {
 		bufSize = 64
 	}

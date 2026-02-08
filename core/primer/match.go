@@ -27,7 +27,7 @@ func isUnambiguous(p []byte) bool {
 
 // capHits == 0  ➜ unlimited
 // terminalWindow: N bases at the primer 3' end where mismatches are disallowed (0=allow)
-func FindMatches(seq, primer []byte, maxMM, capHits int, terminalWindow int) []Match {
+func FindMatches(seq, primer []byte, maxMM, capHits, terminalWindow int) []Match {
 	pl := len(primer)
 	if pl == 0 || len(seq) < pl {
 		return nil

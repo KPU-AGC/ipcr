@@ -1,4 +1,4 @@
-// internal/output/text.go 
+// internal/output/text.go
 package output
 
 import (

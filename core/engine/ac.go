@@ -103,7 +103,7 @@ func scanAC(seq []byte, nodes []node, seeds []Seed) []hit {
 //   - maxMM      : mismatch budget (≤0 means “no mismatches allowed”)
 //   - leftTW     : protected window at 5' end (for rc orientations)
 //   - rightTW    : protected window at 3' end (for forward orientations)
-func verifyAt(seq []byte, pos int, pat []byte, maxMM int, leftTW, rightTW int) (primer.Match, bool) {
+func verifyAt(seq []byte, pos int, pat []byte, maxMM, leftTW, rightTW int) (primer.Match, bool) {
 	n := len(pat)
 	if pos < 0 || pos+n > len(seq) {
 		return primer.Match{}, false

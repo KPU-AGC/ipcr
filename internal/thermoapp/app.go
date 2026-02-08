@@ -7,14 +7,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"os"
-	"strings"
-
 	"ipcr-core/engine"
 	"ipcr-core/oligo"
 	"ipcr-core/primer"
 	"ipcr-core/thermoaddons"
-
 	"ipcr/internal/appcore"
 	"ipcr/internal/clibase"
 	"ipcr/internal/cmdutil"
@@ -23,6 +19,8 @@ import (
 	"ipcr/internal/thermovisitors"
 	"ipcr/internal/version"
 	"ipcr/internal/writers"
+	"os"
+	"strings"
 )
 
 /* ---------- small helpers (local, no external deps) ---------- */

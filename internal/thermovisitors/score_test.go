@@ -2,10 +2,9 @@
 package thermovisitors
 
 import (
+	"ipcr-core/engine"
 	"math"
 	"testing"
-
-	"ipcr-core/engine"
 )
 
 // Small wrapper for tests: forward to the denom-aware DP with a constant D and ssDNA=false.

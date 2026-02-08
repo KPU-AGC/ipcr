@@ -3,7 +3,6 @@ package output
 
 import (
 	"io"
-
 	"ipcr-core/engine"
 	"ipcr/internal/jsonutil"
 	"ipcr/pkg/api"

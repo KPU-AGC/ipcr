@@ -3,12 +3,11 @@ package writers
 
 import (
 	"io"
-	"sort"
-
 	"ipcr/internal/common"
 	"ipcr/internal/output"
 	"ipcr/internal/pretty"
 	"ipcr/internal/probeoutput"
+	"sort"
 )
 
 type annotatedArgs struct {

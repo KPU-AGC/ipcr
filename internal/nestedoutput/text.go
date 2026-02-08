@@ -73,6 +73,7 @@ func WriteTextWithRenderer(w io.Writer, list []NestedProduct, header bool, rende
 func StreamText(w io.Writer, in <-chan NestedProduct, header bool) error {
 	return StreamTextWithRenderer(w, in, header, nil)
 }
+
 func WriteText(w io.Writer, list []NestedProduct, header bool) error {
 	return WriteTextWithRenderer(w, list, header, nil)
 }

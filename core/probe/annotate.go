@@ -11,7 +11,7 @@ type Annotation struct {
 	Site   string
 }
 
-func AnnotateAmplicon(amplicon string, probe string, maxMM int) Annotation {
+func AnnotateAmplicon(amplicon, probe string, maxMM int) Annotation {
 	h := oligo.BestHit(amplicon, probe, maxMM)
 	return Annotation{Found: h.Found, Strand: h.Strand, Pos: h.Pos, MM: h.MM, Site: h.Site}
 }

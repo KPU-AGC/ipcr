@@ -10,7 +10,7 @@ import (
 func TestUnknownProductFormatError(t *testing.T) {
 	var b bytes.Buffer
 	//                    out   format        sort header pretty includeScore rankByScore bufSize
-	in, done := StartProductWriter(&b, "nope-format", false, false, false, false,      false,      1)
+	in, done := StartProductWriter(&b, "nope-format", false, false, false, false, false, 1)
 	close(in) // no payload; writer should error out immediately on dispatch
 	err := <-done
 	if err == nil {

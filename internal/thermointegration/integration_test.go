@@ -2,10 +2,9 @@ package thermointegration
 
 import (
 	"bytes"
+	"ipcr/internal/thermoapp"
 	"os"
 	"testing"
-
-	"ipcr/internal/thermoapp"
 )
 
 func writeFA(t *testing.T, name, data string) string {

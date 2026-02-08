@@ -8,6 +8,7 @@ var nnDH = map[string]float64{
 	"CT": -7.8, "AG": -7.8, "GA": -8.2, "TC": -8.2,
 	"CG": -10.6, "GC": -9.8, "GG": -8.0, "CC": -8.0,
 }
+
 var nnDS = map[string]float64{
 	"AA": -22.2, "TT": -22.2, "AT": -20.4, "TA": -21.3,
 	"CA": -22.7, "TG": -22.7, "GT": -22.4, "AC": -22.4,

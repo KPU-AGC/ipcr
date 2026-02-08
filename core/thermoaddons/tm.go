@@ -41,7 +41,7 @@ func TmNearestNeighbor(primer5to3 string, cond Conditions) (tmC, dH, dS float64,
 	return tmK - 273.15, dH, dS, nil
 }
 
-func DeltaGAt(dHkcal, dScal float64, tempC float64) float64 {
+func DeltaGAt(dHkcal, dScal, tempC float64) float64 {
 	tK := tempC + 273.15
 	return dHkcal - (tK * dScal / 1000.0)
 }

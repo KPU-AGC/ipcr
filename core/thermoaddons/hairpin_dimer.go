@@ -1,79 +1,51 @@
+// core/thermoaddons/hairpin_dimer.go
 package thermoaddons
 
-import "math"
-
+// HairpinPenalty returns a small, bounded °C penalty for simple hairpins in a
+// 5'→3' single-stranded DNA segment. It’s intentionally conservative and O(n^2):
+// - stem >= 4, loop >= 3
+// - penalty ~ 0.25 °C per stem base beyond 3, capped at 2.0 °C
 func HairpinPenalty(seq5to3 string) float64 {
 	b := []byte(seq5to3)
 	n := len(b)
-	maxStem := 0
-	max3Prox := 0
+	bestStem := 0
+
+	comp := func(x byte) byte {
+		switch x {
+		case 'A', 'a':
+			return 'T'
+		case 'T', 't', 'U', 'u':
+			return 'A'
+		case 'C', 'c':
+			return 'G'
+		case 'G', 'g':
+			return 'C'
+		default:
+			return 0
+		}
+	}
+
 	for i := 0; i < n; i++ {
-		for j := i + 3; j < n; j++ {
-			k := 0
-			for i+k < j-k && j+k < n && i-k >= 0 {
-				if !isWC(b[i+k], b[j-k]) {
-					break
-				}
-				k++
+		for j := i + 7; j < n; j++ { // loop >=3 → j-(i+1) >= 3 → j >= i+4; plus 3 more for stem room
+			// grow stem outwards from (i) and (j)
+			li, rj := i, j
+			stem := 0
+			for li >= 0 && rj < n && comp(b[li]) == b[rj] {
+				stem++
+				li--
+				rj++
 			}
-			if k >= 3 {
-				if k > maxStem {
-					maxStem = k
-					max3Prox = (n - 1) - (j - k)
-				} else if k == maxStem {
-					p := (n - 1) - (j - k)
-					if p > max3Prox {
-						max3Prox = p
-					}
-				}
+			if stem > bestStem {
+				bestStem = stem
 			}
 		}
 	}
-	if maxStem == 0 {
+	if bestStem < 4 {
 		return 0
 	}
-	return float64(maxStem) * (1.0 + math.Min(float64(max3Prox)/8.0, 1.0))
-}
-func DimerPenalty(primerA, primerB string) float64 {
-	a := []byte(primerA)
-	b := []byte(primerB)
-	win := 8
-	if len(a) < win || len(b) < win {
-		win = min(len(a), len(b))
+	pen := 0.25 * float64(bestStem-3)
+	if pen > 2.0 {
+		pen = 2.0
 	}
-	if win < 3 {
-		return 0
-	}
-	maxRun := 0
-	for i := 0; i < win; i++ {
-		if isWC(a[len(a)-1-i], b[len(b)-1-i]) {
-			maxRun++
-		} else {
-			break
-		}
-	}
-	if maxRun < 3 {
-		return 0
-	}
-	return float64(maxRun*maxRun) * 0.8
-}
-func isWC(p, t byte) bool {
-	switch p {
-	case 'A', 'a':
-		return t == 'T' || t == 't'
-	case 'T', 't':
-		return t == 'A' || t == 'a'
-	case 'C', 'c':
-		return t == 'G' || t == 'g'
-	case 'G', 'g':
-		return t == 'C' || t == 'c'
-	default:
-		return false
-	}
-}
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
+	return pen
 }

@@ -2,9 +2,8 @@
 package oligo
 
 import (
-	"strings"
-
 	"ipcr-core/primer"
+	"strings"
 )
 
 type Hit struct {
@@ -17,7 +16,7 @@ type Hit struct {
 
 // BestHit returns the best (fewest mismatches, then leftmost) hit of probe on
 // either strand of amplicon, allowing up to maxMM mismatches.
-func BestHit(amplicon string, probe string, maxMM int) Hit {
+func BestHit(amplicon, probe string, maxMM int) Hit {
 	amp := strings.ToUpper(amplicon)
 	prb := strings.ToUpper(probe)
 	prbB := []byte(prb)

@@ -12,7 +12,7 @@ const (
 	maskT = 8
 )
 
-func add(c byte, bits byte) {
+func add(c, bits byte) {
 	iupacMask[c] = bits
 }
 

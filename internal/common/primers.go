@@ -2,9 +2,8 @@
 package common
 
 import (
-	"strings"
-
 	"ipcr-core/primer"
+	"strings"
 )
 
 // AddSelfPairs appends per-row A:self and B:self pairs (Forward == Reverse).

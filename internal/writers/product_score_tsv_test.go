@@ -2,10 +2,9 @@ package writers
 
 import (
 	"bytes"
+	"ipcr-core/engine"
 	"strings"
 	"testing"
-
-	"ipcr-core/engine"
 )
 
 func TestProductWriter_TSVScoreHeaderAndSort(t *testing.T) {

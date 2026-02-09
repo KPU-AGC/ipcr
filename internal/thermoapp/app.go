@@ -200,13 +200,16 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	// Build primer pairs input: either primer TSV, inline primers, or oligo mode.
 	var pairs []primer.Pair
-	if opts.PrimerFile != "" {
+
+	switch {
+	case opts.PrimerFile != "":
 		pairs, err = primer.LoadTSV(opts.PrimerFile)
 		if err != nil {
 			_, _ = fmt.Fprintln(stderr, err)
 			return 2
 		}
-	} else if len(opts.OligoInline) > 0 || opts.OligosTSV != "" {
+
+	case len(opts.OligoInline) > 0 || opts.OligosTSV != "":
 		var oligs []primer.Oligo
 		for i, s := range opts.OligoInline {
 			o, err := parseOligoInline(s, i)
@@ -229,7 +232,8 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 			return 2
 		}
 		pairs = pairsFromOligos(oligs, opts.MinLen, opts.MaxLen, opts.Self)
-	} else {
+
+	default:
 		// Standard inline primer pair
 		pairs = []primer.Pair{{
 			ID:         "manual",

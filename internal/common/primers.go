@@ -11,6 +11,7 @@ import (
 func AddSelfPairs(pairs []primer.Pair) []primer.Pair {
 	out := make([]primer.Pair, 0, len(pairs)+2*len(pairs))
 	out = append(out, pairs...)
+
 	for _, p := range pairs {
 		if p.Forward != "" {
 			u := strings.ToUpper(p.Forward)
@@ -44,6 +45,7 @@ func AddSelfPairsUnique(pairs []primer.Pair) []primer.Pair {
 
 	seenA := make(map[string]struct{}, len(pairs))
 	seenB := make(map[string]struct{}, len(pairs))
+
 	for _, p := range pairs {
 		if f := strings.ToUpper(strings.TrimSpace(p.Forward)); f != "" {
 			if _, ok := seenA[f]; !ok {

@@ -9,6 +9,8 @@ Aho–Corasick seed scanner + local verifier.
 
 - buildAC(seeds) builds a trie with failure links.
 - scanAC(seq, nodes, seeds) emits (endPos, seedIdx) for every seed occurrence.
+- scanACSoftmask(seq, nodes, seeds) does the same, but normalizes lowercase
+  reference bytes to uppercase for matching only (soft-mask aware).
 - verifyAt(seq, pos, pat, ...) re-checks the full primer at 'pos' (0-based),
   counting mismatches with IUPAC and enforcing left/right terminal windows.
 */
@@ -99,11 +101,39 @@ func scanAC(seq []byte, nodes []node, seeds []Seed) []hit {
 	return out
 }
 
+// scanACSoftmask is scanAC but normalizes lowercase ASCII letters to uppercase
+// for matching only. The original reference bytes are never mutated.
+func scanACSoftmask(seq []byte, nodes []node, seeds []Seed) []hit {
+	state := 0
+	out := make([]hit, 0, 128)
+	for i := 0; i < len(seq); i++ {
+		b := seq[i]
+		if b >= 'a' && b <= 'z' {
+			b -= 'a' - 'A'
+		}
+		for state > 0 && nodes[state].next[b] == 0 {
+			state = nodes[state].fail
+		}
+		if next := nodes[state].next[b]; next != 0 {
+			state = next
+		}
+		if ids := nodes[state].out; len(ids) > 0 {
+			for _, idx := range ids {
+				out = append(out, hit{Pos: i, SeedIdx: idx})
+			}
+		}
+	}
+	return out
+}
+
 // verifyAt checks a full primer pattern at pos using IUPAC matching, with:
 //   - maxMM      : mismatch budget (≤0 means “no mismatches allowed”)
 //   - leftTW     : protected window at 5' end (for rc orientations)
 //   - rightTW    : protected window at 3' end (for forward orientations)
-func verifyAt(seq []byte, pos int, pat []byte, maxMM, leftTW, rightTW int) (primer.Match, bool) {
+//   - allowSoftmask : if true, lowercase reference bytes are matched as their
+//     uppercase equivalents; if false, any lowercase reference byte rejects
+//     the candidate immediately (and does not count as a mismatch).
+func verifyAt(seq []byte, pos int, pat []byte, maxMM, leftTW, rightTW int, allowSoftmask bool) (primer.Match, bool) {
 	n := len(pat)
 	if pos < 0 || pos+n > len(seq) {
 		return primer.Match{}, false
@@ -116,17 +146,47 @@ func verifyAt(seq []byte, pos int, pat []byte, maxMM, leftTW, rightTW int) (prim
 	leftCut := leftTW
 	rightCut := n - rightTW
 
+	if allowSoftmask {
+		for j := 0; j < n; j++ {
+			b := seq[pos+j]
+			if b >= 'a' && b <= 'z' {
+				b -= 'a' - 'A'
+			}
+			if !primer.BaseMatch(b, pat[j]) {
+				// inside a protected window → reject
+				if j < leftCut || j >= rightCut {
+					return primer.Match{}, false
+				}
+				mm++
+				mIdx = append(mIdx, j)
+				if maxMM >= 0 && mm > maxMM {
+					return primer.Match{}, false
+				}
+			}
+		}
+		return primer.Match{Pos: pos, Mismatches: mm, Length: n, MismatchIdx: mIdx}, true
+	}
+
+	// Default (softmask-respecting) path: keep the hot “match” case identical,
+	// only paying the lowercase check on the mismatch path.
 	for j := 0; j < n; j++ {
-		if !primer.BaseMatch(seq[pos+j], pat[j]) {
-			// inside a protected window → reject
-			if j < leftCut || j >= rightCut {
-				return primer.Match{}, false
-			}
-			mm++
-			mIdx = append(mIdx, j)
-			if maxMM >= 0 && mm > maxMM {
-				return primer.Match{}, false
-			}
+		b := seq[pos+j]
+		if primer.BaseMatch(b, pat[j]) {
+			continue
+		}
+		// Any lowercase reference base rejects immediately (not a mismatch).
+		if b >= 'a' && b <= 'z' {
+			return primer.Match{}, false
+		}
+
+		// inside a protected window → reject
+		if j < leftCut || j >= rightCut {
+			return primer.Match{}, false
+		}
+		mm++
+		mIdx = append(mIdx, j)
+		if maxMM >= 0 && mm > maxMM {
+			return primer.Match{}, false
 		}
 	}
 	return primer.Match{Pos: pos, Mismatches: mm, Length: n, MismatchIdx: mIdx}, true

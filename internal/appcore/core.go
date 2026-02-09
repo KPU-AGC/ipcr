@@ -27,9 +27,12 @@ type Options struct {
 	SeedLength     int
 	Circular       bool
 
+	// NEW: controls soft-masked (lowercase) matching behavior in the engine.
+	AllowSoftmask bool
+
 	Threads   int
 	ChunkSize int
-	DedupeCap int // NEW
+	DedupeCap int
 
 	Quiet           bool
 	NoMatchExitCode int
@@ -53,7 +56,7 @@ func Run[T any](
 ) int {
 	outw := bufio.NewWriter(stdout)
 
-	// longest primer
+	// Longest primer length (for chunking sanity checks)
 	maxPLen := 0
 	for _, pr := range pairs {
 		if l := len(pr.Forward); l > maxPLen {
@@ -81,7 +84,11 @@ func Run[T any](
 	if thr <= 0 {
 		thr = runtime.NumCPU()
 	}
+	if thr < 1 {
+		thr = 1
+	}
 
+	// Engine config (softmask flag is plumbed here)
 	sim := engine.New(engine.Config{
 		MaxMM:          o.MaxMM,
 		TerminalWindow: o.TerminalWindow,
@@ -91,6 +98,7 @@ func Run[T any](
 		NeedSites:      wf.NeedSites(),
 		SeedLen:        o.SeedLength,
 		Circular:       o.Circular,
+		AllowSoftmask:  o.AllowSoftmask,
 	})
 
 	inCh, writeErr := wf.Start(outw, thr*4)
@@ -106,7 +114,7 @@ func Run[T any](
 			Overlap:   overlap,
 			Circular:  o.Circular,
 			NeedSeq:   wf.NeedSeq(),
-			DedupCap:  o.DedupeCap, // NEW
+			DedupCap:  o.DedupeCap,
 		},
 		o.SeqFiles,
 		pairs,
@@ -124,12 +132,15 @@ func Run[T any](
 
 	close(inCh)
 
+	// Writer completion
 	if werr := <-writeErr; writers.IsBrokenPipe(werr) {
 		return 0
 	} else if werr != nil {
 		_, _ = fmt.Fprintln(stderr, werr)
 		return 3
 	}
+
+	// Flush stdout buffer
 	if e := outw.Flush(); writers.IsBrokenPipe(e) {
 		return 0
 	} else if e != nil {
@@ -137,6 +148,7 @@ func Run[T any](
 		return 3
 	}
 
+	// Pipeline errors
 	if perr != nil {
 		if errors.Is(perr, context.Canceled) {
 			return 130
@@ -144,6 +156,7 @@ func Run[T any](
 		_, _ = fmt.Fprintln(stderr, perr)
 		return 3
 	}
+
 	if total == 0 {
 		return o.NoMatchExitCode
 	}

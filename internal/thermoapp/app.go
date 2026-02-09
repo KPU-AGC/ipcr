@@ -1,3 +1,4 @@
+// internal/thermoapp/app.go
 package thermoapp
 
 import (
@@ -13,7 +14,6 @@ import (
 	"ipcr-core/thermoaddons"
 	"ipcr/internal/appcore"
 	"ipcr/internal/clibase"
-	"ipcr/internal/cmdutil"
 	"ipcr/internal/common"
 	"ipcr/internal/thermocli"
 	"ipcr/internal/thermovisitors"
@@ -88,6 +88,8 @@ func loadOligosTSV(path string) ([]primer.Oligo, error) {
 
 func pairsFromOligos(oligs []primer.Oligo, minLen, maxLen int, includeSelf bool) []primer.Pair {
 	out := make([]primer.Pair, 0, len(oligs)*len(oligs))
+
+	// Pairwise combinations (i<j) => ID = "Oi+Oj"
 	for i := 0; i < len(oligs); i++ {
 		for j := i + 1; j < len(oligs); j++ {
 			out = append(out, primer.Pair{
@@ -99,6 +101,7 @@ func pairsFromOligos(oligs []primer.Oligo, minLen, maxLen int, includeSelf bool)
 			})
 		}
 	}
+
 	if includeSelf {
 		out = append(out, primer.SelfPairs(oligs)...)
 	}
@@ -184,7 +187,6 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		return 2
 	}
 
-	// Version
 	if opts.Version {
 		_, _ = fmt.Fprintf(outw, "ipcr-thermo version %s\n", version.Version)
 		if e := outw.Flush(); writers.IsBrokenPipe(e) {
@@ -196,106 +198,90 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		return 0
 	}
 
-	// Input: either oligo mode or classic primer mode
-	hasOligoMode := len(opts.OligoInline) > 0 || opts.OligosTSV != ""
-	hasPairMode := opts.PrimerFile != "" || (opts.Fwd != "" && opts.Rev != "")
-
-	if hasOligoMode && hasPairMode {
-		_, _ = fmt.Fprintln(stderr, "error: --oligo/--oligos cannot be combined with --primers or --forward/--reverse")
-		return 2
-	}
-	if !hasOligoMode && !hasPairMode {
-		_, _ = fmt.Fprintln(stderr, "error: provide --oligo/--oligos OR --primers/--forward+--reverse")
-		return 2
-	}
-
+	// Build primer pairs input: either primer TSV, inline primers, or oligo mode.
 	var pairs []primer.Pair
-	if hasOligoMode {
-		var oligs []primer.Oligo
-		if opts.OligosTSV != "" {
-			lo, err := loadOligosTSV(opts.OligosTSV)
-			if err != nil {
-				_, _ = fmt.Fprintln(stderr, err)
-				return 2
-			}
-			oligs = append(oligs, lo...)
+	if opts.PrimerFile != "" {
+		pairs, err = primer.LoadTSV(opts.PrimerFile)
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, err)
+			return 2
 		}
-		for i, spec := range opts.OligoInline {
-			o, err := parseOligoInline(spec, i)
+	} else if len(opts.OligoInline) > 0 || opts.OligosTSV != "" {
+		var oligs []primer.Oligo
+		for i, s := range opts.OligoInline {
+			o, err := parseOligoInline(s, i)
 			if err != nil {
 				_, _ = fmt.Fprintln(stderr, err)
 				return 2
 			}
 			oligs = append(oligs, o)
 		}
-		if len(oligs) == 0 {
-			_, _ = fmt.Fprintln(stderr, "error: no oligos provided")
+		if opts.OligosTSV != "" {
+			more, err := loadOligosTSV(opts.OligosTSV)
+			if err != nil {
+				_, _ = fmt.Fprintln(stderr, err)
+				return 2
+			}
+			oligs = append(oligs, more...)
+		}
+		if len(oligs) < 1 {
+			_, _ = fmt.Fprintln(stderr, "need at least one --oligo/--oligos entry")
 			return 2
 		}
 		pairs = pairsFromOligos(oligs, opts.MinLen, opts.MaxLen, opts.Self)
-		if len(pairs) == 0 {
-			_, _ = fmt.Fprintln(stderr, "error: need ≥2 oligos for pairing (or enable --self)")
-			return 2
-		}
 	} else {
-		if opts.PrimerFile != "" {
-			var e error
-			pairs, e = primer.LoadTSV(opts.PrimerFile)
-			if e != nil {
-				_, _ = fmt.Fprintln(stderr, e)
-				return 2
-			}
-		} else {
-			if opts.Fwd == "" || opts.Rev == "" {
-				_, _ = fmt.Fprintln(stderr, "error: --forward and --reverse must be supplied together")
-				return 2
-			}
-			pairs = []primer.Pair{
-				{ID: "manual", Forward: strings.ToUpper(opts.Fwd), Reverse: strings.ToUpper(opts.Rev), MinProduct: opts.MinLen, MaxProduct: opts.MaxLen},
-			}
-		}
+		// Standard inline primer pair
+		pairs = []primer.Pair{{
+			ID:         "manual",
+			Forward:    opts.Fwd,
+			Reverse:    opts.Rev,
+			MinProduct: opts.MinLen,
+			MaxProduct: opts.MaxLen,
+		}}
 		if opts.Self {
-			pairs = common.AddSelfPairsUnique(pairs)
+			pairs = common.AddSelfPairs(pairs)
 		}
 	}
 
-	// Parse solution conditions (warn and default on errors)
+	// Parse thermo solution conditions
 	naM, errNa := parseMolar(opts.NaSpec)
 	mgM, errMg := parseMolar(opts.MgSpec)
 	ctM, errCt := parseMolar(opts.PrimerConcSpec)
-	if errNa != nil {
-		cmdutil.Warnf(stderr, opts.Quiet, "bad --na %q: %v (using 50mM)", opts.NaSpec, errNa)
-		naM = 0.05
+	if errNa != nil && !opts.Quiet {
+		_, _ = fmt.Fprintf(stderr, "WARN: invalid --na %q (%v); using 50mM\n", opts.NaSpec, errNa)
+		naM = 5e-2
 	}
-	if errMg != nil {
-		cmdutil.Warnf(stderr, opts.Quiet, "bad --mg %q: %v (using 3mM)", opts.MgSpec, errMg)
-		mgM = 0.003
+	if errMg != nil && !opts.Quiet {
+		_, _ = fmt.Fprintf(stderr, "WARN: invalid --mg %q (%v); using 3mM\n", opts.MgSpec, errMg)
+		mgM = 3e-3
 	}
-	if errCt != nil {
-		cmdutil.Warnf(stderr, opts.Quiet, "bad --primer-conc %q: %v (using 250nM)", opts.PrimerConcSpec, errCt)
+	if errCt != nil && !opts.Quiet {
+		_, _ = fmt.Fprintf(stderr, "WARN: invalid --primer-conc %q (%v); using 250nM\n", opts.PrimerConcSpec, errCt)
 		ctM = 2.5e-7
 	}
 
 	// Effective monovalent (optional Owczarzy-lite via env)
 	naEff := thermoaddons.EffectiveMonovalent(naM, mgM)
 
-	// Build scorer (visitor)
+	// Build thermo scorer (visitor)
 	scorer := thermovisitors.Score{
 		AnnealTempC:    opts.AnnealTempC,
 		Na_M:           naEff,
 		PrimerConc_M:   ctM,
 		AllowIndels:    opts.AllowIndel,
-		LengthBiasOn:   false, // reserved; keep behavior stable
+		LengthBiasOn:   false, // keep stable unless/until wired as a flag
 		SingleStranded: opts.SingleStranded,
-		// NEW: enable auto-denominator when requested
-		UseAutoDenom: strings.ToLower(opts.DenomMode) == "auto",
+		StructScale:    opts.StructScale,
+		UseAutoDenom:   strings.ToLower(opts.DenomMode) == "auto",
 	}
 
-	// Core pipeline
+	// Terminal window normalization
 	termWin := opts.TerminalWindow
 	if termWin < 1 {
 		termWin = 0
 	}
+
+	// Core pipeline options (NOTE: allow-softmask is threaded here)
 	coreOpts := appcore.Options{
 		SeqFiles:        opts.SeqFiles,
 		MaxMM:           opts.Mismatches,
@@ -305,6 +291,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		HitCap:          opts.HitCap,
 		SeedLength:      opts.SeedLength,
 		Circular:        opts.Circular,
+		AllowSoftmask:   opts.AllowSoftmask,
 		Threads:         opts.Threads,
 		ChunkSize:       opts.ChunkSize,
 		DedupeCap:       opts.DedupeCap,
@@ -323,7 +310,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		RankByScore:  rankByScore,
 	}
 
-	return appcore.Run[engine.Product](parent, outw, stderr, coreOpts, pairs, scorer.Visit, wf)
+	return appcore.Run[engine.Product](parent, stdout, stderr, coreOpts, pairs, scorer.Visit, wf)
 }
 
 func Run(argv []string, stdout, stderr io.Writer) int {

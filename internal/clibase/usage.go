@@ -39,6 +39,7 @@ func UsageCommon(fs *flag.FlagSet, name string, extra func(out io.Writer, def fu
 		_, _ = fmt.Fprintf(out, "      --max-length int        Maximum product length [%s]\n", def("max-length"))
 		_, _ = fmt.Fprintf(out, "      --hit-cap int           Max matches stored per primer/window (0=unlimited) [%s]\n", def("hit-cap"))
 		_, _ = fmt.Fprintf(out, "      --terminal-window int   3' terminal window (N<1 disables) [%s]\n", def("terminal-window"))
+		_, _ = fmt.Fprintf(out, "      --allow-softmask        Allow matching within soft-masked (lowercase) reference regions [%s]\n", def("allow-softmask"))
 		_, _ = fmt.Fprintf(out, "      --self                  Allow single-oligo amplification (A×rc(A), B×rc(B)) [%s]\n", def("self"))
 
 		_, _ = fmt.Fprintln(out, "\nPerformance:")

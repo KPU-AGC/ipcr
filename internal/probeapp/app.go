@@ -2,96 +2,39 @@
 package probeapp
 
 import (
-	"bufio"
 	"context"
-	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"ipcr-core/primer"
 	"ipcr/internal/appcore"
-	"ipcr/internal/clibase"
 	"ipcr/internal/common"
 	"ipcr/internal/probecli"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
 	"ipcr/internal/visitors"
-	"ipcr/internal/writers"
 	"strings"
 )
 
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
-	outw := bufio.NewWriter(stdout)
-	defer outw.Flush()
-
 	fs := probecli.NewFlagSet("ipcr-probe")
 	fs.SetOutput(io.Discard)
 
-	if len(argv) == 0 {
-		_, _ = probecli.ParseArgs(fs, []string{"-h"})
-		fs.SetOutput(outw)
-		fs.Usage()
-		if err := outw.Flush(); writers.IsBrokenPipe(err) {
-			return 0
-		} else if err != nil {
-			_, _ = fmt.Fprintln(stderr, err)
-			return 3
-		}
-		return 0
-	}
-
 	opts, err := probecli.ParseArgs(fs, argv)
 	if err != nil {
-		if errors.Is(err, clibase.ErrPrintedAndExitOK) {
-			probecli.PrintExamples(outw)
-			if e := outw.Flush(); writers.IsBrokenPipe(e) {
-				return 0
-			} else if e != nil {
-				_, _ = fmt.Fprintln(stderr, e)
-				return 3
-			}
-			return 0
-		}
-		if errors.Is(err, flag.ErrHelp) {
-			fs.SetOutput(outw)
-			fs.Usage()
-			if e := outw.Flush(); writers.IsBrokenPipe(e) {
-				return 0
-			} else if e != nil {
-				_, _ = fmt.Fprintln(stderr, e)
-				return 3
-			}
-			return 0
-		}
 		_, _ = fmt.Fprintln(stderr, err)
-		fs.SetOutput(outw)
-		fs.Usage()
-		if e := outw.Flush(); writers.IsBrokenPipe(e) {
-			return 0
-		} else if e != nil {
-			_, _ = fmt.Fprintln(stderr, e)
-			return 3
-		}
 		return 2
 	}
 
 	if opts.Version {
-		_, _ = fmt.Fprintf(outw, "ipcr version %s (ipcr-probe)\n", version.Version)
-		if e := outw.Flush(); writers.IsBrokenPipe(e) {
-			return 0
-		} else if e != nil {
-			_, _ = fmt.Fprintln(stderr, e)
-			return 3
-		}
+		_, _ = fmt.Fprintf(stdout, "ipcr version %s (ipcr-probe)\n", version.Version)
 		return 0
 	}
 
 	var pairs []primer.Pair
 	if opts.PrimerFile != "" {
-		var e error
-		pairs, e = primer.LoadTSV(opts.PrimerFile)
-		if e != nil {
-			_, _ = fmt.Fprintln(stderr, e)
+		pairs, err = primer.LoadTSV(opts.PrimerFile)
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, err)
 			return 2
 		}
 	} else {
@@ -103,17 +46,34 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	termWin := runutil.EffectiveTerminalWindow(opts.TerminalWindow)
 	coreOpts := appcore.Options{
-		SeqFiles: opts.SeqFiles, MaxMM: opts.Mismatches, TerminalWindow: termWin,
-		MinLen: opts.MinLen, MaxLen: opts.MaxLen, HitCap: opts.HitCap, SeedLength: opts.SeedLength,
-		Circular: opts.Circular, Threads: opts.Threads, ChunkSize: opts.ChunkSize,
-		DedupeCap: opts.DedupeCap,
-		Quiet:     opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
+		SeqFiles:        opts.SeqFiles,
+		MaxMM:           opts.Mismatches,
+		TerminalWindow:  termWin,
+		MinLen:          opts.MinLen,
+		MaxLen:          opts.MaxLen,
+		HitCap:          opts.HitCap,
+		SeedLength:      opts.SeedLength,
+		Circular:        opts.Circular,
+		AllowSoftmask:   opts.AllowSoftmask,
+		Threads:         opts.Threads,
+		ChunkSize:       opts.ChunkSize,
+		DedupeCap:       opts.DedupeCap,
+		Quiet:           opts.Quiet,
+		NoMatchExitCode: opts.NoMatchExitCode,
 	}
-	writer := appcore.NewAnnotatedWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty)
-	visitor := visitors.Probe{
-		Name: opts.ProbeName, Seq: strings.ToUpper(opts.Probe), MaxMM: opts.ProbeMaxMM, Require: opts.RequireProbe,
+
+	// WriterFactory for annotated products is 4 args: (format, sort, header, pretty)
+	wf := appcore.NewAnnotatedWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty)
+
+	v := visitors.Probe{
+		Name:    strings.TrimSpace(opts.ProbeName),
+		Seq:     strings.TrimSpace(opts.Probe),
+		MaxMM:   opts.ProbeMaxMM,
+		Require: opts.RequireProbe,
 	}
-	return appcore.Run(parent, stdout, stderr, coreOpts, pairs, visitor.Visit, writer)
+
+	visit := v.Visit
+	return appcore.Run(parent, stdout, stderr, coreOpts, pairs, visit, wf)
 }
 
 func Run(argv []string, stdout, stderr io.Writer) int {

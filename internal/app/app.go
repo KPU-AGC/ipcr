@@ -95,22 +95,56 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 			return 2
 		}
 	} else {
-		pairs = []primer.Pair{{ID: "manual", Forward: opts.Fwd, Reverse: opts.Rev, MinProduct: opts.MinLen, MaxProduct: opts.MaxLen}}
+		pairs = []primer.Pair{{
+			ID:         "manual",
+			Forward:    opts.Fwd,
+			Reverse:    opts.Rev,
+			MinProduct: opts.MinLen,
+			MaxProduct: opts.MaxLen,
+		}}
 	}
+
 	if opts.Self {
 		pairs = common.AddSelfPairs(pairs)
 	}
 
 	termWin := runutil.EffectiveTerminalWindow(opts.TerminalWindow)
+
 	coreOpts := appcore.Options{
-		SeqFiles: opts.SeqFiles, MaxMM: opts.Mismatches, TerminalWindow: termWin,
-		MinLen: opts.MinLen, MaxLen: opts.MaxLen, HitCap: opts.HitCap, SeedLength: opts.SeedLength,
-		Circular: opts.Circular, Threads: opts.Threads, ChunkSize: opts.ChunkSize,
-		DedupeCap: opts.DedupeCap,
-		Quiet:     opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
+		SeqFiles:        opts.SeqFiles,
+		MaxMM:           opts.Mismatches,
+		TerminalWindow:  termWin,
+		MinLen:          opts.MinLen,
+		MaxLen:          opts.MaxLen,
+		HitCap:          opts.HitCap,
+		SeedLength:      opts.SeedLength,
+		Circular:        opts.Circular,
+		Threads:         opts.Threads,
+		ChunkSize:       opts.ChunkSize,
+		DedupeCap:       opts.DedupeCap,
+		Quiet:           opts.Quiet,
+		NoMatchExitCode: opts.NoMatchExitCode,
 	}
-	writer := appcore.NewProductWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty, opts.Products, false, false)
-	return appcore.Run[engine.Product](parent, stdout, stderr, coreOpts, pairs, visitors.PassThrough{}.Visit, writer)
+
+	writer := appcore.NewProductWriterFactory(
+		opts.Output,
+		opts.Sort,
+		opts.Header,
+		opts.Pretty,
+		opts.Products,
+		false, // includeScore
+		false, // rankByScore
+	)
+
+	return appcore.Run[engine.Product](
+		parent,
+		stdout,
+		stderr,
+		coreOpts,
+		pairs,
+		visitors.PassThrough{}.Visit,
+		writer,
+	)
 }
 
 func Run(argv []string, stdout, stderr io.Writer) int {

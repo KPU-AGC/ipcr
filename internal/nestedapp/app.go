@@ -2,138 +2,62 @@
 package nestedapp
 
 import (
-	"bufio"
 	"context"
-	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"ipcr-core/engine"
 	"ipcr-core/primer"
 	"ipcr/internal/appcore"
-	"ipcr/internal/clibase"
 	"ipcr/internal/common"
 	"ipcr/internal/nestedcli"
 	"ipcr/internal/runutil"
 	"ipcr/internal/version"
 	"ipcr/internal/visitors"
-	"ipcr/internal/writers"
-	"strings"
 )
 
 func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer) int {
-	outw := bufio.NewWriter(stdout)
-	defer func() { _ = outw.Flush() }()
-
 	fs := nestedcli.NewFlagSet("ipcr-nested")
 	fs.SetOutput(io.Discard)
 
-	// No args → show help and exit 0
-	if len(argv) == 0 {
-		_, _ = nestedcli.ParseArgs(fs, []string{"-h"})
-		fs.SetOutput(outw)
-		fs.Usage()
-		if err := outw.Flush(); writers.IsBrokenPipe(err) {
-			return 0
-		} else if err != nil {
-			_, _ = fmt.Fprintln(stderr, err)
-			return 3
-		}
-		return 0
-	}
-
 	opts, err := nestedcli.ParseArgs(fs, argv)
 	if err != nil {
-		if errors.Is(err, clibase.ErrPrintedAndExitOK) {
-			nestedcli.PrintExamples(outw)
-			if e := outw.Flush(); writers.IsBrokenPipe(e) {
-				return 0
-			} else if e != nil {
-				_, _ = fmt.Fprintln(stderr, e)
-				return 3
-			}
-			return 0
-		}
-		if errors.Is(err, flag.ErrHelp) {
-			fs.SetOutput(outw)
-			fs.Usage()
-			if err := outw.Flush(); writers.IsBrokenPipe(err) {
-				return 0
-			} else if err != nil {
-				_, _ = fmt.Fprintln(stderr, err)
-				return 3
-			}
-			return 0
-		}
 		_, _ = fmt.Fprintln(stderr, err)
-		fs.SetOutput(outw)
-		fs.Usage()
-		if err := outw.Flush(); writers.IsBrokenPipe(err) {
-			return 0
-		} else if err != nil {
-			_, _ = fmt.Fprintln(stderr, err)
-			return 3
-		}
 		return 2
 	}
 
 	if opts.Version {
-		_, _ = fmt.Fprintf(outw, "ipcr version %s (ipcr-nested)\n", version.Version)
-		if err := outw.Flush(); writers.IsBrokenPipe(err) {
-			return 0
-		} else if err != nil {
-			_, _ = fmt.Fprintln(stderr, err)
-			return 3
-		}
+		_, _ = fmt.Fprintf(stdout, "ipcr-nested version %s\n", version.Version)
 		return 0
 	}
 
-	// ----- Build primer sets -----
-
 	// Outer pairs
-	var outer []primer.Pair
-	var e error
+	var outerPairs []primer.Pair
 	if opts.PrimerFile != "" {
-		outer, e = primer.LoadTSV(opts.PrimerFile)
-		if e != nil {
-			_, _ = fmt.Fprintln(stderr, e)
+		outerPairs, err = primer.LoadTSV(opts.PrimerFile)
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, err)
 			return 2
 		}
 	} else {
-		outer = []primer.Pair{{
-			ID:         "outer",
-			Forward:    strings.ToUpper(opts.Fwd),
-			Reverse:    strings.ToUpper(opts.Rev),
-			MinProduct: opts.MinLen,
-			MaxProduct: opts.MaxLen,
-		}}
+		outerPairs = []primer.Pair{{ID: "outer", Forward: opts.Fwd, Reverse: opts.Rev, MinProduct: opts.MinLen, MaxProduct: opts.MaxLen}}
 	}
 	if opts.Self {
-		outer = common.AddSelfPairs(outer)
+		outerPairs = common.AddSelfPairs(outerPairs)
 	}
 
 	// Inner pairs
-	var inner []primer.Pair
+	var innerPairs []primer.Pair
 	if opts.InnerPrimerFile != "" {
-		inner, e = primer.LoadTSV(opts.InnerPrimerFile)
-		if e != nil {
-			_, _ = fmt.Fprintln(stderr, e)
+		innerPairs, err = primer.LoadTSV(opts.InnerPrimerFile)
+		if err != nil {
+			_, _ = fmt.Fprintln(stderr, err)
 			return 2
 		}
 	} else {
-		inner = []primer.Pair{{
-			ID:      "inner",
-			Forward: strings.ToUpper(opts.InnerFwd),
-			Reverse: strings.ToUpper(opts.InnerRev),
-		}}
-	}
-	if opts.Self {
-		inner = common.AddSelfPairs(inner)
+		innerPairs = []primer.Pair{{ID: "inner", Forward: opts.InnerFwd, Reverse: opts.InnerRev}}
 	}
 
-	// ----- Core execution config -----
 	termWin := runutil.EffectiveTerminalWindow(opts.TerminalWindow)
-
 	coreOpts := appcore.Options{
 		SeqFiles:        opts.SeqFiles,
 		MaxMM:           opts.Mismatches,
@@ -143,6 +67,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		HitCap:          opts.HitCap,
 		SeedLength:      opts.SeedLength,
 		Circular:        opts.Circular,
+		AllowSoftmask:   opts.AllowSoftmask,
 		Threads:         opts.Threads,
 		ChunkSize:       opts.ChunkSize,
 		DedupeCap:       opts.DedupeCap,
@@ -150,21 +75,15 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		NoMatchExitCode: opts.NoMatchExitCode,
 	}
 
-	writer := appcore.NewNestedWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty)
-
-	visitor := visitors.Nested{
-		InnerPairs: inner,
-		EngineCfg: engine.Config{
-			MaxMM:          opts.Mismatches,
-			TerminalWindow: termWin,
-			SeedLen:        opts.SeedLength,
-			Circular:       false,       // inner scan runs on linearized outer products
-			NeedSites:      opts.Pretty, // only pretty mode needs per-base sites
-		},
+	// Nested visitor exists as a struct with Visit method.
+	v := visitors.Nested{
+		InnerPairs:   innerPairs,
+		EngineCfg:    engine.Config{MaxMM: opts.Mismatches, TerminalWindow: termWin, SeedLen: opts.SeedLength, AllowSoftmask: opts.AllowSoftmask, NeedSites: opts.Pretty},
 		RequireInner: opts.RequireInner,
 	}
 
-	return appcore.Run(parent, stdout, stderr, coreOpts, outer, visitor.Visit, writer)
+	wf := appcore.NewNestedWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty)
+	return appcore.Run(parent, stdout, stderr, coreOpts, outerPairs, v.Visit, wf)
 }
 
 func Run(argv []string, stdout, stderr io.Writer) int {

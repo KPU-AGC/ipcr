@@ -27,12 +27,17 @@ func TestComputeOverlap(t *testing.T) {
 }
 
 func TestValidateChunking(t *testing.T) {
-	// circular disables
-	cs, ov, w := ValidateChunking(true, 1000, 500, 25)
+	// default/no chunking is silent
+	cs, ov, w := ValidateChunking(false, 0, 500, 25)
+	if cs != 0 || ov != 0 || len(w) != 0 {
+		t.Fatalf("chunk-size=0 should disable silently: cs=%d ov=%d warns=%v", cs, ov, w)
+	}
+	// circular disables only when chunking was requested
+	cs, ov, w = ValidateChunking(true, 1000, 500, 25)
 	if cs != 0 || ov != 0 || len(w) == 0 {
 		t.Fatalf("circular should disable with warning")
 	}
-	// no maxLen
+	// no finite effective maxLen
 	cs, ov, w = ValidateChunking(false, 1000, 0, 25)
 	if cs != 0 || ov != 0 || len(w) == 0 {
 		t.Fatalf("missing maxLen should disable with warning")

@@ -2,15 +2,15 @@
 package fasta
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 )
 
-// StreamChunksPathCtx opens `path`, scans FASTA, and emits overlapped chunks.
-// Cancellation via ctx is honored promptly (both between lines and between chunks).
+// StreamChunksPathCtx opens path, scans FASTA, and emits overlapped chunks.
+// With chunking enabled, sequence is emitted with a rolling window and the full
+// FASTA record is not buffered. With chunking disabled, the full record is
+// emitted as one Record and is therefore buffered until its next header/EOF.
+// Cancellation via ctx is honored between input fragments and between chunks.
 //
 // chunkSize <= 0  → whole record as one chunk (no overlap considered)
 // overlap < 0     → treated as 0
@@ -31,11 +31,15 @@ func StreamChunksPathCtx(
 	}
 	defer func() { _ = rc.Close() }()
 
-	sc := bufio.NewScanner(rc)
-	const maxLine = 64 * 1024 * 1024 // allow very long single-line sequences (64 MiB)
-	buf := make([]byte, 64*1024)
-	sc.Buffer(buf, maxLine)
+	if chunkSize <= 0 || overlap >= chunkSize {
+		return streamWholeRecords(ctx, rc, emit)
+	}
+	return streamRollingChunks(ctx, rc, chunkSize, overlap, emit)
+}
 
+func streamWholeRecords(ctx context.Context, r interface {
+	Read([]byte) (int, error)
+}, emit func(Record) error) error {
 	var (
 		id  string
 		seq = make([]byte, 0, 1<<20)
@@ -45,69 +49,127 @@ func StreamChunksPathCtx(
 		if id == "" {
 			return nil
 		}
-		if chunkSize <= 0 || chunkSize >= len(seq) {
-			if err := emit(Record{ID: id, Seq: append([]byte(nil), seq...)}); err != nil {
-				return err
-			}
-			return nil
-		}
-		step := chunkSize - overlap
-		if step <= 0 {
-			if err := emit(Record{ID: id, Seq: append([]byte(nil), seq...)}); err != nil {
-				return err
-			}
-			return nil
-		}
-		for off := 0; off < len(seq); off += step {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			default:
-			}
-			end := off + chunkSize
-			if end > len(seq) {
-				end = len(seq)
-			}
-			chID := fmt.Sprintf("%s:%d-%d", id, off, end)
-			if err := emit(Record{ID: chID, Seq: append([]byte(nil), seq[off:end]...)}); err != nil {
-				return err
-			}
-			if end == len(seq) {
-				break
-			}
+		if err := emit(Record{ID: id, Seq: append([]byte(nil), seq...)}); err != nil {
+			return err
 		}
 		return nil
 	}
 
-	for sc.Scan() {
+	err := scanFASTALines(ctx, r,
+		func(header []byte) error {
+			if err := flush(); err != nil {
+				return err
+			}
+			id = parseHeaderID(header)
+			seq = seq[:0]
+			return nil
+		},
+		func(line []byte) error {
+			if id == "" {
+				return nil
+			}
+			seq = appendNormalizedSeqLine(seq, line)
+			return nil
+		},
+	)
+	if err != nil {
+		return err
+	}
+	return flush()
+}
+
+func streamRollingChunks(ctx context.Context, r interface {
+	Read([]byte) (int, error)
+}, chunkSize, overlap int, emit func(Record) error) error {
+	step := chunkSize - overlap
+	if step <= 0 {
+		return streamWholeRecords(ctx, r, emit)
+	}
+
+	var (
+		id             string
+		window         = make([]byte, 0, chunkSize+1)
+		windowStart    int
+		totalLen       int
+		lastEmittedEnd int
+		emittedChunk   bool
+	)
+
+	reset := func(newID string) {
+		id = newID
+		window = window[:0]
+		windowStart = 0
+		totalLen = 0
+		lastEmittedEnd = 0
+		emittedChunk = false
+	}
+
+	emitChunk := func(start, end int, seq []byte) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
 		}
-		line := sc.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		if line[0] == '>' {
-			if id != "" {
-				if err := flush(); err != nil {
-					return err
-				}
-				seq = seq[:0]
-			}
-			id = parseHeaderID(line[1:])
-			continue
-		}
-		seq = append(seq, bytes.TrimSpace(line)...)
-	}
-	if err := sc.Err(); err != nil && err != io.EOF {
-		return fmt.Errorf("fasta scan: %w", err)
-	}
-	if id != "" || len(seq) > 0 {
-		if err := flush(); err != nil {
+		chID := fmt.Sprintf("%s:%d-%d", id, start, end)
+		if err := emit(Record{ID: chID, Seq: append([]byte(nil), seq...)}); err != nil {
 			return err
 		}
+		lastEmittedEnd = end
+		emittedChunk = true
+		return nil
 	}
-	return nil
+
+	flush := func() error {
+		if id == "" {
+			return nil
+		}
+		if !emittedChunk {
+			if err := emit(Record{ID: id, Seq: append([]byte(nil), window...)}); err != nil {
+				return err
+			}
+			return nil
+		}
+		if lastEmittedEnd < totalLen {
+			return emitChunk(windowStart, totalLen, window)
+		}
+		return nil
+	}
+
+	appendSeq := func(line []byte) error {
+		if id == "" {
+			return nil
+		}
+		before := len(window)
+		window = appendNormalizedSeqLine(window, line)
+		totalLen += len(window) - before
+
+		for len(window) > chunkSize {
+			if err := emitChunk(windowStart, windowStart+chunkSize, window[:chunkSize]); err != nil {
+				return err
+			}
+			if step >= len(window) {
+				window = window[:0]
+			} else {
+				copy(window, window[step:])
+				window = window[:len(window)-step]
+			}
+			windowStart += step
+		}
+		return nil
+	}
+
+	err := scanFASTALines(ctx, r,
+		func(header []byte) error {
+			if err := flush(); err != nil {
+				return err
+			}
+			reset(parseHeaderID(header))
+			return nil
+		},
+		appendSeq,
+	)
+	if err != nil {
+		return err
+	}
+	return flush()
 }

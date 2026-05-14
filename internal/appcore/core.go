@@ -43,6 +43,28 @@ type WriterFactory[T any] interface {
 	Start(out io.Writer, bufSize int) (chan<- T, <-chan error)
 }
 
+func effectiveMaxProductLen(globalMaxLen int, pairs []primer.Pair) int {
+	effective := globalMaxLen
+	unbounded := false
+
+	for _, p := range pairs {
+		if p.MaxProduct > 0 {
+			if p.MaxProduct > effective {
+				effective = p.MaxProduct
+			}
+			continue
+		}
+		if globalMaxLen <= 0 {
+			unbounded = true
+		}
+	}
+
+	if unbounded {
+		return 0
+	}
+	return effective
+}
+
 func Run[T any](
 	parent context.Context,
 	stdout, stderr io.Writer,
@@ -63,8 +85,9 @@ func Run[T any](
 			maxPLen = l
 		}
 	}
-	if o.MaxLen > 0 && o.MaxLen < maxPLen {
-		_, _ = fmt.Fprintf(stderr, "error: --max-length (%d) is smaller than the longest primer length (%d)\n", o.MaxLen, maxPLen)
+	effectiveMaxLen := effectiveMaxProductLen(o.MaxLen, pairs)
+	if effectiveMaxLen > 0 && effectiveMaxLen < maxPLen {
+		_, _ = fmt.Fprintf(stderr, "error: effective maximum product length (%d) is smaller than the longest primer length (%d)\n", effectiveMaxLen, maxPLen)
 		return 2
 	}
 	if o.MinLen > 0 && o.MaxLen > 0 && o.MinLen > o.MaxLen {
@@ -72,7 +95,7 @@ func Run[T any](
 		return 2
 	}
 
-	chunkSize, overlap, warns := runutil.ValidateChunking(o.Circular, o.ChunkSize, o.MaxLen, maxPLen)
+	chunkSize, overlap, warns := runutil.ValidateChunking(o.Circular, o.ChunkSize, effectiveMaxLen, maxPLen)
 	for _, w := range warns {
 		cmdutil.Warnf(stderr, o.Quiet, "%s", w)
 	}

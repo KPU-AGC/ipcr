@@ -30,7 +30,8 @@ func ComputeOverlap(maxLen, maxPrimerLen int) int {
 }
 
 // ValidateChunking decides effective chunking and emits human-readable warnings.
-// Rules (matching tests):
+// Rules:
+//   - chunkSize<=0 => disable silently; the user did not request chunking
 //   - circular => disable (warn)
 //   - maxLen==0 => disable (warn)
 //   - chunkSize<=maxLen => disable (warn)
@@ -38,16 +39,19 @@ func ComputeOverlap(maxLen, maxPrimerLen int) int {
 func ValidateChunking(circular bool, chunkSize, maxLen, maxPrimerLen int) (int, int, []string) {
 	var warns []string
 
+	if chunkSize <= 0 {
+		return 0, 0, warns
+	}
 	if circular {
 		warns = append(warns, "chunking disabled for circular templates")
 		return 0, 0, warns
 	}
 	if maxLen <= 0 {
-		warns = append(warns, "chunking disabled: --max-length is required to compute safe overlap")
+		warns = append(warns, "chunking disabled: a finite effective max product length is required to compute safe overlap")
 		return 0, 0, warns
 	}
 	if chunkSize <= maxLen {
-		warns = append(warns, fmt.Sprintf("chunk-size (%d) <= max-length (%d): disabling chunking", chunkSize, maxLen))
+		warns = append(warns, fmt.Sprintf("chunk-size (%d) <= effective max product length (%d): disabling chunking", chunkSize, maxLen))
 		return 0, 0, warns
 	}
 	ov := ComputeOverlap(maxLen, maxPrimerLen)

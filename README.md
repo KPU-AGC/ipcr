@@ -12,7 +12,7 @@ It finds amplicons from primer pairs under a mismatch model with a **3′ termin
 ---
 
 - **Fast & parallel**: multi-threaded seeded scanner with per-hit verification.
-- **Streaming**: chunked FASTA with safe overlap.
+- **Streaming**: rolling chunked FASTA with safe overlap.
 - **IUPAC-aware**: primer ambiguity codes; genome `N` is a **hard mismatch** to avoid spurious hits.
 - **Pretty mode**: readable ASCII alignment blocks.
 - **Deterministic**: `--sort` gives stable order; JSON/JSONL use versioned, stable wire schemas.
@@ -52,8 +52,8 @@ Escherichia-coli.fna.gz   NC_000913.3     manual  223777  225283  1506    forwar
 #    |||||||||||¦||||||||-->
 # 5'-AGAGTTTGATCATGGCTCAG.................................................................................................-3' # (+)
 # 3'-...............................................................................................ATGCCAATGGAACAATGCTGAA-5' # (-)
-#				                                                                                 <--|||||¦||||||||||¦|||||
-#				                                                                                 3'-TTCAGYATTGTTCCATYGGCAT-5'
+#				                                                                                         <--|||||¦||||||||||¦|||||
+#				                                                                                         3'-TTCAGYATTGTTCCATYGGCAT-5'
 #
 ...
 ```
@@ -176,9 +176,10 @@ Salmonella-Enteritidis	NZ_CP025559.1	O1+O2	1853303	1854185	882	revcomp	0	0	-137.
 ## Performance & streaming
 
 - **Threads**: `--threads N` (0 = all CPUs).
-- **Chunking**: `--chunk-size N` splits records into windows; **overlap** is chosen safely from `max(--max-length, primer_len-1)` so boundary hits survive.
-  - If `--circular`, chunking is disabled.
-  - If `--max-length` is missing or `--chunk-size <= --max-length`, chunking auto-disables with a warning.
+- **Chunking**: `--chunk-size N` splits records into rolling windows; **overlap** is chosen safely from `max(effective_max_product_len, primer_len-1)` so boundary hits survive. TSV per-pair `max_len` overrides are included in the effective maximum.
+  - Chunked mode streams each FASTA record as it is read; unchunked mode emits whole records and therefore buffers each record until the next header/EOF.
+  - If `--circular`, chunking is disabled when a positive `--chunk-size` is requested.
+  - If the effective max product length is unbounded or `--chunk-size <= effective_max_product_len`, chunking auto-disables with a warning.
 
 - **Seeding**: exact 3′ suffix seeds (default length 12 or primer-length if shorter) for forward primers; rc seeds use 5′ prefixes. Ambiguous primers fall back to full verification.
 - **Cancelable I/O**: FASTA scanners honor context; Ctrl-C exits with **130**.

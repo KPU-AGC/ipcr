@@ -79,7 +79,7 @@ func TestRenderAnnotated_Plus_Golden(t *testing.T) {
 		Length: 40, Start: 0, End: 40, Type: "forward",
 	}
 	ann := ProbeAnnotation{
-		Name: "probe", Seq: "GTACGT", Found: true, Strand: "+", Pos: 6, MM: 0, Site: "GTACGT",
+		Name: "probe", Seq: "GTACGT", Found: true, Strand: "+", Pos: 12, MM: 0, Site: "GTACGT",
 	}
 	got := RenderAnnotated(p, ann)
 	path := filepath.Join("testdata", "probe_plus.golden")
@@ -108,6 +108,31 @@ func TestRenderAnnotated_Minus_Golden(t *testing.T) {
 	}
 	got := RenderAnnotated(p, ann)
 	path := filepath.Join("testdata", "probe_minus.golden")
+	if created, err := writeIfMissingOrUpdate(path, got); err != nil {
+		t.Fatalf("write golden: %v", err)
+	} else if created {
+		t.Logf("wrote %s", path)
+		return
+	}
+	want := mustRead(path, t)
+	if got != want {
+		t.Fatalf("mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRenderAnnotated_MinusNearForward_Golden(t *testing.T) {
+	p := engine.Product{
+		FwdPrimer: "GTTTACCCATATCTTTGACGCTCTTA",
+		RevPrimer: "GGAAAGACATATCCCAATACAGCAA",
+		FwdSite:   "GTTTACCCATATCTTTGACGCTCTTA",
+		RevSite:   "GGAAAGACATATCCCAATACAGCAA",
+		Length:    68, Start: 861241, End: 861309, Type: "revcomp",
+	}
+	ann := ProbeAnnotation{
+		Name: "probe", Seq: "TCGGTGCTGGAAGAA", Found: true, Strand: "-", Pos: 27, MM: 0, Site: "TTCTTCCAGCACCGA",
+	}
+	got := RenderAnnotated(p, ann)
+	path := filepath.Join("testdata", "probe_minus_near_forward.golden")
 	if created, err := writeIfMissingOrUpdate(path, got); err != nil {
 		t.Fatalf("write golden: %v", err)
 	} else if created {

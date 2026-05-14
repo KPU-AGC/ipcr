@@ -2,10 +2,8 @@
 package fasta
 
 import (
-	"bufio"
 	"bytes"
 	"context"
-	"fmt"
 	"io"
 )
 
@@ -23,20 +21,15 @@ type RecordChunk struct {
 // If chunkSize <= 0, each record is emitted as a single chunk.
 // If circular = true and chunkSize > 0, a final wrap chunk is emitted.
 //
-// It is **cancelable**: returning promptly when ctx is Done, even mid-record.
+// It is cancelable and does not use bufio.Scanner, so long single-line FASTA
+// records are not limited by Scanner's token size.
 func StreamChunksCtx(ctx context.Context, r io.Reader, chunkSize int, circular bool, emit func(RecordChunk) error) error {
-	sc := bufio.NewScanner(r)
-	const maxLine = 64 * 1024 * 1024 // allow very long single-line sequences (64 MiB)
-	buf := make([]byte, 64*1024)
-	sc.Buffer(buf, maxLine)
-
 	var (
-		id   string
-		seq  = make([]byte, 0, 1<<20)
-		line []byte
+		id  string
+		seq = make([]byte, 0, 1<<20)
 	)
 
-	flush := func(last bool) error {
+	flush := func() error {
 		if len(seq) == 0 && id == "" {
 			return nil
 		}
@@ -100,38 +93,27 @@ func StreamChunksCtx(ctx context.Context, r io.Reader, chunkSize int, circular b
 		return nil
 	}
 
-	for sc.Scan() {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		line = sc.Bytes()
-		if len(line) == 0 {
-			continue
-		}
-		if line[0] == '>' {
-			if id != "" {
-				if err := flush(true); err != nil {
-					return err
-				}
-				seq = seq[:0]
+	err := scanFASTALines(ctx, r,
+		func(header []byte) error {
+			if err := flush(); err != nil {
+				return err
 			}
-			id = parseHeaderID(line[1:])
-			continue
-		}
-		line = bytes.TrimSpace(line)
-		seq = append(seq, line...)
+			id = parseHeaderID(header)
+			seq = seq[:0]
+			return nil
+		},
+		func(line []byte) error {
+			if id == "" {
+				return nil
+			}
+			seq = appendNormalizedSeqLine(seq, line)
+			return nil
+		},
+	)
+	if err != nil {
+		return err
 	}
-	if err := sc.Err(); err != nil {
-		return fmt.Errorf("fasta scan: %w", err)
-	}
-	if id != "" || len(seq) > 0 {
-		if err := flush(true); err != nil {
-			return err
-		}
-	}
-	return nil
+	return flush()
 }
 
 // Convenience wrapper for reader-based streaming with background context.

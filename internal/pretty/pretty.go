@@ -140,6 +140,178 @@ func intsCSV(a []int) string {
 	return strings.Join(ss, ",")
 }
 
+type lineSegment struct {
+	col  int
+	text string
+}
+
+func renderLineSegments(segs ...lineSegment) string {
+	var line []rune
+	for _, seg := range segs {
+		line = putAt(line, seg.col, seg.text)
+	}
+	return strings.TrimRight(string(line), " ")
+}
+
+func putAt(line []rune, col int, text string) []rune {
+	if text == "" {
+		return line
+	}
+	runes := []rune(text)
+	if col < 0 {
+		clip := -col
+		if clip >= len(runes) {
+			return line
+		}
+		runes = runes[clip:]
+		col = 0
+	}
+	need := col + len(runes)
+	if need > len(line) {
+		old := len(line)
+		line = append(line, make([]rune, need-old)...)
+		for i := old; i < len(line); i++ {
+			line[i] = ' '
+		}
+	}
+	for i, r := range runes {
+		line[col+i] = r
+	}
+	return line
+}
+
+func firstGlyph(glyph, fallback string) rune {
+	if glyph == "" {
+		glyph = fallback
+	}
+	for _, r := range glyph {
+		return r
+	}
+	for _, r := range fallback {
+		return r
+	}
+	return '|'
+}
+
+func probeMatchLine(probeSeq, site, exactGlyph, partialGlyph string) string {
+	n := len(probeSeq)
+	if len(site) < n {
+		n = len(site)
+	}
+	if n <= 0 {
+		return ""
+	}
+	exact := firstGlyph(exactGlyph, DefaultOptions.ExactGlyph)
+	partial := firstGlyph(partialGlyph, DefaultOptions.PartialGlyph)
+
+	var b strings.Builder
+	b.Grow(n)
+	for i := 0; i < n; i++ {
+		if !primer.BaseMatch(site[i], probeSeq[i]) {
+			b.WriteByte(' ')
+			continue
+		}
+		if isACGT(probeSeq[i]) {
+			b.WriteRune(exact)
+		} else {
+			b.WriteRune(partial)
+		}
+	}
+	return b.String()
+}
+
+func probeLabel(name string) string {
+	if name == "" {
+		return "probe"
+	}
+	return name
+}
+
+func rangesOverlap(aStart, aLen, bStart, bLen int) bool {
+	if aLen <= 0 || bLen <= 0 {
+		return false
+	}
+	return aStart < bStart+bLen && bStart < aStart+aLen
+}
+
+type probeOverlay struct {
+	strand   string
+	colAbs   int
+	siteSeg  string
+	probeSeg string
+	bars     string
+}
+
+func buildProbeOverlay(ann ProbeAnnotation, aLen, interior, inner, plusOffset, minusOffset int, exactGlyph, partialGlyph string) *probeOverlay {
+	if !ann.Found || len(ann.Site) == 0 || interior <= 0 || inner <= 0 {
+		return nil
+	}
+
+	strand := ann.Strand
+	if strand != "-" {
+		strand = "+"
+	}
+
+	site := ann.Site
+	probeSeq := ann.Seq
+	if probeSeq == "" {
+		probeSeq = site
+	}
+	if strand == "-" {
+		site = comp5to3(site)
+		probeSeq = reverseString(probeSeq)
+	}
+
+	if len(probeSeq) > len(site) {
+		probeSeq = probeSeq[:len(site)]
+	} else if len(site) > len(probeSeq) {
+		site = site[:len(probeSeq)]
+	}
+
+	start := ann.Pos
+	if start < aLen {
+		clip := aLen - start
+		if clip >= len(site) || clip >= len(probeSeq) {
+			return nil
+		}
+		site = site[clip:]
+		probeSeq = probeSeq[clip:]
+		start = aLen
+	}
+	if start >= aLen+interior {
+		return nil
+	}
+
+	off := start - aLen
+	scaled := scalePos(off, interior, inner)
+	slot := inner - scaled
+	if slot <= 0 {
+		return nil
+	}
+	if len(site) > slot {
+		site = site[:slot]
+	}
+	if len(probeSeq) > len(site) {
+		probeSeq = probeSeq[:len(site)]
+	}
+	if len(site) == 0 || len(probeSeq) == 0 {
+		return nil
+	}
+
+	colAbs := plusOffset + scaled
+	if strand == "-" {
+		colAbs = minusOffset + scaled
+	}
+
+	return &probeOverlay{
+		strand:   strand,
+		colAbs:   colAbs,
+		siteSeg:  site,
+		probeSeg: probeSeq,
+		bars:     probeMatchLine(probeSeq, site, exactGlyph, partialGlyph),
+	}
+}
+
 // RenderProductWithOptions prints the ipcr-style block (no probe overlay).
 func RenderProductWithOptions(p engine.Product, opt Options) string {
 	const (
@@ -270,6 +442,9 @@ func RenderAnnotatedWithOptions(p engine.Product, ann ProbeAnnotation, opt Optio
 		dot = DefaultOptions.DotGlyph
 	}
 
+	exactGlyph := opt.ExactGlyphOrDefault()
+	partialGlyph := opt.PartialGlyphOrDefault()
+
 	aLen, bLen := len(p.FwdPrimer), len(p.RevPrimer)
 	interior := p.Length - aLen - bLen
 	if interior < 0 {
@@ -297,204 +472,162 @@ func RenderAnnotatedWithOptions(p engine.Product, ann ProbeAnnotation, opt Optio
 		innerMinus += (contPlus - contMinus)
 	}
 
-	var b strings.Builder
-
-	// 1) Forward primer (5'→3')
-	_, _ = fmt.Fprintf(&b, "%s%s%s%s\n", linePrefix, prefixPlus, p.FwdPrimer, suffixPlus)
-
-	// 2) Bars under forward primer
-	_, _ = fmt.Fprintf(&b, "%s%s%s%s\n",
-		linePrefix,
-		strings.Repeat(" ", len(prefixPlus)),
-		matchLineAmbig(p.FwdPrimer, p.FwdSite, p.FwdMismatchIdx, opt.ExactGlyphOrDefault(), opt.PartialGlyphOrDefault()),
-		arrowRight,
-	)
-
-	// Prepare overlayable interiors
-	plusInterior := strings.Repeat(dot, innerPlus)
-	minusInterior := strings.Repeat(dot, innerMinus)
-
-	type overlay struct {
-		onPlus bool
-		colAbs int
-		seg    string
+	minusProbeMode := ann.Found && ann.Strand == "-" && len(ann.Site) > 0
+	plusInteriorLen := innerPlus
+	minusInteriorLen := innerMinus
+	minusProbeOffset := len(prefixMinus)
+	if minusProbeMode {
+		// A minus-strand probe is still reported in plus-oriented amplicon
+		// coordinates. Keep the schematic compact, but include the forward
+		// primer footprint on the minus track so probe_pos maps to the same
+		// horizontal coordinate users see in the output table. Extend the plus
+		// row by the reverse primer footprint so the two genomic rows stay the
+		// same visual width.
+		plusInteriorLen = innerPlus + bLen
+		minusInteriorLen = aLen + innerMinus
+		minusProbeOffset = len(prefixMinus) + aLen
 	}
-	var ov *overlay
 
-	// Compute overlay position and visible segment
-	if ann.Found && p.Length > 0 && len(ann.Site) > 0 && opt.ShowProbeInline {
-		start := ann.Pos
-		site := ann.Site
+	plusInterior := strings.Repeat(dot, plusInteriorLen)
+	minusInterior := strings.Repeat(dot, minusInteriorLen)
 
-		if ann.Strand == "+" {
-			remStart := start
-			if remStart < aLen {
-				clip := aLen - remStart
-				if clip < len(site) {
-					site = site[clip:]
-					remStart = aLen
-				} else {
-					site = ""
-				}
+	plusInteriorStart := len(prefixPlus) + aLen
+	minusInteriorStart := len(prefixMinus)
+	ovPlus := buildProbeOverlay(ann, aLen, interior, innerPlus, plusInteriorStart, minusProbeOffset, exactGlyph, partialGlyph)
+	var ovMinus *probeOverlay
+	if ovPlus != nil && ovPlus.strand == "-" {
+		ovMinus = buildProbeOverlay(ann, aLen, interior, innerMinus, plusInteriorStart, minusProbeOffset, exactGlyph, partialGlyph)
+		ovPlus = nil
+	}
+
+	if opt.ShowProbeInline {
+		if ovPlus != nil {
+			plusInterior = renderLineSegments(
+				lineSegment{col: 0, text: plusInterior},
+				lineSegment{col: ovPlus.colAbs - plusInteriorStart, text: ovPlus.siteSeg},
+			)
+		}
+		if ovMinus != nil {
+			minusInterior = renderLineSegments(
+				lineSegment{col: 0, text: minusInterior},
+				lineSegment{col: ovMinus.colAbs - minusInteriorStart, text: ovMinus.siteSeg},
+			)
+		}
+	}
+
+	fwdSeqBlock := prefixPlus + p.FwdPrimer + suffixPlus
+	fwdBars := matchLineAmbig(p.FwdPrimer, p.FwdSite, p.FwdMismatchIdx, exactGlyph, partialGlyph)
+	fwdBarsBlock := fwdBars + arrowRight
+	topSeqSegments := []lineSegment{{col: 0, text: fwdSeqBlock}}
+	topBarsSegments := []lineSegment{{col: len(prefixPlus), text: fwdBarsBlock}}
+	var extraTopSeqSegments []lineSegment
+	var extraTopBarsSegments []lineSegment
+	if ovPlus != nil {
+		probeSeqBlock := prefixPlus + ovPlus.probeSeg + suffixPlus + " " + probeLabel(ann.Name) + " (+)"
+		probeSeqCol := ovPlus.colAbs - len(prefixPlus)
+		probeBarsCol := ovPlus.colAbs
+		probeSeqOverlaps := opt.ShowProbeSeqRow && rangesOverlap(probeSeqCol, len(probeSeqBlock), 0, len(fwdSeqBlock))
+		probeBarsOverlaps := opt.ShowProbeBars && rangesOverlap(probeBarsCol, len(ovPlus.bars), len(prefixPlus), len(fwdBarsBlock))
+		if probeSeqOverlaps || probeBarsOverlaps {
+			if opt.ShowProbeSeqRow {
+				extraTopSeqSegments = append(extraTopSeqSegments, lineSegment{col: probeSeqCol, text: probeSeqBlock})
 			}
-			if len(site) > 0 && remStart >= aLen && remStart < aLen+interior && innerPlus > 0 && interior > 0 {
-				off := remStart - aLen
-				s := scalePos(off, interior, innerPlus)
-				slot := innerPlus - s
-				seg := site
-				if len(seg) > slot {
-					seg = seg[:slot]
-				}
-				if len(seg) > 0 {
-					ir := []rune(plusInterior)
-					copy(ir[s:], []rune(seg))
-					plusInterior = string(ir)
-					ov = &overlay{onPlus: true, colAbs: len(prefixPlus) + aLen + s, seg: seg}
-				}
+			if opt.ShowProbeBars {
+				extraTopBarsSegments = append(extraTopBarsSegments, lineSegment{col: probeBarsCol, text: ovPlus.bars})
 			}
-		} else { // "-"
-			remStart := start
-			if remStart < aLen {
-				clip := aLen - remStart
-				if clip < len(site) {
-					site = site[clip:]
-					remStart = aLen
-				} else {
-					site = ""
-				}
+		} else {
+			if opt.ShowProbeSeqRow {
+				topSeqSegments = append(topSeqSegments, lineSegment{col: probeSeqCol, text: probeSeqBlock})
 			}
-			if len(site) > 0 && remStart >= aLen && remStart < aLen+interior && innerMinus > 0 && interior > 0 {
-				off := remStart - aLen
-				s := scalePos(off, interior, innerMinus)
-				slot := innerMinus - s
-				seg := site
-				if len(seg) > slot {
-					seg = seg[:slot]
-				}
-				if len(seg) > 0 {
-					ir := []rune(minusInterior)
-					copy(ir[s:], []rune(seg))
-					minusInterior = string(ir)
-					ov = &overlay{onPlus: false, colAbs: len(prefixMinus) + s, seg: seg}
-				}
+			if opt.ShowProbeBars {
+				topBarsSegments = append(topBarsSegments, lineSegment{col: probeBarsCol, text: ovPlus.bars})
 			}
 		}
 	}
 
-	// 3) (+) line (with overlay)
+	minusSite := comp5to3(p.RevSite)
+	siteStart := len(prefixMinus) + minusInteriorLen
+	revBars := reverseString(matchLineAmbig(p.RevPrimer, p.RevSite, p.RevMismatchIdx, exactGlyph, partialGlyph))
+	arrowStartCol := siteStart - len(arrowLeft)
+	if arrowStartCol < 0 {
+		arrowStartCol = 0
+	}
+
+	revPrimerDisplayed := reverseString(p.RevPrimer)
+	rightBlock := prefixMinus + revPrimerDisplayed + suffixMinus
+	rightStartCol := arrowStartCol + len(arrowLeft) - len(prefixMinus)
+	if rightStartCol < 0 {
+		rightStartCol = 0
+	}
+
+	bottomBarsSegments := []lineSegment{{col: arrowStartCol, text: arrowLeft + revBars}}
+	bottomSeqSegments := []lineSegment{{col: rightStartCol, text: rightBlock}}
+	var extraBottomBarsSegments []lineSegment
+	var extraBottomSeqSegments []lineSegment
+	if ovMinus != nil {
+		probeSeqLabel := probeLabel(ann.Name) + " (-) "
+		probeSeqBlock := probeSeqLabel + prefixMinus + ovMinus.probeSeg + suffixMinus
+		probeSeqCol := ovMinus.colAbs - len(probeSeqLabel) - len(prefixMinus)
+		probeBarsCol := ovMinus.colAbs
+		probeSeqOverlaps := opt.ShowProbeSeqRow && rangesOverlap(probeSeqCol, len(probeSeqBlock), rightStartCol, len(rightBlock))
+		probeBarsOverlaps := opt.ShowProbeBars && rangesOverlap(probeBarsCol, len(ovMinus.bars), arrowStartCol, len(arrowLeft)+len(revBars))
+		if probeSeqOverlaps || probeBarsOverlaps {
+			if opt.ShowProbeBars {
+				extraBottomBarsSegments = append(extraBottomBarsSegments, lineSegment{col: probeBarsCol, text: ovMinus.bars})
+			}
+			if opt.ShowProbeSeqRow {
+				extraBottomSeqSegments = append(extraBottomSeqSegments, lineSegment{col: probeSeqCol, text: probeSeqBlock})
+			}
+		} else {
+			if opt.ShowProbeBars {
+				bottomBarsSegments = append(bottomBarsSegments, lineSegment{col: probeBarsCol, text: ovMinus.bars})
+			}
+			if opt.ShowProbeSeqRow {
+				bottomSeqSegments = append(bottomSeqSegments, lineSegment{col: probeSeqCol, text: probeSeqBlock})
+			}
+		}
+	}
+
+	var b strings.Builder
+
+	_, _ = fmt.Fprintf(&b, "%s%s\n", linePrefix, renderLineSegments(topSeqSegments...))
+	_, _ = fmt.Fprintf(&b, "%s%s\n", linePrefix, renderLineSegments(topBarsSegments...))
+	if len(extraTopSeqSegments) > 0 || len(extraTopBarsSegments) > 0 {
+		_, _ = fmt.Fprintf(&b, "%s%s\n", linePrefix, renderLineSegments(extraTopSeqSegments...))
+		_, _ = fmt.Fprintf(&b, "%s%s\n", linePrefix, renderLineSegments(extraTopBarsSegments...))
+	}
+
 	_, _ = fmt.Fprintf(&b, "%s%s%s%s%s # (+)\n",
 		linePrefix, prefixPlus, p.FwdSite, plusInterior, suffixPlus,
 	)
 
-	// Optional caret under (+)
-	if opt.ShowCaret && ov != nil && ov.onPlus {
-		startCol := ov.colAbs
-		if startCol < 0 {
-			startCol = 0
-		}
+	if opt.ShowCaret && ovPlus != nil {
 		g := opt.CaretGlyph
 		if g == "" {
 			g = DefaultOptions.CaretGlyph
 		}
-		_, _ = fmt.Fprintf(&b, "%s%s%s\n", linePrefix, strings.Repeat(" ", startCol), strings.Repeat(g, len(ov.seg)))
+		_, _ = fmt.Fprintf(&b, "%s%s%s\n", linePrefix, strings.Repeat(" ", ovPlus.colAbs), strings.Repeat(g, len(ovPlus.siteSeg)))
 	}
 
-	// 4) (−) line (with overlay) — uses **minusInterior** and comp5to3
-	minusSite := comp5to3(p.RevSite)
 	_, _ = fmt.Fprintf(&b, "%s%s%s%s%s # (-)\n",
 		linePrefix, prefixMinus, minusInterior, minusSite, suffixMinus,
 	)
 
-	// Optional caret under (−)
-	if opt.ShowCaret && ov != nil && !ov.onPlus {
-		startCol := ov.colAbs
-		if startCol < 0 {
-			startCol = 0
-		}
+	if opt.ShowCaret && ovMinus != nil {
 		g := opt.CaretGlyph
 		if g == "" {
 			g = DefaultOptions.CaretGlyph
 		}
-		_, _ = fmt.Fprintf(&b, "%s%s%s\n", linePrefix, strings.Repeat(" ", startCol), strings.Repeat(g, len(ov.seg)))
+		_, _ = fmt.Fprintf(&b, "%s%s%s\n", linePrefix, strings.Repeat(" ", ovMinus.colAbs), strings.Repeat(g, len(ovMinus.siteSeg)))
 	}
 
-	// Composite bars: probe bars + reverse-primer bars
-	siteStart := len(prefixMinus) + innerMinus
-	revBars := reverseString(matchLineAmbig(p.RevPrimer, p.RevSite, p.RevMismatchIdx, opt.ExactGlyphOrDefault(), opt.PartialGlyphOrDefault()))
-	arrowStartCol := siteStart - len(arrowLeft)
+	if len(extraBottomBarsSegments) > 0 || len(extraBottomSeqSegments) > 0 {
+		_, _ = fmt.Fprintf(&b, "%s%s\n", linePrefix, renderLineSegments(extraBottomBarsSegments...))
+		_, _ = fmt.Fprintf(&b, "%s%s\n", linePrefix, renderLineSegments(extraBottomSeqSegments...))
+	}
+	_, _ = fmt.Fprintf(&b, "%s%s\n", linePrefix, renderLineSegments(bottomBarsSegments...))
+	_, _ = fmt.Fprintf(&b, "%s%s\n", linePrefix, renderLineSegments(bottomSeqSegments...))
 
-	width := arrowStartCol + len(arrowLeft) + len(revBars)
-	if ov != nil && ov.colAbs+len(ov.seg) > width {
-		width = ov.colAbs + len(ov.seg)
-	}
-	line := make([]rune, width)
-	for i := range line {
-		line[i] = ' '
-	}
-	if opt.ShowProbeBars && ov != nil {
-		for i := 0; i < len(ov.seg); i++ {
-			pos := ov.colAbs + i
-			if pos >= 0 && pos < width {
-				line[pos] = []rune(opt.ExactGlyphOrDefault())[0]
-			}
-		}
-	}
-	for i, r := range arrowLeft {
-		line[arrowStartCol+i] = r
-	}
-	for i, r := range revBars {
-		line[arrowStartCol+len(arrowLeft)+i] = r
-	}
-	_, _ = fmt.Fprintf(&b, "%s%s\n", linePrefix, string(line))
-
-	// Sequence row: left probe block (optional) + right reverse-primer block
-	if opt.ShowProbeSeqRow {
-		leftBlock := ""
-		leftStartCol := 0
-		if ov != nil {
-			if ann.Strand == "+" {
-				leftBlock = "5'-" + ov.seg + "-3'"
-			} else {
-				leftBlock = "3'-" + ov.seg + "-5'"
-			}
-			leftStartCol = ov.colAbs - len("5'-")
-			if leftStartCol < 0 {
-				leftStartCol = 0
-			}
-		}
-		rightSeq := reverseString(p.RevPrimer)
-		rightBlock := "3'-" + rightSeq + "-5'"
-		rightStartCol := arrowStartCol + len(arrowLeft) - len("3'-")
-		if rightStartCol < 0 {
-			rightStartCol = 0
-		}
-		w2 := rightStartCol + len(rightBlock)
-		if ov != nil && leftStartCol+len(leftBlock) > w2 {
-			w2 = leftStartCol + len(leftBlock)
-		}
-		line2 := make([]rune, w2)
-		for i := range line2 {
-			line2[i] = ' '
-		}
-		if ov != nil {
-			for i, r := range leftBlock {
-				line2[leftStartCol+i] = r
-			}
-		}
-		for i, r := range rightBlock {
-			line2[rightStartCol+i] = r
-		}
-		_, _ = fmt.Fprintf(&b, "%s%s\n", linePrefix, string(line2))
-	} else {
-		revPrimerDisplayed := reverseString(p.RevPrimer)
-		padPrimer := siteStart - len(prefixMinus)
-		if padPrimer < 0 {
-			padPrimer = 0
-		}
-		_, _ = fmt.Fprintf(&b, "%s%s%s%s%s\n", linePrefix, strings.Repeat(" ", padPrimer), prefixMinus, revPrimerDisplayed, suffixMinus)
-	}
-
-	// Summary
 	if ann.Found {
 		_, _ = fmt.Fprintf(&b, "%sprobe %q (%s) pos=%d mm=%d site=%s fwd_mm=%d@[%s] rev_mm=%d@[%s]\n",
 			linePrefix,

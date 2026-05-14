@@ -112,7 +112,7 @@ jobs:
         with:
           version: v1.59.1
           working-directory: .
-          args: --timeout=5m --fix
+          args: --timeout=5m
           skip-cache: true
           verify: true
 
@@ -137,6 +137,6 @@ jobs:
         with:
           version: v1.59.1
           working-directory: core
-          args: -c .golangci.yml --timeout=5m --fix
+          args: -c .golangci.yml --timeout=5m
           skip-cache: true
           verify: true

@@ -3,6 +3,7 @@ package fasta
 
 import (
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -84,5 +85,51 @@ func TestStreamStdin(t *testing.T) {
 	}
 	if count != 2 {
 		t.Fatalf("expected 2 records from stdin, got %d", count)
+	}
+}
+
+func TestStreamChunksPathCtx_RollingOverlap(t *testing.T) {
+	dir := t.TempDir()
+	fn := filepath.Join(dir, "chunk.fa")
+	if err := os.WriteFile(fn, []byte(">s\nACGTACGTACGT\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	var got []Record
+	if err := StreamChunksPathCtx(context.Background(), fn, 5, 2, func(r Record) error {
+		got = append(got, r)
+		return nil
+	}); err != nil {
+		t.Fatalf("StreamChunksPathCtx: %v", err)
+	}
+
+	wantIDs := []string{"s:0-5", "s:3-8", "s:6-11", "s:9-12"}
+	wantSeqs := []string{"ACGTA", "TACGT", "GTACG", "CGT"}
+	if len(got) != len(wantIDs) {
+		t.Fatalf("got %d chunks, want %d: %+v", len(got), len(wantIDs), got)
+	}
+	for i := range wantIDs {
+		if got[i].ID != wantIDs[i] || string(got[i].Seq) != wantSeqs[i] {
+			t.Fatalf("chunk %d got %q %q, want %q %q", i, got[i].ID, got[i].Seq, wantIDs[i], wantSeqs[i])
+		}
+	}
+}
+
+func TestStreamChunksPathCtx_ShortRecordKeepsBaseID(t *testing.T) {
+	dir := t.TempDir()
+	fn := filepath.Join(dir, "short.fa")
+	if err := os.WriteFile(fn, []byte(">s\nACGTA\n"), 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+
+	var got []Record
+	if err := StreamChunksPathCtx(context.Background(), fn, 5, 2, func(r Record) error {
+		got = append(got, r)
+		return nil
+	}); err != nil {
+		t.Fatalf("StreamChunksPathCtx: %v", err)
+	}
+	if len(got) != 1 || got[0].ID != "s" || string(got[0].Seq) != "ACGTA" {
+		t.Fatalf("unexpected chunks: %+v", got)
 	}
 }

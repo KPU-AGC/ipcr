@@ -3,13 +3,24 @@ package probeoutput
 
 import "ipcr/internal/pretty"
 
-// RenderPretty renders the standard ASCII alignment block for the base Product
-// inside an AnnotatedProduct (used by writers when --pretty is on).
+func probeAnnotation(ap AnnotatedProduct) pretty.ProbeAnnotation {
+	return pretty.ProbeAnnotation{
+		Name:   ap.ProbeName,
+		Seq:    ap.ProbeSeq,
+		Found:  ap.ProbeFound,
+		Strand: ap.ProbeStrand,
+		Pos:    ap.ProbePos,
+		MM:     ap.ProbeMM,
+		Site:   ap.ProbeSite,
+	}
+}
+
+// RenderPretty renders the ASCII alignment block with the probe overlay.
 func RenderPretty(ap AnnotatedProduct) string {
-	return pretty.RenderProduct(ap.Product)
+	return pretty.RenderAnnotated(ap.Product, probeAnnotation(ap))
 }
 
 // RenderPrettyWithOptions allows custom pretty glyph/options when needed.
 func RenderPrettyWithOptions(ap AnnotatedProduct, opt pretty.Options) string {
-	return pretty.RenderProductWithOptions(ap.Product, opt)
+	return pretty.RenderAnnotatedWithOptions(ap.Product, probeAnnotation(ap), opt)
 }

@@ -19,20 +19,7 @@ func (v Nested) Visit(p engine.Product) (bool, nestedoutput.NestedProduct, error
 	eng := engine.New(v.EngineCfg)
 	hits := eng.SimulateBatch("amplicon", amp, v.InnerPairs)
 
-	// Pick a deterministic “best” inner: fewest total mismatches, then longest, then leftmost.
-	bestIdx := -1
-	bestScore := 1 << 30
-	for i := range hits {
-		totalMM := hits[i].FwdMM + hits[i].RevMM
-		if bestIdx == -1 || totalMM < bestScore ||
-			(totalMM == bestScore && (hits[i].Length > hits[bestIdx].Length ||
-				(hits[i].Length == hits[bestIdx].Length && hits[i].Start < hits[bestIdx].Start))) {
-			bestIdx = i
-			bestScore = totalMM
-		}
-	}
-
-	if bestIdx == -1 {
+	if len(hits) == 0 {
 		if v.RequireInner {
 			return false, nestedoutput.NestedProduct{}, nil
 		}
@@ -43,10 +30,27 @@ func (v Nested) Visit(p engine.Product) (bool, nestedoutput.NestedProduct, error
 		}, nil
 	}
 
-	// Stabilize by start position if multiple equal scored remain (already handled, but keep order tidy).
-	sort.SliceStable(hits, func(i, j int) bool { return hits[i].Start < hits[j].Start })
+	// Pick a deterministic best inner: fewest total mismatches, then longest,
+	// then leftmost. Sorting first avoids stale-index bugs after reordering.
+	sort.SliceStable(hits, func(i, j int) bool {
+		mi := hits[i].FwdMM + hits[i].RevMM
+		mj := hits[j].FwdMM + hits[j].RevMM
+		if mi != mj {
+			return mi < mj
+		}
+		if hits[i].Length != hits[j].Length {
+			return hits[i].Length > hits[j].Length
+		}
+		if hits[i].Start != hits[j].Start {
+			return hits[i].Start < hits[j].Start
+		}
+		if hits[i].End != hits[j].End {
+			return hits[i].End < hits[j].End
+		}
+		return hits[i].ExperimentID < hits[j].ExperimentID
+	})
+	inner := hits[0]
 
-	inner := hits[bestIdx]
 	np := nestedoutput.NestedProduct{
 		Product:     p, // outer
 		InnerFound:  true,

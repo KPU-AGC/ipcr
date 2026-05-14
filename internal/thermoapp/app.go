@@ -10,12 +10,13 @@ import (
 	"ipcr-core/engine"
 	"ipcr-core/oligo"
 	"ipcr-core/primer"
-	"ipcr-core/thermoaddons"
+	"ipcr-core/thermo"
 	"ipcr/internal/appcore"
 	"ipcr/internal/clibase"
 	"ipcr/internal/cmdutil"
 	"ipcr/internal/common"
 	"ipcr/internal/thermocli"
+	"ipcr/internal/thermomodel"
 	"ipcr/internal/thermovisitors"
 	"ipcr/internal/version"
 	"ipcr/internal/writers"
@@ -107,7 +108,30 @@ func pairsFromOligos(oligs []primer.Oligo, minLen, maxLen int, includeSelf bool)
 
 // parseMolar: "250nM" → 2.5e-7; "50mM" → 5e-2
 func parseMolar(s string) (float64, error) {
-	return thermoaddons.ParseConc(s)
+	return thermo.ParseConc(s)
+}
+
+func isStrictACGTSeq(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case 'A', 'C', 'G', 'T', 'a', 'c', 'g', 't':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validateNNDuplexPrimers(pairs []primer.Pair) error {
+	for _, pair := range pairs {
+		if !isStrictACGTSeq(pair.Forward) || !isStrictACGTSeq(pair.Reverse) {
+			return fmt.Errorf("--thermo-model %s uses strict A/C/G/T primer thermodynamics; pair %q contains degenerate/IUPAC bases", thermomodel.NNDuplexV1, pair.ID)
+		}
+	}
+	return nil
 }
 
 /* ---------- writer (forces NeedSeq + score column + rank-by-score) ---------- */
@@ -276,11 +300,40 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		ctM = 2.5e-7
 	}
 
-	// Effective monovalent (optional Owczarzy-lite via env)
-	naEff := thermoaddons.EffectiveMonovalent(naM, mgM)
+	saltModel, err := thermo.ParseSaltModel(opts.SaltModel)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return 2
+	}
+	conditions := thermo.Conditions{
+		AnnealC:      opts.AnnealTempC,
+		NaM:          naM,
+		MgM:          mgM,
+		PrimerTotalM: ctM,
+		SaltModel:    saltModel,
+	}
+	naEff := conditions.EffectiveNaM()
+
+	mode, err := thermomodel.Parse(opts.ThermoModel)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return 2
+	}
+	if !mode.Implemented() {
+		_, _ = fmt.Fprintf(stderr, "--thermo-model %q is reserved for staged rollout but is not implemented yet; use %q\n", mode, thermomodel.LegacyHeuristic)
+		return 2
+	}
+	if mode == thermomodel.NNDuplexV1 {
+		if err := validateNNDuplexPrimers(pairs); err != nil {
+			_, _ = fmt.Fprintln(stderr, err)
+			return 2
+		}
+	}
 
 	// Build scorer (visitor)
 	scorer := thermovisitors.Score{
+		Model:          mode,
+		Conditions:     conditions,
 		AnnealTempC:    opts.AnnealTempC,
 		Na_M:           naEff,
 		PrimerConc_M:   ctM,

@@ -213,3 +213,50 @@ func TestTm_Orientation_MustBe3to5WC(t *testing.T) {
 		t.Fatalf("expected non-WC error for wrong orientation, got: %v", err)
 	}
 }
+
+func TestNNParams_AATTCanonicalSnapshot(t *testing.T) {
+	got, ok := dimerParams["AA/TT"]
+	if !ok {
+		t.Fatal("missing AA/TT nearest-neighbor parameter")
+	}
+	if got.DH != -7.9 || got.DS != -22.2 {
+		t.Fatalf("AA/TT parameters drifted: got ΔH=%g ΔS=%g, want -7.9/-22.2", got.DH, got.DS)
+	}
+	syn, ok := dimerParams["TT/AA"]
+	if !ok {
+		t.Fatal("missing TT/AA nearest-neighbor synonym")
+	}
+	if syn != got {
+		t.Fatalf("TT/AA synonym drifted: got %+v, want %+v", syn, got)
+	}
+}
+
+func TestPerfectDuplexReportsAnnealMarginAndDeltaG(t *testing.T) {
+	primer := strings.ToUpper("ACGTACGTACGTACGTACGT")
+	cond := DefaultConditions()
+	cond.AnnealC = 60
+
+	res, err := PerfectDuplex(primer, comp(primer), cond)
+	if err != nil {
+		t.Fatalf("PerfectDuplex returned error: %v", err)
+	}
+	if math.Abs(res.AnnealMarginC-(res.TmC-cond.AnnealC)) > 1e-9 {
+		t.Fatalf("margin mismatch: got %g want %g", res.AnnealMarginC, res.TmC-cond.AnnealC)
+	}
+	if res.EffectiveDenomCalK == 0 || math.IsNaN(res.DeltaGAtAnnealKcal) {
+		t.Fatalf("invalid thermodynamic components: %+v", res)
+	}
+}
+
+func TestPerfectDuplexRejectsMismatch(t *testing.T) {
+	primer := strings.ToUpper("ACGTACGTACGT")
+	target := []byte(comp(primer))
+	target[3] = 'A'
+	if target[3] == comp(primer)[3] {
+		target[3] = 'C'
+	}
+	_, err := PerfectDuplex(primer, string(target), DefaultConditions())
+	if err == nil || !strings.Contains(err.Error(), "non-WC pair") {
+		t.Fatalf("expected non-WC rejection, got %v", err)
+	}
+}

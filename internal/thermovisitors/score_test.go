@@ -3,6 +3,7 @@ package thermovisitors
 
 import (
 	"ipcr-core/engine"
+	"ipcr/internal/thermomodel"
 	"math"
 	"testing"
 )
@@ -121,5 +122,117 @@ func TestScore_ImprovesWithPerfectEnds(t *testing.T) {
 	}
 	if math.IsNaN(p1.Score) || math.IsNaN(p2.Score) {
 		t.Fatalf("NaN scores")
+	}
+}
+
+func TestScore_DefaultModelMatchesExplicitLegacyHeuristic(t *testing.T) {
+	fwd := "ACGTAC"
+	rev := "GGTACC"
+	amp := fwd + "AAAA" + rc5to3(rev)
+	p := engine.Product{
+		FwdPrimer: fwd, RevPrimer: rev,
+		Seq: amp, Length: len(amp), Type: "forward",
+	}
+
+	base := Score{AnnealTempC: 60, Na_M: 0.05, PrimerConc_M: 2.5e-7, AllowIndels: true}
+	_, gotDefault, err := base.Visit(p)
+	if err != nil {
+		t.Fatalf("default Visit returned error: %v", err)
+	}
+
+	base.Model = thermomodel.LegacyHeuristic
+	_, gotLegacy, err := base.Visit(p)
+	if err != nil {
+		t.Fatalf("legacy Visit returned error: %v", err)
+	}
+
+	if gotDefault.Score != gotLegacy.Score {
+		t.Fatalf("default model changed score: default=%g legacy=%g", gotDefault.Score, gotLegacy.Score)
+	}
+}
+
+func TestScore_NNDuplexModelProducesThermoComponents(t *testing.T) {
+	fwd := "ACGTACGTACGTACGTACGT"
+	rev := "ACGTACGTACGTACGTACGT"
+	amp := fwd + "AAAA" + rc5to3(rev)
+	p := engine.Product{
+		FwdPrimer: fwd, RevPrimer: rev,
+		Seq: amp, Length: len(amp), Type: "forward",
+	}
+
+	v := Score{Model: thermomodel.NNDuplexV1, AnnealTempC: 60, Na_M: 0.05, PrimerConc_M: 2.5e-7}
+	_, got, err := v.Visit(p)
+	if err != nil {
+		t.Fatalf("NNDuplex Visit returned error: %v", err)
+	}
+	if got.Thermo == nil {
+		t.Fatal("expected thermo components")
+	}
+	if got.Thermo.Model != thermomodel.NNDuplexV1.String() {
+		t.Fatalf("got model %q", got.Thermo.Model)
+	}
+	if got.Score != got.Thermo.ScoreC {
+		t.Fatalf("score/component mismatch: %g vs %g", got.Score, got.Thermo.ScoreC)
+	}
+	if got.Thermo.Fwd.MismatchPenaltyC != 0 || got.Thermo.Rev.MismatchPenaltyC != 0 {
+		t.Fatalf("perfect duplex should not have mismatch penalties: %+v", got.Thermo)
+	}
+}
+
+func TestScore_NNDuplexAnnealTemperatureChangesScore(t *testing.T) {
+	fwd := "ACGTACGTACGTACGTACGT"
+	rev := "ACGTACGTACGTACGTACGT"
+	amp := fwd + "AAAA" + rc5to3(rev)
+	p := engine.Product{FwdPrimer: fwd, RevPrimer: rev, Seq: amp}
+
+	low := Score{Model: thermomodel.NNDuplexV1, AnnealTempC: 55, Na_M: 0.05, PrimerConc_M: 2.5e-7}
+	high := Score{Model: thermomodel.NNDuplexV1, AnnealTempC: 70, Na_M: 0.05, PrimerConc_M: 2.5e-7}
+	_, pLow, err := low.Visit(p)
+	if err != nil {
+		t.Fatalf("low anneal Visit: %v", err)
+	}
+	_, pHigh, err := high.Visit(p)
+	if err != nil {
+		t.Fatalf("high anneal Visit: %v", err)
+	}
+	if !(pLow.Score > pHigh.Score) {
+		t.Fatalf("expected lower anneal temp to produce higher margin score: low=%g high=%g", pLow.Score, pHigh.Score)
+	}
+}
+
+func TestScore_NNDuplexMismatchUsesFallbackAndLowersScore(t *testing.T) {
+	fwd := "ACGTACGTACGTACGTACGT"
+	rev := "ACGTACGTACGTACGTACGT"
+	amp := fwd + "AAAA" + rc5to3(rev)
+	p := engine.Product{FwdPrimer: fwd, RevPrimer: rev, Seq: amp}
+	v := Score{Model: thermomodel.NNDuplexV1, AnnealTempC: 60, Na_M: 0.05, PrimerConc_M: 2.5e-7}
+	_, perfect, err := v.Visit(p)
+	if err != nil {
+		t.Fatalf("perfect Visit: %v", err)
+	}
+
+	badAmp := []byte(amp)
+	badAmp[len(fwd)-1] = 'A'
+	if amp[len(fwd)-1] == 'A' {
+		badAmp[len(fwd)-1] = 'C'
+	}
+	p.Seq = string(badAmp)
+	_, mismatched, err := v.Visit(p)
+	if err != nil {
+		t.Fatalf("mismatch Visit: %v", err)
+	}
+	if !(perfect.Score > mismatched.Score) {
+		t.Fatalf("expected mismatch to lower NN score: perfect=%g mismatched=%g", perfect.Score, mismatched.Score)
+	}
+	if mismatched.Thermo == nil || !mismatched.Thermo.Fwd.HasNonWatsonCrick || !mismatched.Thermo.Fwd.UsedHeuristicAdjust {
+		t.Fatalf("expected fwd mismatch fallback details, got %+v", mismatched.Thermo)
+	}
+}
+
+func TestScore_UnimplementedThermoModelRejected(t *testing.T) {
+	v := Score{Model: thermomodel.NNStructureV1}
+	_, _, err := v.Visit(engine.Product{})
+	if err == nil {
+		t.Fatal("expected unimplemented model error")
 	}
 }

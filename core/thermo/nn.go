@@ -33,7 +33,7 @@ type NNParams struct {
 // SantaLucia & Hicks (2004), Table 1.
 var dimerParams = map[string]NNParams{
 	// Canonical 10
-	"AA/TT": {-7.6, -21.3},
+	"AA/TT": {-7.9, -22.2},
 	"AT/TA": {-7.2, -20.4},
 	"TA/AT": {-7.2, -21.3},
 	"CA/GT": {-8.5, -22.7},
@@ -45,7 +45,7 @@ var dimerParams = map[string]NNParams{
 	"GG/CC": {-8.0, -19.9},
 
 	// Synonym keys (reverse-orientation / swapped forms)
-	"TT/AA": {-7.6, -21.3}, // same as AA/TT
+	"TT/AA": {-7.9, -22.2}, // same as AA/TT
 	"CC/GG": {-8.0, -19.9}, // same as GG/CC
 	"AC/TG": {-8.5, -22.7}, // same as CA/GT
 	"TG/AC": {-8.4, -22.4}, // same as GT/CA
@@ -73,6 +73,17 @@ type Result struct {
 	DS_cal  float64 // total ΔS at 1 M (cal/K·mol)
 	DS_Na   float64 // ΔS corrected by [Na+] (cal/K·mol)
 	TmC     float64 // melting temperature (°C)
+}
+
+// DuplexResult reports condition-aware thermodynamic quantities for a perfect
+// Watson-Crick primer-template duplex at the configured annealing temperature.
+type DuplexResult struct {
+	Result
+	AnnealC            float64
+	AnnealMarginC      float64
+	DeltaGAtAnnealKcal float64
+	EffectiveDenomCalK float64
+	SelfComplementary  bool
 }
 
 // Tm computes Tm for primer (5'→3') vs target (3'→5') aligned WC.
@@ -165,6 +176,34 @@ func Tm(primer5to3, target3to5 string, in TmInput) (Result, error) {
 	out.DS_cal = DS
 	out.DS_Na = DS_Na
 	out.TmC = tmK - 273.15
+	return out, nil
+}
+
+// PerfectDuplex computes nearest-neighbor duplex thermodynamics for a primer
+// (5'→3') aligned to a target strand supplied 3'→5'. Only perfect Watson-Crick
+// A/C/G/T duplexes are accepted. For mismatched duplexes, callers should use
+// this function on the perfect complement and apply an explicit mismatch policy.
+func PerfectDuplex(primer5to3, target3to5 string, cond Conditions) (DuplexResult, error) {
+	var out DuplexResult
+	p := strings.ToUpper(strings.TrimSpace(primer5to3))
+	cond = cond.WithDefaults()
+	cond.SelfComplementary = isSelfCompl(p)
+	in := cond.TmInput()
+
+	res, err := Tm(p, target3to5, in)
+	if err != nil {
+		return out, err
+	}
+	denom := res.DS_Na + Rcal*math.Log(in.CT/float64(in.X))
+	deltaG := res.DH_kcal - (cond.AnnealC+273.15)*denom/1000.0
+	out = DuplexResult{
+		Result:             res,
+		AnnealC:            cond.AnnealC,
+		AnnealMarginC:      res.TmC - cond.AnnealC,
+		DeltaGAtAnnealKcal: deltaG,
+		EffectiveDenomCalK: denom,
+		SelfComplementary:  cond.SelfComplementary,
+	}
 	return out, nil
 }
 

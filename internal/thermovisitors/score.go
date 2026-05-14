@@ -2,9 +2,11 @@
 package thermovisitors
 
 import (
+	"fmt"
 	"ipcr-core/engine"
 	"ipcr-core/thermo"
 	"ipcr-core/thermoaddons"
+	"ipcr/internal/thermomodel"
 	"math"
 	"os"
 	"strings"
@@ -18,10 +20,18 @@ const (
 	K5                  = 3 // 5' end is harsher across first K5 bases
 	K3                  = 3 // 3' end is harshest across last K3 bases
 	PROBE_NOT_FOUND_PEN = 12.0
+
+	iupacPolicyStrictACGT           = "strict-acgt"
+	mismatchPolicyNNPerfect         = "nn-perfect"
+	mismatchPolicyHeuristicFallback = "heuristic-ddg-fallback"
+	mismatchPolicyMixed             = "nn-perfect-or-heuristic-ddg-fallback"
 )
 
 // Score is the thermo-scoring visitor config.
 type Score struct {
+	Model      thermomodel.Mode
+	Conditions thermo.Conditions
+
 	AnnealTempC    float64
 	Na_M           float64
 	PrimerConc_M   float64
@@ -33,6 +43,23 @@ type Score struct {
 	// Opt-in: compute ΔΔG→ΔTm denominator from solution conditions.
 	// Default false keeps the historical fixed D=200 path.
 	UseAutoDenom bool
+}
+
+func (v Score) conditions() thermo.Conditions {
+	c := v.Conditions
+	if c.AnnealC == 0 {
+		c.AnnealC = v.AnnealTempC
+	}
+	if c.NaM == 0 {
+		c.NaM = v.Na_M
+	}
+	if c.PrimerTotalM == 0 {
+		c.PrimerTotalM = v.PrimerConc_M
+	}
+	if c.SaltModel == "" {
+		c.SaltModel = thermo.SaltModelMonovalent
+	}
+	return c.WithDefaults()
 }
 
 // Public helper used by tests/tools.
@@ -131,6 +158,16 @@ func comp5to3(top string) string {
 		out[i] = compBase(top[i])
 	}
 	return string(out)
+}
+
+func absFiniteOrFallback(x, fallback float64) float64 {
+	if math.IsNaN(x) || math.IsInf(x, 0) || x == 0 {
+		return fallback
+	}
+	if x < 0 {
+		return -x
+	}
+	return x
 }
 
 // Env-based ssDNA toggle (kept for backwards compatibility).
@@ -259,29 +296,24 @@ func alignPenaltyC_contextualD_ss(primer5to3, tgt3to5 string, allowGap bool, den
 // We return the absolute value so ΔΔG→ΔTm scaling is a positive magnitude.
 func (v Score) denomForPrimer(primer5to3 string) float64 {
 	p := toUpperACGT(primer5to3)
-	if p == "" || v.Na_M <= 0 || v.PrimerConc_M <= 0 {
+	cond := v.conditions()
+	if p == "" || cond.NaM <= 0 || cond.PrimerTotalM <= 0 {
 		return 200.0
 	}
-	// Build 3'→5' complement for Tm()
+	// Build 3'→5' complement for Tm().
 	t3 := comp5to3(p)
 
-	// Self-compl check: rc == p (5'→3')
+	// Self-compl check: rc == p (5'→3').
 	rc := rev(comp5to3(p))
-	x := 4
-	if rc == p {
-		x = 1
-	}
+	cond.SelfComplementary = rc == p
+	in := cond.TmInput()
 
-	res, err := thermo.Tm(p, t3, thermo.TmInput{
-		CT: v.PrimerConc_M,
-		Na: v.Na_M,
-		X:  x,
-	})
+	res, err := thermo.Tm(p, t3, in)
 	if err != nil {
 		return 200.0
 	}
-	D := res.DS_Na + thermo.Rcal*math.Log(v.PrimerConc_M/float64(x))
-	// Go 1.22-safe "finite" check, then take magnitude
+	D := res.DS_Na + thermo.Rcal*math.Log(in.CT/float64(in.X))
+	// Go 1.22-safe "finite" check, then take magnitude.
 	if math.IsNaN(D) || math.IsInf(D, 0) || D == 0 {
 		return 200.0
 	}
@@ -291,10 +323,133 @@ func (v Score) denomForPrimer(primer5to3 string) float64 {
 	return D
 }
 
+func endpointFromDuplex(side string, d thermo.DuplexResult, mismatchPenaltyC float64, policy string, hasNonWC, heuristic bool) engine.ThermoEndpoint {
+	return engine.ThermoEndpoint{
+		Side:                side,
+		TmC:                 d.TmC,
+		AnnealMarginC:       d.AnnealMarginC,
+		DeltaGAtAnnealKcal:  d.DeltaGAtAnnealKcal,
+		MismatchPenaltyC:    mismatchPenaltyC,
+		EffectiveDenomCalK:  absFiniteOrFallback(d.EffectiveDenomCalK, 200.0),
+		MismatchPolicy:      policy,
+		HasNonWatsonCrick:   hasNonWC,
+		UsedHeuristicAdjust: heuristic,
+	}
+}
+
+func (v Score) scoreNNDuplexEndpoint(side, primer5to3, target3to5 string) (engine.ThermoEndpoint, error) {
+	primer := toUpperACGT(primer5to3)
+	if primer == "" {
+		return engine.ThermoEndpoint{}, fmt.Errorf("nn-duplex-v1 requires A/C/G/T primers; %s primer contains unsupported bases", side)
+	}
+	target := toUpperACGTAllowN(target3to5)
+	if target == "" {
+		return engine.ThermoEndpoint{}, fmt.Errorf("nn-duplex-v1 requires A/C/G/T/N target sites; %s target contains unsupported bases", side)
+	}
+	if len(primer) != len(target) {
+		return engine.ThermoEndpoint{}, fmt.Errorf("nn-duplex-v1 %s endpoint length mismatch: primer=%d target=%d", side, len(primer), len(target))
+	}
+
+	cond := v.conditions()
+	if actual, err := thermo.PerfectDuplex(primer, target, cond); err == nil {
+		return endpointFromDuplex(side, actual, 0, mismatchPolicyNNPerfect, false, false), nil
+	}
+
+	// Mismatched or N-containing target: anchor the thermodynamics in the perfect
+	// primer/complement duplex, then apply the currently curated mismatch layer.
+	// Triplet ΔTm/ΔΔG overrides are used when present; otherwise the existing
+	// pair/context heuristic is used explicitly and reported in the output.
+	perfectTarget := comp5to3(primer)
+	base, err := thermo.PerfectDuplex(primer, perfectTarget, cond)
+	if err != nil {
+		return engine.ThermoEndpoint{}, err
+	}
+	denom := absFiniteOrFallback(base.EffectiveDenomCalK, 200.0)
+	ssOn := v.SingleStranded || singleStrandedMode()
+	penaltyC := alignPenaltyC_contextualD_ss(primer, target, v.AllowIndels, denom, ssOn)
+	deltaGPenalty := penaltyC * denom / 1000.0
+
+	adjusted := base
+	adjusted.TmC = base.TmC - penaltyC
+	adjusted.AnnealMarginC = adjusted.TmC - cond.AnnealC
+	adjusted.DeltaGAtAnnealKcal = base.DeltaGAtAnnealKcal + deltaGPenalty
+	adjusted.EffectiveDenomCalK = denom
+	return endpointFromDuplex(side, adjusted, penaltyC, mismatchPolicyHeuristicFallback, true, true), nil
+}
+
+func (v Score) visitNNDuplexV1(p engine.Product) (bool, engine.Product, error) {
+	f := toUpperACGT(p.FwdPrimer)
+	r := toUpperACGT(p.RevPrimer)
+	if f == "" || r == "" {
+		return false, p, fmt.Errorf("nn-duplex-v1 requires A/C/G/T primers; degenerate/IUPAC primer scoring is not implemented yet")
+	}
+	if len(p.Seq) < len(f) || len(p.Seq) < len(r) {
+		return false, p, fmt.Errorf("nn-duplex-v1 requires product sequence long enough for both primer sites")
+	}
+
+	leftSite := toUpperACGTAllowN(p.Seq[:len(f)])
+	rightSite := toUpperACGTAllowN(p.Seq[len(p.Seq)-len(r):])
+	if leftSite == "" || rightSite == "" {
+		return false, p, fmt.Errorf("nn-duplex-v1 requires A/C/G/T/N product sequence at primer sites")
+	}
+
+	// The left site is in the same 5'→3' orientation as the forward primer.
+	// The right site is the reference-strand reverse complement of the reverse
+	// primer, so reversing the site gives the primer-aligned target strand 3'→5'.
+	fwdTarget3 := comp5to3(leftSite)
+	revTarget3 := rev(rightSite)
+
+	fwd, err := v.scoreNNDuplexEndpoint("fwd", f, fwdTarget3)
+	if err != nil {
+		return false, p, err
+	}
+	revEnd, err := v.scoreNNDuplexEndpoint("rev", r, revTarget3)
+	if err != nil {
+		return false, p, err
+	}
+
+	limitingSide := "fwd"
+	score := fwd.AnnealMarginC
+	if revEnd.AnnealMarginC < score {
+		score = revEnd.AnnealMarginC
+		limitingSide = "rev"
+	}
+
+	cond := v.conditions()
+	p.Score = score
+	p.Thermo = &engine.ThermoDetails{
+		Model:          thermomodel.NNDuplexV1.String(),
+		SaltModel:      cond.SaltModel.String(),
+		AnnealTempC:    cond.AnnealC,
+		IUPACPolicy:    iupacPolicyStrictACGT,
+		MismatchPolicy: mismatchPolicyMixed,
+		ScoreC:         score,
+		LimitingSide:   limitingSide,
+		Fwd:            fwd,
+		Rev:            revEnd,
+	}
+	return true, p, nil
+}
+
 // Visit implements the appcore visitor for ipcr-thermo.
 // It computes a small penalty for the forward end (and conservatively for the reverse end),
 // then sets Score = -penalty so that higher is better.
 func (v Score) Visit(p engine.Product) (bool, engine.Product, error) {
+	mode := v.Model
+	if mode == "" {
+		mode = thermomodel.Default()
+	}
+	switch mode {
+	case thermomodel.LegacyHeuristic:
+		return v.visitLegacyHeuristic(p)
+	case thermomodel.NNDuplexV1:
+		return v.visitNNDuplexV1(p)
+	default:
+		return false, p, fmt.Errorf("thermo model %q is not implemented", mode)
+	}
+}
+
+func (v Score) visitLegacyHeuristic(p engine.Product) (bool, engine.Product, error) {
 	// Default conservative fixed denominator
 	denomF, denomR := 200.0, 200.0
 

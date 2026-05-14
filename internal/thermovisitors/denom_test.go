@@ -41,3 +41,13 @@ func TestAutoDenomInfluencesPenalty(t *testing.T) {
 		t.Fatalf("expected auto denom to change penalty: fixed=%.6f auto=%.6f (D=%.2f)", pFixed, pAuto, dAuto)
 	}
 }
+
+func TestDenomForPrimerUsesCanonicalConditionsObject(t *testing.T) {
+	base := Score{Na_M: 0.05, PrimerConc_M: 2.5e-7}
+	fromLegacyFields := base.denomForPrimer("ACGTACGTAC")
+
+	fromConditions := Score{Conditions: base.conditions()}.denomForPrimer("ACGTACGTAC")
+	if fromLegacyFields != fromConditions {
+		t.Fatalf("conditions object changed denom: legacy-fields=%g conditions=%g", fromLegacyFields, fromConditions)
+	}
+}

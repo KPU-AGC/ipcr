@@ -25,9 +25,36 @@ func ToAPIProduct(p engine.Product) api.ProductV1 {
 		Seq:            p.Seq,
 		SourceFile:     p.SourceFile,
 	}
+	if p.Thermo != nil {
+		v.Thermo = &api.ThermoDetailsV1{
+			Model:          p.Thermo.Model,
+			SaltModel:      p.Thermo.SaltModel,
+			AnnealTempC:    p.Thermo.AnnealTempC,
+			IUPACPolicy:    p.Thermo.IUPACPolicy,
+			MismatchPolicy: p.Thermo.MismatchPolicy,
+			ScoreC:         p.Thermo.ScoreC,
+			LimitingSide:   p.Thermo.LimitingSide,
+			Fwd:            toAPIThermoEndpoint(p.Thermo.Fwd),
+			Rev:            toAPIThermoEndpoint(p.Thermo.Rev),
+		}
+	}
 	// Conditionally attach Score (thermo-only).
 	applyScoreToAPI(&v, p)
 	return v
+}
+
+func toAPIThermoEndpoint(src engine.ThermoEndpoint) api.ThermoEndpointV1 {
+	return api.ThermoEndpointV1{
+		Side:                src.Side,
+		TmC:                 src.TmC,
+		AnnealMarginC:       src.AnnealMarginC,
+		DeltaGAtAnnealKcal:  src.DeltaGAtAnnealKcal,
+		MismatchPenaltyC:    src.MismatchPenaltyC,
+		EffectiveDenomCalK:  src.EffectiveDenomCalK,
+		MismatchPolicy:      src.MismatchPolicy,
+		HasNonWatsonCrick:   src.HasNonWatsonCrick,
+		UsedHeuristicAdjust: src.UsedHeuristicAdjust,
+	}
 }
 
 func toAPIProducts(list []engine.Product) []api.ProductV1 {

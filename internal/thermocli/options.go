@@ -4,8 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"ipcr-core/thermo"
 	"ipcr/internal/clibase"
 	"ipcr/internal/cliutil"
+	"ipcr/internal/thermomodel"
 	"strings"
 )
 
@@ -27,12 +29,16 @@ type Options struct {
 	NaSpec         string
 	MgSpec         string
 	PrimerConcSpec string
+	SaltModel      string
 	AllowIndel     bool
 
 	// NEW: ssDNA mode (BS-PCR)
 	SingleStranded bool
 
-	// NEW: denominator mode for ΔΔG→ΔTm conversion: "fixed" (D=200) or "auto"
+	// Model mode for staged thermodynamic implementations.
+	ThermoModel string
+
+	// Denominator mode for ΔΔG→ΔTm conversion: "fixed" (D=200) or "auto".
 	DenomMode string
 
 	// Oligo input
@@ -78,9 +84,10 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintf(out, "      --na string            Monovalent salt, e.g., 50mM [%s]\n", "50mM")
 		_, _ = fmt.Fprintf(out, "      --mg string            Mg2+, e.g., 3mM [%s]\n", "3mM")
 		_, _ = fmt.Fprintf(out, "      --primer-conc string   Primer concentration, e.g., 250nM [%s]\n", "250nM")
+		_, _ = fmt.Fprintf(out, "      --salt-model string    Salt model: %s [%s]\n", thermo.KnownSaltModels(), thermo.SaltModelMonovalent)
 		_, _ = fmt.Fprintln(out, "      --allow-indel          Allow a single 1-nt gap (bulge) per primer [false]")
 		_, _ = fmt.Fprintln(out, "      --single-stranded      Treat target as ssDNA (BS-PCR): tiny dangling-end bonus + target-hairpin penalty [false]")
-		// NEW:
+		_, _ = fmt.Fprintf(out, "      --thermo-model string  Scoring model: %s [%s]\n", thermomodel.KnownList(), thermomodel.Default())
 		_, _ = fmt.Fprintf(out, "      --denom string         ΔΔG→ΔTm denominator: fixed | auto [%s]\n", "fixed")
 
 		_, _ = fmt.Fprintln(out, "\nProbe (optional):")
@@ -136,11 +143,12 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.StringVar(&o.NaSpec, "na", "50mM", "monovalent salt (e.g., 50mM)")
 	fs.StringVar(&o.MgSpec, "mg", "3mM", "Mg2+ (e.g., 3mM)")
 	fs.StringVar(&o.PrimerConcSpec, "primer-conc", "250nM", "primer concentration (e.g., 250nM)")
+	fs.StringVar(&o.SaltModel, "salt-model", thermo.SaltModelMonovalent.String(), "salt model: "+thermo.KnownSaltModels())
 
 	fs.BoolVar(&o.AllowIndel, "allow-indel", false, "allow a single 1-nt gap (bulge) per primer")
 	fs.BoolVar(&o.SingleStranded, "single-stranded", false, "target is ssDNA (BS-PCR mode)")
 
-	// NEW: denom mode
+	fs.StringVar(&o.ThermoModel, "thermo-model", thermomodel.Default().String(), "scoring model: "+thermomodel.KnownList())
 	fs.StringVar(&o.DenomMode, "denom", "fixed", "ΔΔG→ΔTm denominator: fixed | auto")
 
 	fs.StringVar(&o.Probe, "probe", "", "internal probe (5'→3') [optional]")
@@ -198,7 +206,21 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	default:
 		return o, fmt.Errorf("--rank must be 'coord' or 'score'")
 	}
-	// NEW: validate denom
+	mode, err := thermomodel.Parse(o.ThermoModel)
+	if err != nil {
+		return o, err
+	}
+	o.ThermoModel = mode.String()
+	if !mode.Implemented() {
+		return o, fmt.Errorf("--thermo-model %q is reserved for staged rollout but is not implemented yet; use %q", mode, thermomodel.LegacyHeuristic)
+	}
+
+	modeSalt, err := thermo.ParseSaltModel(o.SaltModel)
+	if err != nil {
+		return o, err
+	}
+	o.SaltModel = modeSalt.String()
+
 	switch strings.ToLower(o.DenomMode) {
 	case "fixed", "auto":
 	default:

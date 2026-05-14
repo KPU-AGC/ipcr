@@ -39,7 +39,8 @@ func StreamChunksPathCtx(
 
 func streamWholeRecords(ctx context.Context, r interface {
 	Read([]byte) (int, error)
-}, emit func(Record) error) error {
+}, emit func(Record) error,
+) error {
 	var (
 		id  string
 		seq = make([]byte, 0, 1<<20)
@@ -55,7 +56,8 @@ func streamWholeRecords(ctx context.Context, r interface {
 		return nil
 	}
 
-	err := scanFASTALines(ctx, r,
+	err := scanFASTALines(
+		ctx, r,
 		func(header []byte) error {
 			if err := flush(); err != nil {
 				return err
@@ -80,7 +82,8 @@ func streamWholeRecords(ctx context.Context, r interface {
 
 func streamRollingChunks(ctx context.Context, r interface {
 	Read([]byte) (int, error)
-}, chunkSize, overlap int, emit func(Record) error) error {
+}, chunkSize, overlap int, emit func(Record) error,
+) error {
 	step := chunkSize - overlap
 	if step <= 0 {
 		return streamWholeRecords(ctx, r, emit)
@@ -158,7 +161,8 @@ func streamRollingChunks(ctx context.Context, r interface {
 		return nil
 	}
 
-	err := scanFASTALines(ctx, r,
+	err := scanFASTALines(
+		ctx, r,
 		func(header []byte) error {
 			if err := flush(); err != nil {
 				return err

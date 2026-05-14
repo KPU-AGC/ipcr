@@ -480,10 +480,10 @@ func RenderAnnotatedWithOptions(p engine.Product, ann ProbeAnnotation, opt Optio
 		// A minus-strand probe is still reported in plus-oriented amplicon
 		// coordinates. Keep the schematic compact, but include the forward
 		// primer footprint on the minus track so probe_pos maps to the same
-		// horizontal coordinate users see in the output table. Extend the plus
-		// row by the reverse primer footprint so the two genomic rows stay the
-		// same visual width.
-		plusInteriorLen = innerPlus + bLen
+		// horizontal coordinate users see in the output table. The minus row is
+		// widened by aLen here, so widen the plus row by the same amount to keep
+		// both genomic rows the same visual width when primer lengths differ.
+		plusInteriorLen = innerPlus + aLen
 		minusInteriorLen = aLen + innerMinus
 		minusProbeOffset = len(prefixMinus) + aLen
 	}

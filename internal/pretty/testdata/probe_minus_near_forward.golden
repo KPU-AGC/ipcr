@@ -1,6 +1,6 @@
 # 5'-GTTTACCCATATCTTTGACGCTCTTA-3'
 #    ||||||||||||||||||||||||||-->
-# 5'-GTTTACCCATATCTTTGACGCTCTTA.......................................................-3' # (+)
+# 5'-GTTTACCCATATCTTTGACGCTCTTA........................................................-3' # (+)
 # 3'-...........................AAGAAGGTCGTGGCT...............CCTTTCTGTATAGGGTTATGTCGTT-5' # (-)
 #                               |||||||||||||||            <--|||||||||||||||||||||||||
 #                  probe (-) 3'-AAGAAGGTCGTGGCT-5'         3'-AACGACATAACCCTATACAGAAAGG-5'

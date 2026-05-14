@@ -4,6 +4,7 @@ import (
 	"ipcr-core/engine"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -142,5 +143,37 @@ func TestRenderAnnotated_MinusNearForward_Golden(t *testing.T) {
 	want := mustRead(path, t)
 	if got != want {
 		t.Fatalf("mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
+	}
+}
+
+func TestRenderAnnotated_MinusProbeUnequalPrimerLengths_EqualGenomicLineWidths(t *testing.T) {
+	p := engine.Product{
+		FwdPrimer: "GTTTACCCATATCTTTGACGCTCTTA",
+		RevPrimer: "GGAAAGACATATCCCAATACAGCAA",
+		FwdSite:   "GTTTACCCATATCTTTGACGCTCTTA",
+		RevSite:   "GGAAAGACATATCCCAATACAGCAA",
+		Length:    68, Start: 861241, End: 861309, Type: "revcomp",
+	}
+	ann := ProbeAnnotation{
+		Name: "probe", Seq: "TCGGTGCTGGAAGAA", Found: true, Strand: "-", Pos: 27, MM: 0, Site: "TTCTTCCAGCACCGA",
+	}
+	got := RenderAnnotated(p, ann)
+
+	var plusLine, minusLine string
+	for _, line := range strings.Split(got, "\n") {
+		if strings.Contains(line, "# (+)") {
+			plusLine = line
+		}
+		if strings.Contains(line, "# (-)") {
+			minusLine = line
+		}
+	}
+	if plusLine == "" || minusLine == "" {
+		t.Fatalf("missing genomic rows in pretty output:\n%s", got)
+	}
+	plusLine = strings.TrimSuffix(plusLine, " # (+)")
+	minusLine = strings.TrimSuffix(minusLine, " # (-)")
+	if len(plusLine) != len(minusLine) {
+		t.Fatalf("genomic row widths differ: plus=%d minus=%d\n%s", len(plusLine), len(minusLine), got)
 	}
 }

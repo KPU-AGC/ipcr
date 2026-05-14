@@ -115,9 +115,10 @@ func TestPositionalGlobOK(t *testing.T) {
 	// Order is determined by filepath.Glob; just assert both are present.
 	foundA, foundB := false, false
 	for _, f := range o.SeqFiles {
-		if f == a {
+		switch f {
+		case a:
 			foundA = true
-		} else if f == b {
+		case b:
 			foundB = true
 		}
 	}

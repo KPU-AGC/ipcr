@@ -175,13 +175,13 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	}
 
 	// Manual finalize (thermo): positionals → seq files; allow oligo OR primers
-	o.Common.Header = !*noHeader
+	o.Header = !*noHeader
 	if len(posArgs) > 0 {
 		exp, err := cliutil.ExpandPositionals(posArgs)
 		if err != nil {
 			return o, err
 		}
-		o.Common.SeqFiles = append(o.Common.SeqFiles, exp...)
+		o.SeqFiles = append(o.SeqFiles, exp...)
 	}
 
 	hasOligoMode := len(o.OligoInline) > 0 || o.OligosTSV != ""

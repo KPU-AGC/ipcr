@@ -1,6 +1,6 @@
 # ipcr — fast in-silico PCR toolkit (primers, probes, nested & multiplex)
 
-[![CI](https://img.shields.io/github/actions/workflow/status/KPU-AGC/ipcr/ci.yml?branch=main\&label=ci)](https://github.com/KPU-AGC/ipcr/actions/workflows/ci.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/KPU-AGC/ipcr/ci.yml?branch=main&label=ci)](https://github.com/KPU-AGC/ipcr/actions/workflows/ci.yml)
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/ipcr/badges/downloads.svg)](https://anaconda.org/bioconda/ipcr)
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/ipcr/README.html)
 [![Go](https://img.shields.io/badge/go-%3E=%201.22-blue)](https://golang.org)
@@ -11,24 +11,24 @@ It finds amplicons from primer pairs under a mismatch model with a **3′ termin
 
 ---
 
-* **Fast & parallel**: multi-threaded seeded scanner with per-hit verification.
-* **Streaming**: chunked FASTA with safe overlap.
-* **IUPAC-aware**: primer ambiguity codes; genome `N` is a **hard mismatch** to avoid spurious hits.
-* **Pretty mode**: readable ASCII alignment blocks.
-* **Deterministic**: `--sort` gives stable order; JSON/JSONL use versioned, stable wire schemas.
-* **Good UX**: cancelable I/O (Ctrl-C → exit 130), consistent warnings (gated by `--quiet`), clear validation errors.
+- **Fast & parallel**: multi-threaded seeded scanner with per-hit verification.
+- **Streaming**: chunked FASTA with safe overlap.
+- **IUPAC-aware**: primer ambiguity codes; genome `N` is a **hard mismatch** to avoid spurious hits.
+- **Pretty mode**: readable ASCII alignment blocks.
+- **Deterministic**: `--sort` gives stable order; JSON/JSONL use versioned, stable wire schemas.
+- **Good UX**: cancelable I/O (Ctrl-C → exit 130), consistent warnings (gated by `--quiet`), clear validation errors.
 
 ---
 
 ## Binaries (CLIs)
 
-| Binary           | Description	              | Common use                   |
-| ---------------- | ------------------------------------------------ | ---------------------------- |
-| `ipcr`           | Standard in-silico PCR	   | general PCR                  |
-| `ipcr-probe`     | ipcr + **internal probe** annotation & filtering | qPCR/TaqMan-style assays     |
-| `ipcr-nested`    | **Nested PCR**: outer amplicon + inner scan      | Two-round/nested assays      |
-| `ipcr-multiplex` | Panels from TSV or **pooled inline** primers     | Screens / large panels       |
-| `ipcr-thermo`    | Thermodynamically-informed scoring & ranking     | Ranking / assay robustness   |
+| Binary           | Description                                      | Common use                 |
+| ---------------- | ------------------------------------------------ | -------------------------- |
+| `ipcr`           | Standard in-silico PCR                           | general PCR                |
+| `ipcr-probe`     | ipcr + **internal probe** annotation & filtering | qPCR/TaqMan-style assays   |
+| `ipcr-nested`    | **Nested PCR**: outer amplicon + inner scan      | Two-round/nested assays    |
+| `ipcr-multiplex` | Panels from TSV or **pooled inline** primers     | Screens / large panels     |
+| `ipcr-thermo`    | Thermodynamically-informed scoring & ranking     | Ranking / assay robustness |
 
 ---
 
@@ -44,6 +44,7 @@ ipcr \
   --pretty \
   Escherichia-coli.fna.gz
 ```
+
 ```
 source_file     sequence_id     experiment_id   start   end     length  type    fwd_mm  rev_mm  fwd_mm_i        rev_mm_i
 Escherichia-coli.fna.gz   NC_000913.3     manual  223777  225283  1506    forward 0       0
@@ -58,6 +59,7 @@ Escherichia-coli.fna.gz   NC_000913.3     manual  223777  225283  1506    forwar
 ```
 
 ### Probe (with JSON):
+
 ```bash
 # With primers + probe described by Parker et al. (2017); DOI: 10.1371/journal.pone.0173422
 ipcr-probe \
@@ -66,6 +68,7 @@ ipcr-probe \
   --output json \
   Mycoplasmopsis-bovis.fna.gz
 ```
+
 ```json
 [
   {
@@ -87,7 +90,7 @@ ipcr-probe \
 ]
 ```
 
-### Nested PCR (outer TSV, inner TSV): 
+### Nested PCR (outer TSV, inner TSV):
 
 ```bash
 # With external and internal primers described by Figuero et al. (2011); DOI: 10.1902/jop.2011.100719
@@ -99,6 +102,7 @@ ipcr-nested \
   --sort \
   Fusobacterium-nucleatum.fna.gz
 ```
+
 ```
 source_file	sequence_id	outer_experiment_id	outer_start	outer_end	outer_length	outer_type	inner_experiment_id	inner_found	inner_start	inner_end	inner_length	inner_type	inner_fwd_mm	inner_rev_mm
 Fusobacterium-nucleatum.fna.gz	NZ_CP028101.1	outer	534786	536270	1484	forward	Fn-F517-R1214	true	541	1237	696	forward	0	0
@@ -119,8 +123,18 @@ ipcr-multiplex \
   --sort \
   Salmonella-Typhimurium.fna.gz
 ```
+
 ```json
-{"experiment_id":"ST","sequence_id":"NC_003197.2","start":4750875,"end":4751186,"length":311,"type":"revcomp","seq":"ATGACAAACTCTTGATTCTGAAGATCGACTTTTTTTGCTATGTAATCCGCGATCTTTTTCTGATTCAATAAGCCAACGAGTTGTTTTTTCAGCGCTTCGGTACCGACTTTCACTTCCTGCTGACAGACGCGGTCAAATAACCCACGTTCAGTGAGCATGTCGACGATGATCTGAAAGATGTTGAGGTGCGCGAACTTGTGGTCCTTTTCCAGATTACGCAACAGATACTTCAGGTGTTCACGCACCTGCAGCTCATTCTGAGCAGGATAATCAAAAATCCAGAACCCAATCTCATTACCGGAGCCGTTGTT","source_file":"S-typhimurium.fna.gz"}
+{
+  "experiment_id": "ST",
+  "sequence_id": "NC_003197.2",
+  "start": 4750875,
+  "end": 4751186,
+  "length": 311,
+  "type": "revcomp",
+  "seq": "ATGACAAACTCTTGATTCTGAAGATCGACTTTTTTTGCTATGTAATCCGCGATCTTTTTCTGATTCAATAAGCCAACGAGTTGTTTTTTCAGCGCTTCGGTACCGACTTTCACTTCCTGCTGACAGACGCGGTCAAATAACCCACGTTCAGTGAGCATGTCGACGATGATCTGAAAGATGTTGAGGTGCGCGAACTTGTGGTCCTTTTCCAGATTACGCAACAGATACTTCAGGTGTTCACGCACCTGCAGCTCATTCTGAGCAGGATAATCAAAAATCCAGAACCCAATCTCATTACCGGAGCCGTTGTT",
+  "source_file": "S-typhimurium.fna.gz"
+}
 ```
 
 ### Thermodynamically-informed :
@@ -134,6 +148,7 @@ ipcr-thermo \
   --mismatches 3 --circular \
   Salmonella-Enteritidis.fna.gz
 ```
+
 ```text
 source_file	sequence_id	experiment_id	start	end	length	type	fwd_mm	rev_mm	fwd_mm_i	rev_mm_i	score
 Salmonella-Enteritidis	NZ_CP025559.1	O3+O4	2446500	2446839	339	revcomp	0	0	-110.73864769266693
@@ -145,39 +160,40 @@ Salmonella-Enteritidis	NZ_CP025559.1	O1+O2	1853303	1854185	882	revcomp	0	0	-137.
 
 ## Inputs
 
-* **Inline primers**: `-f/--forward`, `-r/--reverse` (5′→3′; IUPAC allowed).
-* **TSV primers** (panel file):
+- **Inline primers**: `-f/--forward`, `-r/--reverse` (5′→3′; IUPAC allowed).
+- **TSV primers** (panel file):
 
   ```
   id  FORWARD_PRIMER  REVERSE_PRIMER  [min_len]  [max_len]
   ```
 
   Optional per-pair `min_len`/`max_len` override global bounds.
-* **FASTA**: Positional paths/globs. Use `-` for **stdin**. gz is auto-detected. (Also accepts `--sequences FILE[.gz]` (repeatable), soon to be deprecated)
+
+- **FASTA**: Positional paths/globs. Use `-` for **stdin**. gz is auto-detected. (Also accepts `--sequences FILE[.gz]` (repeatable), soon to be deprecated)
 
 ---
 
 ## Performance & streaming
 
-* **Threads**: `--threads N` (0 = all CPUs).
-* **Chunking**: `--chunk-size N` splits records into windows; **overlap** is chosen safely from `max(--max-length, primer_len-1)` so boundary hits survive.
+- **Threads**: `--threads N` (0 = all CPUs).
+- **Chunking**: `--chunk-size N` splits records into windows; **overlap** is chosen safely from `max(--max-length, primer_len-1)` so boundary hits survive.
+  - If `--circular`, chunking is disabled.
+  - If `--max-length` is missing or `--chunk-size <= --max-length`, chunking auto-disables with a warning.
 
-  * If `--circular`, chunking is disabled.
-  * If `--max-length` is missing or `--chunk-size <= --max-length`, chunking auto-disables with a warning.
-* **Seeding**: exact 3′ suffix seeds (default length 12 or primer-length if shorter) for forward primers; rc seeds use 5′ prefixes. Ambiguous primers fall back to full verification.
-* **Cancelable I/O**: FASTA scanners honor context; Ctrl-C exits with **130**.
+- **Seeding**: exact 3′ suffix seeds (default length 12 or primer-length if shorter) for forward primers; rc seeds use 5′ prefixes. Ambiguous primers fall back to full verification.
+- **Cancelable I/O**: FASTA scanners honor context; Ctrl-C exits with **130**.
 
 ---
 
 ## Flags you’ll actually use
 
-* `--mismatches N` — max mismatches per primer (default 0)
-* `--terminal-window N` — no mismatches allowed in the last *N* bases (3 nt by default in `realistic` mode)
-* `--min-length / --max-length` — product length bounds
-* `--circular` — permit wrap-around amplicons
-* `--output text|json|jsonl|fasta` — choose format; `--sort` for stable order; `--products` to emit sequences in text/json
-* `--pretty` — ASCII alignment blocks (text)
-* `--self=true|false` — include **single-oligo amplification** (A×rc(A), B×rc(B)) (default **true**)
+- `--mismatches N` — max mismatches per primer (default 0)
+- `--terminal-window N` — no mismatches allowed in the last _N_ bases (3 nt by default in `realistic` mode)
+- `--min-length / --max-length` — product length bounds
+- `--circular` — permit wrap-around amplicons
+- `--output text|json|jsonl|fasta` — choose format; `--sort` for stable order; `--products` to emit sequences in text/json
+- `--pretty` — ASCII alignment blocks (text)
+- `--self=true|false` — include **single-oligo amplification** (A×rc(A), B×rc(B)) (default **true**)
 
 ---
 
@@ -188,4 +204,5 @@ MIT. See [LICENSE](./LICENSE).
 If you use **ipcr** in your work, please cite this repository (a manuscript is in progress).
 
 ```
+
 ```

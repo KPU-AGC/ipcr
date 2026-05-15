@@ -38,15 +38,31 @@ type Product struct {
 // product. It is intentionally model-labelled because legacy heuristic scores
 // and NN-derived scores are not numerically comparable.
 type ThermoDetails struct {
-	Model          string         `json:"model"`
-	SaltModel      string         `json:"salt_model"`
-	AnnealTempC    float64        `json:"anneal_temp_c"`
-	IUPACPolicy    string         `json:"iupac_policy"`
-	MismatchPolicy string         `json:"mismatch_policy"`
-	ScoreC         float64        `json:"score_c"`
-	LimitingSide   string         `json:"limiting_side"`
-	Fwd            ThermoEndpoint `json:"fwd"`
-	Rev            ThermoEndpoint `json:"rev"`
+	Model                   string           `json:"model"`
+	SaltModel               string           `json:"salt_model"`
+	AnnealTempC             float64          `json:"anneal_temp_c"`
+	IUPACPolicy             string           `json:"iupac_policy"`
+	MismatchPolicy          string           `json:"mismatch_policy"`
+	StructurePolicy         string           `json:"structure_policy,omitempty"`
+	ScoreProfile            string           `json:"score_profile,omitempty"`
+	ScoreC                  float64          `json:"score_c"`
+	BaseScoreC              float64          `json:"base_score_c,omitempty"`
+	AmpliconAdjustmentC     float64          `json:"amplicon_adjustment_c,omitempty"`
+	ExtensionLogit          float64          `json:"extension_logit,omitempty"`
+	ExtensionBonusC         float64          `json:"extension_bonus_c,omitempty"`
+	LengthPenaltyC          float64          `json:"length_penalty_c,omitempty"`
+	BandMassBonusC          float64          `json:"band_mass_bonus_c,omitempty"`
+	StructurePenaltyC       float64          `json:"structure_penalty_c,omitempty"`
+	LimitingSide            string           `json:"limiting_side"`
+	Fwd                     ThermoEndpoint   `json:"fwd"`
+	Rev                     ThermoEndpoint   `json:"rev"`
+	WorstHairpin            *ThermoStructure `json:"worst_hairpin,omitempty"`
+	WorstSelfDimer          *ThermoStructure `json:"worst_self_dimer,omitempty"`
+	CrossDimer              *ThermoStructure `json:"cross_dimer,omitempty"`
+	PanelCrossDimer         *ThermoStructure `json:"panel_cross_dimer,omitempty"`
+	PanelCrossDimerPenaltyC float64          `json:"panel_cross_dimer_penalty_c,omitempty"`
+	PanelCrossDimerBurdenC  float64          `json:"panel_cross_dimer_burden_c,omitempty"`
+	PanelCrossDimerCount    int              `json:"panel_cross_dimer_count,omitempty"`
 }
 
 // ThermoEndpoint describes one primer-template endpoint in 5'→3' primer
@@ -62,4 +78,25 @@ type ThermoEndpoint struct {
 	MismatchPolicy      string  `json:"mismatch_policy"`
 	HasNonWatsonCrick   bool    `json:"has_non_watson_crick"`
 	UsedHeuristicAdjust bool    `json:"used_heuristic_adjust"`
+}
+
+// ThermoStructure describes a primer secondary-structure candidate used by
+// nn-structure-v1. PenaltyC is the °C-equivalent competition penalty applied to
+// the final score.
+type ThermoStructure struct {
+	Kind                 string  `json:"kind"`
+	QueryA               string  `json:"query_a,omitempty"`
+	QueryB               string  `json:"query_b,omitempty"`
+	DeltaGAtAnnealKcal   float64 `json:"delta_g_at_anneal_kcal"`
+	TmC                  float64 `json:"tm_c"`
+	AnnealMarginC        float64 `json:"anneal_margin_c"`
+	StemLen              int     `json:"stem_len"`
+	LoopLen              int     `json:"loop_len,omitempty"`
+	AStart               int     `json:"a_start"`
+	AEnd                 int     `json:"a_end"`
+	BStart               int     `json:"b_start"`
+	BEnd                 int     `json:"b_end"`
+	ThreePrimeAnchored   bool    `json:"three_prime_anchored"`
+	BothThreePrimeAnchor bool    `json:"both_three_prime_anchor,omitempty"`
+	PenaltyC             float64 `json:"penalty_c,omitempty"`
 }

@@ -62,14 +62,14 @@ func TestParseArgs_NNDuplexThermoModelAccepted(t *testing.T) {
 	}
 }
 
-func TestParseArgs_NNStructureThermoModelReserved(t *testing.T) {
+func TestParseArgs_NNStructureThermoModelAccepted(t *testing.T) {
 	args := append(minimalArgs(), "--thermo-model", thermomodel.NNStructureV1.String())
-	_, err := parseArgsForTest(args...)
-	if err == nil {
-		t.Fatal("expected reserved-mode error")
+	opts, err := parseArgsForTest(args...)
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "not implemented yet") {
-		t.Fatalf("unexpected error: %v", err)
+	if opts.ThermoModel != thermomodel.NNStructureV1.String() {
+		t.Fatalf("got model %q, want %q", opts.ThermoModel, thermomodel.NNStructureV1)
 	}
 }
 
@@ -108,5 +108,16 @@ func TestParseArgs_UnknownSaltModelRejected(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "unknown salt model") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseArgs_ThermoDetailsFlag(t *testing.T) {
+	args := append(minimalArgs(), "--thermo-details")
+	opts, err := parseArgsForTest(args...)
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if !opts.ThermoDetails {
+		t.Fatal("expected --thermo-details to be enabled")
 	}
 }

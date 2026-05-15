@@ -21,8 +21,8 @@ const (
 	// explicit mismatch fallback policy when the target site is imperfect.
 	NNDuplexV1 Mode = "nn-duplex-v1"
 
-	// NNStructureV1 is reserved for the later NN secondary-structure model that
-	// will include hairpin, self-dimer, and cross-dimer terms.
+	// NNStructureV1 adds nearest-neighbor secondary-structure competition terms:
+	// primer hairpins, self-dimers, and forward/reverse cross-dimers.
 	NNStructureV1 Mode = "nn-structure-v1"
 )
 
@@ -61,4 +61,6 @@ func KnownList() string {
 func (m Mode) String() string { return string(m) }
 
 // Implemented reports whether the mode is executable in this patch.
-func (m Mode) Implemented() bool { return m == LegacyHeuristic || m == NNDuplexV1 }
+func (m Mode) Implemented() bool {
+	return m == LegacyHeuristic || m == NNDuplexV1 || m == NNStructureV1
+}

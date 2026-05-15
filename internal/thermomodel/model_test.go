@@ -25,13 +25,10 @@ func TestParseKnownModes(t *testing.T) {
 }
 
 func TestImplementedModes(t *testing.T) {
-	for _, mode := range []Mode{LegacyHeuristic, NNDuplexV1} {
+	for _, mode := range []Mode{LegacyHeuristic, NNDuplexV1, NNStructureV1} {
 		if !mode.Implemented() {
 			t.Fatalf("%q should be implemented", mode)
 		}
-	}
-	if NNStructureV1.Implemented() {
-		t.Fatalf("%q should still be reserved, not implemented", NNStructureV1)
 	}
 }
 

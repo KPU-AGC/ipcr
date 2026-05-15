@@ -206,21 +206,42 @@ func TestThermo_NNDuplexModelRejectsDegeneratePrimers(t *testing.T) {
 	}
 }
 
-func TestThermo_FutureStructureModelRejectedAtCLI(t *testing.T) {
-	fa := writeFA2(t, "thermo_future_model.fa", ">s\nACGTACAAAAAAGGTACC\n")
+func rcForIntegration(s string) string {
+	b := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case 'A':
+			b[len(s)-1-i] = 'T'
+		case 'C':
+			b[len(s)-1-i] = 'G'
+		case 'G':
+			b[len(s)-1-i] = 'C'
+		case 'T':
+			b[len(s)-1-i] = 'A'
+		default:
+			b[len(s)-1-i] = 'N'
+		}
+	}
+	return string(b)
+}
+
+func TestThermo_NNStructureModelAcceptedAndReportsDimers(t *testing.T) {
+	fwd := "GCGCGCGC"
+	rev := "GCGCGCGC"
+	fa := writeFA2(t, "thermo_structure_model.fa", ">s\n"+fwd+"AAAA"+rcForIntegration(rev)+"\n")
 	t.Cleanup(func() { _ = os.Remove(fa) })
 
-	var out, errB bytes.Buffer
-	code := thermoapp.Run([]string{
-		"--forward", "ACGTAC",
-		"--reverse", "GGTACC",
+	out := runThermo(t, []string{
+		"--forward", fwd,
+		"--reverse", rev,
 		"--sequences", fa,
+		"--output", "json",
+		"--self=false",
 		"--thermo-model", "nn-structure-v1",
-	}, &out, &errB)
-	if code != 2 {
-		t.Fatalf("expected exit 2 for reserved model, got %d stdout=%q stderr=%q", code, out.String(), errB.String())
-	}
-	if !strings.Contains(errB.String(), "not implemented yet") {
-		t.Fatalf("unexpected stderr: %q", errB.String())
+	})
+	for _, want := range []string{`"model": "nn-structure-v1"`, `"structure_penalty_c"`, `"cross_dimer"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected JSON output to contain %s; got:\n%s", want, out)
+		}
 	}
 }

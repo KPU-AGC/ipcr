@@ -27,15 +27,31 @@ func ToAPIProduct(p engine.Product) api.ProductV1 {
 	}
 	if p.Thermo != nil {
 		v.Thermo = &api.ThermoDetailsV1{
-			Model:          p.Thermo.Model,
-			SaltModel:      p.Thermo.SaltModel,
-			AnnealTempC:    p.Thermo.AnnealTempC,
-			IUPACPolicy:    p.Thermo.IUPACPolicy,
-			MismatchPolicy: p.Thermo.MismatchPolicy,
-			ScoreC:         p.Thermo.ScoreC,
-			LimitingSide:   p.Thermo.LimitingSide,
-			Fwd:            toAPIThermoEndpoint(p.Thermo.Fwd),
-			Rev:            toAPIThermoEndpoint(p.Thermo.Rev),
+			Model:                   p.Thermo.Model,
+			SaltModel:               p.Thermo.SaltModel,
+			AnnealTempC:             p.Thermo.AnnealTempC,
+			IUPACPolicy:             p.Thermo.IUPACPolicy,
+			MismatchPolicy:          p.Thermo.MismatchPolicy,
+			StructurePolicy:         p.Thermo.StructurePolicy,
+			ScoreProfile:            p.Thermo.ScoreProfile,
+			ScoreC:                  p.Thermo.ScoreC,
+			BaseScoreC:              p.Thermo.BaseScoreC,
+			AmpliconAdjustmentC:     p.Thermo.AmpliconAdjustmentC,
+			ExtensionLogit:          p.Thermo.ExtensionLogit,
+			ExtensionBonusC:         p.Thermo.ExtensionBonusC,
+			LengthPenaltyC:          p.Thermo.LengthPenaltyC,
+			BandMassBonusC:          p.Thermo.BandMassBonusC,
+			StructurePenaltyC:       p.Thermo.StructurePenaltyC,
+			LimitingSide:            p.Thermo.LimitingSide,
+			Fwd:                     toAPIThermoEndpoint(p.Thermo.Fwd),
+			Rev:                     toAPIThermoEndpoint(p.Thermo.Rev),
+			WorstHairpin:            toAPIThermoStructure(p.Thermo.WorstHairpin),
+			WorstSelfDimer:          toAPIThermoStructure(p.Thermo.WorstSelfDimer),
+			CrossDimer:              toAPIThermoStructure(p.Thermo.CrossDimer),
+			PanelCrossDimer:         toAPIThermoStructure(p.Thermo.PanelCrossDimer),
+			PanelCrossDimerPenaltyC: p.Thermo.PanelCrossDimerPenaltyC,
+			PanelCrossDimerBurdenC:  p.Thermo.PanelCrossDimerBurdenC,
+			PanelCrossDimerCount:    p.Thermo.PanelCrossDimerCount,
 		}
 	}
 	// Conditionally attach Score (thermo-only).
@@ -54,6 +70,29 @@ func toAPIThermoEndpoint(src engine.ThermoEndpoint) api.ThermoEndpointV1 {
 		MismatchPolicy:      src.MismatchPolicy,
 		HasNonWatsonCrick:   src.HasNonWatsonCrick,
 		UsedHeuristicAdjust: src.UsedHeuristicAdjust,
+	}
+}
+
+func toAPIThermoStructure(src *engine.ThermoStructure) *api.ThermoStructureV1 {
+	if src == nil {
+		return nil
+	}
+	return &api.ThermoStructureV1{
+		Kind:                 src.Kind,
+		QueryA:               src.QueryA,
+		QueryB:               src.QueryB,
+		DeltaGAtAnnealKcal:   src.DeltaGAtAnnealKcal,
+		TmC:                  src.TmC,
+		AnnealMarginC:        src.AnnealMarginC,
+		StemLen:              src.StemLen,
+		LoopLen:              src.LoopLen,
+		AStart:               src.AStart,
+		AEnd:                 src.AEnd,
+		BStart:               src.BStart,
+		BEnd:                 src.BEnd,
+		ThreePrimeAnchored:   src.ThreePrimeAnchored,
+		BothThreePrimeAnchor: src.BothThreePrimeAnchor,
+		PenaltyC:             src.PenaltyC,
 	}
 }
 

@@ -52,18 +52,21 @@ type Options struct {
 	ProbeWeight float64
 
 	// Ranking/output (NOTE: score is always included in ipcr-thermo)
-	Rank string
+	Rank          string
+	ThermoDetails bool
+	ScoreProfile  string
 
 	// Thermo addons (thermo-only)
-	ExtAlpha      float64
-	LenKneeBP     int
-	LenSteep      float64
-	LenMaxPenC    float64
-	StructHairpin bool
-	StructDimer   bool
-	StructScale   float64
-	BindWeight    float64
-	ExtWeight     float64
+	ExtAlpha       float64
+	LenKneeBP      int
+	LenSteep       float64
+	LenMaxPenC     float64
+	StructHairpin  bool
+	StructDimer    bool
+	StructScale    float64
+	BindWeight     float64
+	ExtWeight      float64
+	BandMassWeight float64
 }
 
 func NewFlagSet(name string) *flag.FlagSet {
@@ -97,10 +100,12 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintf(out, "      --probe-weight float   Blend [0..1]: (1=min of margins) [%s]\n", "1.0")
 
 		_, _ = fmt.Fprintln(out, "\nThermo extensions (scoring only; thermo binary):")
+		_, _ = fmt.Fprintf(out, "      --score-profile string Score profile: binding | pcr | gel [%s]\n", "binding")
 		_, _ = fmt.Fprintf(out, "      --ext-alpha float      Slope for extension prob vs margin [%s]\n", "0.45")
 		_, _ = fmt.Fprintf(out, "      --length-knee-bp int   Soft-knee start (bp) for length bias [%s]\n", "550")
 		_, _ = fmt.Fprintf(out, "      --length-steep float   Soft-knee steepness [%s]\n", "0.003")
 		_, _ = fmt.Fprintf(out, "      --length-max-pen float Max °C-equivalent length penalty [%s]\n", "10")
+		_, _ = fmt.Fprintf(out, "      --band-mass-weight float Gel profile bonus per 2× amplicon mass [%s]\n", "15")
 		_, _ = fmt.Fprintln(out, "      --struct-hairpin       Penalize hairpins [true]")
 		_, _ = fmt.Fprintln(out, "      --struct-dimer         Penalize primer-dimers [true]")
 		_, _ = fmt.Fprintf(out, "      --struct-scale float   Structural penalties scale [%s]\n", "1.0")
@@ -110,6 +115,7 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintln(out, "\nRanking & outputs (thermo):")
 		_, _ = fmt.Fprintln(out, "      score field is always included in outputs (TSV/JSON/JSONL).")
 		_, _ = fmt.Fprintf(out, "      --rank string          Order by: score | coord [%s]\n", "score")
+		_, _ = fmt.Fprintln(out, "      --thermo-details       Add NN thermo component columns to text/TSV output [false]")
 		_, _ = fmt.Fprintln(out, "      (default is score; pass --rank coord to keep coordinate order.)")
 	})
 	return fs
@@ -157,14 +163,17 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.Float64Var(&o.ProbeWeight, "probe-weight", 1.0, "blend [0..1]: 1 favors probe strongly")
 
 	fs.StringVar(&o.Rank, "rank", "score", "order by: score | coord")
+	fs.BoolVar(&o.ThermoDetails, "thermo-details", false, "add NN thermo component columns to text/TSV output")
 	fs.BoolVar(&help, "h", false, "show this help [false]")
 	fs.BoolVar(&showExamples, "examples", false, "show quickstart examples and exit [false]")
 
 	// Thermo addons (with defaults)
+	fs.StringVar(&o.ScoreProfile, "score-profile", "binding", "score profile: binding | pcr | gel")
 	fs.Float64Var(&o.ExtAlpha, "ext-alpha", 0.45, "slope for extension prob vs margin")
 	fs.IntVar(&o.LenKneeBP, "length-knee-bp", 550, "soft-knee start (bp)")
 	fs.Float64Var(&o.LenSteep, "length-steep", 0.003, "soft-knee steepness")
 	fs.Float64Var(&o.LenMaxPenC, "length-max-pen", 10, "max length penalty (°C)")
+	fs.Float64Var(&o.BandMassWeight, "band-mass-weight", 15, "gel profile band-mass bonus per 2x amplicon length")
 	fs.BoolVar(&o.StructHairpin, "struct-hairpin", true, "penalize hairpins")
 	fs.BoolVar(&o.StructDimer, "struct-dimer", true, "penalize primer-dimers")
 	fs.Float64Var(&o.StructScale, "struct-scale", 1.0, "scale for structural penalties")
@@ -225,6 +234,27 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	case "fixed", "auto":
 	default:
 		return o, fmt.Errorf("--denom must be 'fixed' or 'auto'")
+	}
+	switch strings.ToLower(o.ScoreProfile) {
+	case "binding", "pcr", "gel":
+		o.ScoreProfile = strings.ToLower(o.ScoreProfile)
+	default:
+		return o, fmt.Errorf("--score-profile must be 'binding', 'pcr', or 'gel'")
+	}
+	if o.ExtAlpha < 0 {
+		return o, fmt.Errorf("--ext-alpha must be >= 0")
+	}
+	if o.LenKneeBP < 0 {
+		return o, fmt.Errorf("--length-knee-bp must be >= 0")
+	}
+	if o.LenSteep < 0 {
+		return o, fmt.Errorf("--length-steep must be >= 0")
+	}
+	if o.LenMaxPenC < 0 {
+		return o, fmt.Errorf("--length-max-pen must be >= 0")
+	}
+	if o.BandMassWeight < 0 {
+		return o, fmt.Errorf("--band-mass-weight must be >= 0")
 	}
 	if o.ProbeWeight < 0 || o.ProbeWeight > 1 {
 		return o, fmt.Errorf("--probe-weight must be in [0,1]")

@@ -5,6 +5,7 @@ import (
 	"ipcr-core/engine"
 	"ipcr/internal/thermomodel"
 	"math"
+	"strings"
 	"testing"
 )
 
@@ -92,6 +93,14 @@ func rc5to3(s string) string {
 		}
 	}
 	return string(b)
+}
+
+func perfectAmplicon(fwd, rev string, length int) string {
+	filler := length - len(fwd) - len(rev)
+	if filler < 0 {
+		filler = 0
+	}
+	return fwd + strings.Repeat("A", filler) + rc5to3(rev)
 }
 
 func TestScore_ImprovesWithPerfectEnds(t *testing.T) {
@@ -229,10 +238,173 @@ func TestScore_NNDuplexMismatchUsesFallbackAndLowersScore(t *testing.T) {
 	}
 }
 
-func TestScore_UnimplementedThermoModelRejected(t *testing.T) {
-	v := Score{Model: thermomodel.NNStructureV1}
-	_, _, err := v.Visit(engine.Product{})
-	if err == nil {
-		t.Fatal("expected unimplemented model error")
+func TestScore_NNStructureModelAddsStructureComponents(t *testing.T) {
+	fwd := "GCGCGCGC"
+	rev := "GCGCGCGC"
+	amp := fwd + "AAAA" + rc5to3(rev)
+	p := engine.Product{FwdPrimer: fwd, RevPrimer: rev, Seq: amp}
+
+	duplex := Score{Model: thermomodel.NNDuplexV1, AnnealTempC: 60, Na_M: 0.05, PrimerConc_M: 2.5e-7}
+	_, base, err := duplex.Visit(p)
+	if err != nil {
+		t.Fatalf("NNDuplex Visit: %v", err)
+	}
+
+	structure := Score{
+		Model:         thermomodel.NNStructureV1,
+		AnnealTempC:   60,
+		Na_M:          0.05,
+		PrimerConc_M:  2.5e-7,
+		StructHairpin: true,
+		StructDimer:   true,
+		StructScale:   1.0,
+	}
+	_, got, err := structure.Visit(p)
+	if err != nil {
+		t.Fatalf("NNStructure Visit: %v", err)
+	}
+	if got.Thermo == nil || got.Thermo.Model != thermomodel.NNStructureV1.String() {
+		t.Fatalf("expected nn-structure-v1 details, got %+v", got.Thermo)
+	}
+	if got.Thermo.CrossDimer == nil {
+		t.Fatalf("expected cross-dimer component, got %+v", got.Thermo)
+	}
+	if got.Thermo.StructurePenaltyC <= 0 {
+		t.Fatalf("expected positive structure penalty, got %+v", got.Thermo)
+	}
+	if !(got.Score < base.Score) {
+		t.Fatalf("expected structure-aware score to be lower than duplex-only score: structure=%g duplex=%g", got.Score, base.Score)
+	}
+}
+
+func TestScore_NNDuplexBaseScoreMatchesFinalScore(t *testing.T) {
+	fwd := "ACGTACGTACGTACGTACGT"
+	rev := "ACGTACGTACGTACGTACGT"
+	amp := fwd + "AAAA" + rc5to3(rev)
+	p := engine.Product{FwdPrimer: fwd, RevPrimer: rev, Seq: amp, Type: "forward"}
+
+	v := Score{Model: thermomodel.NNDuplexV1, AnnealTempC: 60, Na_M: 0.05, PrimerConc_M: 2.5e-7}
+	_, got, err := v.Visit(p)
+	if err != nil {
+		t.Fatalf("NNDuplex Visit returned error: %v", err)
+	}
+	if got.Thermo == nil {
+		t.Fatal("expected thermo details")
+	}
+	if got.Thermo.BaseScoreC != got.Thermo.ScoreC || got.Score != got.Thermo.BaseScoreC {
+		t.Fatalf("expected duplex base/final score parity, got score=%g thermo=%+v", got.Score, got.Thermo)
+	}
+}
+
+func TestScore_NNStructurePanelCrossDimerPenalty(t *testing.T) {
+	fwd := "AAAACGCGCGCGCGCG"
+	rev := "TTTTATATATATATAT"
+	partner := "TTTTCGCGCGCGCGCG"
+	amp := fwd + "AAAA" + rc5to3(rev)
+	p := engine.Product{FwdPrimer: fwd, RevPrimer: rev, Seq: amp, Type: "forward"}
+
+	v := Score{
+		Model:         thermomodel.NNStructureV1,
+		AnnealTempC:   60,
+		Na_M:          0.05,
+		PrimerConc_M:  2.5e-7,
+		StructHairpin: false,
+		StructDimer:   true,
+		StructScale:   1,
+		PanelPrimers: []PrimerRef{
+			{ID: "current-fwd", Seq: fwd},
+			{ID: "current-rev", Seq: rev},
+			{ID: "panel_partner", Seq: partner},
+		},
+	}
+	_, got, err := v.Visit(p)
+	if err != nil {
+		t.Fatalf("NNStructure Visit returned error: %v", err)
+	}
+	if got.Thermo == nil {
+		t.Fatal("expected thermo details")
+	}
+	if got.Thermo.PanelCrossDimer == nil {
+		t.Fatalf("expected panel cross-dimer details, got %+v", got.Thermo)
+	}
+	if got.Thermo.PanelCrossDimerPenaltyC <= 0 || got.Thermo.PanelCrossDimerBurdenC <= 0 || got.Thermo.PanelCrossDimerCount <= 0 {
+		t.Fatalf("expected positive panel cross-dimer penalty/burden/count, got %+v", got.Thermo)
+	}
+	if got.Thermo.PanelCrossDimer.QueryB != "panel_partner" {
+		t.Fatalf("expected panel partner label, got %+v", got.Thermo.PanelCrossDimer)
+	}
+	if !(got.Score < got.Thermo.BaseScoreC) {
+		t.Fatalf("expected panel dimer penalty to lower score: score=%g base=%g", got.Score, got.Thermo.BaseScoreC)
+	}
+}
+
+func TestScore_GelProfileAddsAmpliconObservableTerms(t *testing.T) {
+	// Xiong-style Salmonella multiplex primers. The binding-only NN score ranks
+	// the short, high-Tm product highest; gel-observable ranking should be able
+	// to include amplicon mass and extension penalties as explicit components.
+	o1 := "ATGTCTATAAGCACCACAATG"
+	o2 := "TCATTTCAATAATGATTCAAGC"
+	o3 := "CATTCTGACCTTTAAGCCGGTCAATGAG"
+	o4 := "CCAAAAAGCGAGACCTCAAACTTACTCAG"
+	o5 := "GCGGACGTCATTGTCACTAACCCGACG"
+	o6 := "TCTAAAGTGGGAACCCGATGTTCAGCG"
+
+	p155 := engine.Product{ExperimentID: "O5+O6", FwdPrimer: o5, RevPrimer: o6, Seq: perfectAmplicon(o5, o6, 155), Length: 155}
+	p339 := engine.Product{ExperimentID: "O3+O4", FwdPrimer: o3, RevPrimer: o4, Seq: perfectAmplicon(o3, o4, 339), Length: 339}
+	p882 := engine.Product{ExperimentID: "O1+O2", FwdPrimer: o1, RevPrimer: o2, Seq: perfectAmplicon(o1, o2, 882), Length: 882}
+
+	binding := Score{Model: thermomodel.NNDuplexV1, AnnealTempC: 60, Na_M: 0.05, PrimerConc_M: 2.5e-7}
+	_, b155, err := binding.Visit(p155)
+	if err != nil {
+		t.Fatalf("binding 155 Visit: %v", err)
+	}
+	_, b339, err := binding.Visit(p339)
+	if err != nil {
+		t.Fatalf("binding 339 Visit: %v", err)
+	}
+	if !(b155.Score > b339.Score) {
+		t.Fatalf("expected binding-only score to prefer short high-Tm product: 155=%g 339=%g", b155.Score, b339.Score)
+	}
+
+	gel := Score{
+		Model:          thermomodel.NNStructureV1,
+		AnnealTempC:    60,
+		Na_M:           0.05,
+		PrimerConc_M:   2.5e-7,
+		StructHairpin:  true,
+		StructDimer:    true,
+		StructScale:    1,
+		ScoreProfile:   scoreProfileGel,
+		ExtAlpha:       0.45,
+		ExtWeight:      1,
+		LenKneeBP:      550,
+		LenSteep:       0.003,
+		LenMaxPenC:     10,
+		BandMassWeight: 15,
+	}
+	_, g155, err := gel.Visit(p155)
+	if err != nil {
+		t.Fatalf("gel 155 Visit: %v", err)
+	}
+	_, g339, err := gel.Visit(p339)
+	if err != nil {
+		t.Fatalf("gel 339 Visit: %v", err)
+	}
+	_, g882, err := gel.Visit(p882)
+	if err != nil {
+		t.Fatalf("gel 882 Visit: %v", err)
+	}
+
+	if g339.Thermo == nil || g339.Thermo.ScoreProfile != scoreProfileGel {
+		t.Fatalf("expected gel thermo details, got %+v", g339.Thermo)
+	}
+	if g339.Thermo.BandMassBonusC <= g155.Thermo.BandMassBonusC {
+		t.Fatalf("expected longer visible product to get larger band-mass term: 339=%g 155=%g", g339.Thermo.BandMassBonusC, g155.Thermo.BandMassBonusC)
+	}
+	if g882.Thermo.LengthPenaltyC <= 0 {
+		t.Fatalf("expected long product extension/length penalty, got %+v", g882.Thermo)
+	}
+	if !(g339.Score > g882.Score && g882.Score > g155.Score) {
+		t.Fatalf("expected gel profile rank 339 > 882 > 155; got 339=%g 882=%g 155=%g", g339.Score, g882.Score, g155.Score)
 	}
 }

@@ -25,7 +25,22 @@ const (
 	mismatchPolicyNNPerfect         = "nn-perfect"
 	mismatchPolicyHeuristicFallback = "heuristic-ddg-fallback"
 	mismatchPolicyMixed             = "nn-perfect-or-heuristic-ddg-fallback"
+	structurePolicyNNStemV1         = "nn-contiguous-stem-v1"
+
+	scoreProfileBinding = "binding"
+	scoreProfilePCR     = "pcr"
+	scoreProfileGel     = "gel"
+
+	defaultBandMassWeightC = 15.0
+	bandMassRefBP          = 100.0
 )
+
+// PrimerRef identifies one primer in the current panel/pool for panel-wide
+// dimer competition checks. Seq is expected in 5′→3′ orientation.
+type PrimerRef struct {
+	ID  string
+	Seq string
+}
 
 // Score is the thermo-scoring visitor config.
 type Score struct {
@@ -38,7 +53,21 @@ type Score struct {
 	AllowIndels    bool
 	LengthBiasOn   bool
 	SingleStranded bool // read (OR'd with env) to enable ssDNA tweaks
+	StructHairpin  bool
+	StructDimer    bool
 	StructScale    float64
+	PanelPrimers   []PrimerRef
+
+	// ScoreProfile controls whether NN model scores remain pure primer-template
+	// binding margins or include PCR/gel-observable amplicon-level terms.
+	ScoreProfile   string
+	ExtAlpha       float64
+	ExtWeight      float64
+	LenKneeBP      int
+	LenSteep       float64
+	LenMaxPenC     float64
+	BindWeight     float64
+	BandMassWeight float64
 
 	// Opt-in: compute ΔΔG→ΔTm denominator from solution conditions.
 	// Default false keeps the historical fixed D=200 path.
@@ -60,6 +89,77 @@ func (v Score) conditions() thermo.Conditions {
 		c.SaltModel = thermo.SaltModelMonovalent
 	}
 	return c.WithDefaults()
+}
+
+func (v Score) scoreProfile() string {
+	switch strings.ToLower(strings.TrimSpace(v.ScoreProfile)) {
+	case "", scoreProfileBinding:
+		return scoreProfileBinding
+	case scoreProfilePCR:
+		return scoreProfilePCR
+	case scoreProfileGel:
+		return scoreProfileGel
+	default:
+		return scoreProfileBinding
+	}
+}
+
+func (v Score) extAlpha() float64 {
+	if v.ExtAlpha == 0 {
+		return 0.45
+	}
+	if v.ExtAlpha < 0 {
+		return 0
+	}
+	return v.ExtAlpha
+}
+
+func (v Score) extWeight() float64 {
+	if v.ExtWeight == 0 {
+		return 1
+	}
+	return v.ExtWeight
+}
+
+func (v Score) lenKneeBP() int {
+	if v.LenKneeBP <= 0 {
+		return 550
+	}
+	return v.LenKneeBP
+}
+
+func (v Score) lenSteep() float64 {
+	if v.LenSteep == 0 {
+		return 0.003
+	}
+	if v.LenSteep < 0 {
+		return 0
+	}
+	return v.LenSteep
+}
+
+func (v Score) lenMaxPenC() float64 {
+	if v.LenMaxPenC == 0 {
+		return 10
+	}
+	if v.LenMaxPenC < 0 {
+		return 0
+	}
+	return v.LenMaxPenC
+}
+
+func (v Score) bindWeight() float64 {
+	if v.BindWeight == 0 {
+		return 1
+	}
+	return v.BindWeight
+}
+
+func (v Score) bandMassWeight() float64 {
+	if v.BandMassWeight == 0 {
+		return defaultBandMassWeightC
+	}
+	return v.BandMassWeight
 }
 
 // Public helper used by tests/tools.
@@ -377,20 +477,20 @@ func (v Score) scoreNNDuplexEndpoint(side, primer5to3, target3to5 string) (engin
 	return endpointFromDuplex(side, adjusted, penaltyC, mismatchPolicyHeuristicFallback, true, true), nil
 }
 
-func (v Score) visitNNDuplexV1(p engine.Product) (bool, engine.Product, error) {
+func (v Score) scoreNNDuplexComponents(p engine.Product) (engine.ThermoEndpoint, engine.ThermoEndpoint, float64, string, thermo.Conditions, error) {
 	f := toUpperACGT(p.FwdPrimer)
 	r := toUpperACGT(p.RevPrimer)
 	if f == "" || r == "" {
-		return false, p, fmt.Errorf("nn-duplex-v1 requires A/C/G/T primers; degenerate/IUPAC primer scoring is not implemented yet")
+		return engine.ThermoEndpoint{}, engine.ThermoEndpoint{}, 0, "", thermo.Conditions{}, fmt.Errorf("nn-duplex-v1 requires A/C/G/T primers; degenerate/IUPAC primer scoring is not implemented yet")
 	}
 	if len(p.Seq) < len(f) || len(p.Seq) < len(r) {
-		return false, p, fmt.Errorf("nn-duplex-v1 requires product sequence long enough for both primer sites")
+		return engine.ThermoEndpoint{}, engine.ThermoEndpoint{}, 0, "", thermo.Conditions{}, fmt.Errorf("nn-duplex-v1 requires product sequence long enough for both primer sites")
 	}
 
 	leftSite := toUpperACGTAllowN(p.Seq[:len(f)])
 	rightSite := toUpperACGTAllowN(p.Seq[len(p.Seq)-len(r):])
 	if leftSite == "" || rightSite == "" {
-		return false, p, fmt.Errorf("nn-duplex-v1 requires A/C/G/T/N product sequence at primer sites")
+		return engine.ThermoEndpoint{}, engine.ThermoEndpoint{}, 0, "", thermo.Conditions{}, fmt.Errorf("nn-duplex-v1 requires A/C/G/T/N product sequence at primer sites")
 	}
 
 	// The left site is in the same 5'→3' orientation as the forward primer.
@@ -401,11 +501,11 @@ func (v Score) visitNNDuplexV1(p engine.Product) (bool, engine.Product, error) {
 
 	fwd, err := v.scoreNNDuplexEndpoint("fwd", f, fwdTarget3)
 	if err != nil {
-		return false, p, err
+		return engine.ThermoEndpoint{}, engine.ThermoEndpoint{}, 0, "", thermo.Conditions{}, err
 	}
 	revEnd, err := v.scoreNNDuplexEndpoint("rev", r, revTarget3)
 	if err != nil {
-		return false, p, err
+		return engine.ThermoEndpoint{}, engine.ThermoEndpoint{}, 0, "", thermo.Conditions{}, err
 	}
 
 	limitingSide := "fwd"
@@ -414,20 +514,320 @@ func (v Score) visitNNDuplexV1(p engine.Product) (bool, engine.Product, error) {
 		score = revEnd.AnnealMarginC
 		limitingSide = "rev"
 	}
+	return fwd, revEnd, score, limitingSide, v.conditions(), nil
+}
 
-	cond := v.conditions()
-	p.Score = score
-	p.Thermo = &engine.ThermoDetails{
-		Model:          thermomodel.NNDuplexV1.String(),
+func nnThermoDetails(model thermomodel.Mode, cond thermo.Conditions, fwd, revEnd engine.ThermoEndpoint, score float64, limitingSide string) *engine.ThermoDetails {
+	return &engine.ThermoDetails{
+		Model:          model.String(),
 		SaltModel:      cond.SaltModel.String(),
 		AnnealTempC:    cond.AnnealC,
 		IUPACPolicy:    iupacPolicyStrictACGT,
 		MismatchPolicy: mismatchPolicyMixed,
+		ScoreProfile:   scoreProfileBinding,
 		ScoreC:         score,
+		BaseScoreC:     score,
 		LimitingSide:   limitingSide,
 		Fwd:            fwd,
 		Rev:            revEnd,
 	}
+}
+
+func ampliconBandMassBonusC(bp int, weightC float64) float64 {
+	if bp <= 0 || weightC == 0 {
+		return 0
+	}
+	ratio := float64(bp) / bandMassRefBP
+	if ratio <= 0 {
+		return 0
+	}
+	return weightC * math.Log2(ratio)
+}
+
+func (v Score) applyAmpliconProfile(p engine.Product, details *engine.ThermoDetails, score float64) float64 {
+	if details == nil {
+		return score
+	}
+	profile := v.scoreProfile()
+	details.ScoreProfile = profile
+	if profile == scoreProfileBinding {
+		details.ScoreC = score
+		return score
+	}
+
+	limitingMargin := details.Fwd.AnnealMarginC
+	if details.Rev.AnnealMarginC < limitingMargin {
+		limitingMargin = details.Rev.AnnealMarginC
+	}
+
+	bindingAdjustment := score * (v.bindWeight() - 1)
+
+	extProb := thermoaddons.ExtensionProb(limitingMargin, v.extAlpha())
+	extLogit := thermoaddons.Logit(extProb)
+	extBonus := v.extWeight() * extLogit
+	lengthPenalty := thermoaddons.LengthPenalty(p.Length, v.lenKneeBP(), v.lenSteep(), v.lenMaxPenC())
+
+	details.ExtensionLogit = extLogit
+	details.ExtensionBonusC = extBonus
+	details.LengthPenaltyC = lengthPenalty
+
+	adjustment := bindingAdjustment + extBonus - lengthPenalty
+	if profile == scoreProfileGel {
+		bandBonus := ampliconBandMassBonusC(p.Length, v.bandMassWeight())
+		details.BandMassBonusC = bandBonus
+		adjustment += bandBonus
+	}
+	details.AmpliconAdjustmentC = adjustment
+	score += adjustment
+	details.ScoreC = score
+	return score
+}
+
+func (v Score) visitNNDuplexV1(p engine.Product) (bool, engine.Product, error) {
+	fwd, revEnd, score, limitingSide, cond, err := v.scoreNNDuplexComponents(p)
+	if err != nil {
+		return false, p, err
+	}
+	details := nnThermoDetails(thermomodel.NNDuplexV1, cond, fwd, revEnd, score, limitingSide)
+	score = v.applyAmpliconProfile(p, details, score)
+	p.Score = score
+	p.Thermo = details
+	return true, p, nil
+}
+
+func structureFromResult(src thermo.StructureResult, penaltyC float64) *engine.ThermoStructure {
+	return structureFromResultWithLabels(src, penaltyC, "", "")
+}
+
+func structureFromResultWithLabels(src thermo.StructureResult, penaltyC float64, queryA, queryB string) *engine.ThermoStructure {
+	if src.StemLen == 0 {
+		return nil
+	}
+	return &engine.ThermoStructure{
+		Kind:                 src.Kind,
+		QueryA:               queryA,
+		QueryB:               queryB,
+		DeltaGAtAnnealKcal:   src.DeltaGAtAnnealKcal,
+		TmC:                  src.TmC,
+		AnnealMarginC:        src.AnnealMarginC,
+		StemLen:              src.StemLen,
+		LoopLen:              src.LoopLen,
+		AStart:               src.AStart,
+		AEnd:                 src.AEnd,
+		BStart:               src.BStart,
+		BEnd:                 src.BEnd,
+		ThreePrimeAnchored:   src.ThreePrimeAnchored,
+		BothThreePrimeAnchor: src.BothThreePrimeAnchor,
+		PenaltyC:             penaltyC,
+	}
+}
+
+func structureCompetitionPenaltyC(src thermo.StructureResult, binding engine.ThermoEndpoint) float64 {
+	if src.StemLen == 0 || math.IsNaN(src.DeltaGAtAnnealKcal) || math.IsInf(src.DeltaGAtAnnealKcal, 0) {
+		return 0
+	}
+	// Positive when the structure is close enough to compete with the relevant
+	// primer-template endpoint at annealing temperature. 3' anchored dimers get a
+	// larger competition window because they can seed extension.
+	windowKcal := 1.0
+	if src.Kind != thermo.StructureHairpin && src.ThreePrimeAnchored {
+		windowKcal = 2.0
+	}
+	if src.BothThreePrimeAnchor {
+		windowKcal = 3.0
+	}
+	competitiveKcal := binding.DeltaGAtAnnealKcal - src.DeltaGAtAnnealKcal + windowKcal
+	if competitiveKcal <= 0 {
+		return 0
+	}
+	denom := absFiniteOrFallback(binding.EffectiveDenomCalK, 200.0)
+	penalty := competitiveKcal * 1000.0 / denom
+	if math.IsNaN(penalty) || math.IsInf(penalty, 0) || penalty < 0 {
+		return 0
+	}
+	if penalty > 30 {
+		return 30
+	}
+	return penalty
+}
+
+func chooseWorseStructure(cur, cand *engine.ThermoStructure) *engine.ThermoStructure {
+	if cand == nil || cand.PenaltyC <= 0 {
+		return cur
+	}
+	if cur == nil || cand.PenaltyC > cur.PenaltyC {
+		return cand
+	}
+	if cand.PenaltyC == cur.PenaltyC && cand.DeltaGAtAnnealKcal < cur.DeltaGAtAnnealKcal {
+		return cand
+	}
+	return cur
+}
+
+func normalizePanelPrimers(refs []PrimerRef) []PrimerRef {
+	out := make([]PrimerRef, 0, len(refs))
+	seen := map[string]struct{}{}
+	for _, ref := range refs {
+		seq := toUpperACGT(ref.Seq)
+		if seq == "" {
+			continue
+		}
+		id := strings.TrimSpace(ref.ID)
+		if id == "" {
+			id = seq
+		}
+		if _, ok := seen[seq]; ok {
+			continue
+		}
+		seen[seq] = struct{}{}
+		out = append(out, PrimerRef{ID: id, Seq: seq})
+	}
+	return out
+}
+
+func samePrimerSeq(a, b string) bool {
+	a = toUpperACGT(a)
+	b = toUpperACGT(b)
+	return a != "" && a == b
+}
+
+type panelCrossDimerHit struct {
+	Result    thermo.StructureResult
+	PenaltyC  float64
+	BurdenC   float64
+	Count     int
+	QueryID   string
+	PartnerID string
+}
+
+func (v Score) bestPanelCrossDimer(fwdPrimer, revPrimer string, fwd, revEnd engine.ThermoEndpoint, cond thermo.Conditions) panelCrossDimerHit {
+	if len(v.PanelPrimers) == 0 {
+		return panelCrossDimerHit{}
+	}
+	queries := []struct {
+		ID      string
+		Seq     string
+		Binding engine.ThermoEndpoint
+	}{
+		{ID: "fwd", Seq: fwdPrimer, Binding: fwd},
+		{ID: "rev", Seq: revPrimer, Binding: revEnd},
+	}
+	panel := normalizePanelPrimers(v.PanelPrimers)
+	seen := map[string]struct{}{}
+	var best panelCrossDimerHit
+	for _, q := range queries {
+		qSeq := toUpperACGT(q.Seq)
+		if qSeq == "" {
+			continue
+		}
+		for _, partner := range panel {
+			if samePrimerSeq(partner.Seq, fwdPrimer) || samePrimerSeq(partner.Seq, revPrimer) {
+				continue
+			}
+			key := q.ID + "\x00" + qSeq + "\x00" + partner.ID + "\x00" + partner.Seq
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			res, ok, err := thermo.BestCrossDimer(qSeq, partner.Seq, thermo.DefaultStructureOptions(cond))
+			if err != nil || !ok {
+				continue
+			}
+			pen := structureCompetitionPenaltyC(res, q.Binding)
+			if pen <= 0 {
+				continue
+			}
+			best.Count++
+			best.BurdenC += pen
+			if pen > best.PenaltyC || (pen == best.PenaltyC && res.DeltaGAtAnnealKcal < best.Result.DeltaGAtAnnealKcal) {
+				best.Result = res
+				best.PenaltyC = pen
+				best.QueryID = q.ID
+				best.PartnerID = partner.ID
+			}
+		}
+	}
+	return best
+}
+
+func (v Score) visitNNStructureV1(p engine.Product) (bool, engine.Product, error) {
+	fwd, revEnd, baseScore, limitingSide, cond, err := v.scoreNNDuplexComponents(p)
+	if err != nil {
+		return false, p, err
+	}
+
+	f := toUpperACGT(p.FwdPrimer)
+	r := toUpperACGT(p.RevPrimer)
+	scale := v.StructScale
+	if scale < 0 {
+		scale = 0
+	}
+
+	details := nnThermoDetails(thermomodel.NNStructureV1, cond, fwd, revEnd, baseScore, limitingSide)
+	details.StructurePolicy = structurePolicyNNStemV1
+	details.BaseScoreC = baseScore
+
+	totalPenalty := 0.0
+	if v.StructHairpin {
+		if hp, ok, err := thermo.BestHairpin(f, thermo.DefaultStructureOptions(cond)); err == nil && ok {
+			pen := structureCompetitionPenaltyC(hp, fwd)
+			details.WorstHairpin = chooseWorseStructure(details.WorstHairpin, structureFromResultWithLabels(hp, pen, "fwd", "fwd"))
+			totalPenalty += pen
+		}
+		if hp, ok, err := thermo.BestHairpin(r, thermo.DefaultStructureOptions(cond)); err == nil && ok {
+			pen := structureCompetitionPenaltyC(hp, revEnd)
+			details.WorstHairpin = chooseWorseStructure(details.WorstHairpin, structureFromResultWithLabels(hp, pen, "rev", "rev"))
+			totalPenalty += pen
+		}
+	}
+
+	if v.StructDimer {
+		if sd, ok, err := thermo.BestSelfDimer(f, thermo.DefaultStructureOptions(cond)); err == nil && ok {
+			pen := structureCompetitionPenaltyC(sd, fwd)
+			details.WorstSelfDimer = chooseWorseStructure(details.WorstSelfDimer, structureFromResultWithLabels(sd, pen, "fwd", "fwd"))
+			totalPenalty += pen
+		}
+		if sd, ok, err := thermo.BestSelfDimer(r, thermo.DefaultStructureOptions(cond)); err == nil && ok {
+			pen := structureCompetitionPenaltyC(sd, revEnd)
+			details.WorstSelfDimer = chooseWorseStructure(details.WorstSelfDimer, structureFromResultWithLabels(sd, pen, "rev", "rev"))
+			totalPenalty += pen
+		}
+		if xd, ok, err := thermo.BestCrossDimer(f, r, thermo.DefaultStructureOptions(cond)); err == nil && ok {
+			pen := math.Max(structureCompetitionPenaltyC(xd, fwd), structureCompetitionPenaltyC(xd, revEnd))
+			details.CrossDimer = chooseWorseStructure(details.CrossDimer, structureFromResultWithLabels(xd, pen, "fwd", "rev"))
+			totalPenalty += pen
+		}
+		panel := v.bestPanelCrossDimer(f, r, fwd, revEnd, cond)
+		if panel.PenaltyC > 0 {
+			details.PanelCrossDimer = structureFromResultWithLabels(panel.Result, panel.PenaltyC, panel.QueryID, panel.PartnerID)
+			details.PanelCrossDimerPenaltyC = panel.PenaltyC
+			details.PanelCrossDimerBurdenC = panel.BurdenC
+			details.PanelCrossDimerCount = panel.Count
+			totalPenalty += panel.PenaltyC
+		}
+	}
+
+	totalPenalty *= scale
+	if details.WorstHairpin != nil {
+		details.WorstHairpin.PenaltyC *= scale
+	}
+	if details.WorstSelfDimer != nil {
+		details.WorstSelfDimer.PenaltyC *= scale
+	}
+	if details.CrossDimer != nil {
+		details.CrossDimer.PenaltyC *= scale
+	}
+	if details.PanelCrossDimer != nil {
+		details.PanelCrossDimer.PenaltyC *= scale
+		details.PanelCrossDimerPenaltyC *= scale
+		details.PanelCrossDimerBurdenC *= scale
+	}
+
+	score := baseScore - totalPenalty
+	details.StructurePenaltyC = totalPenalty
+	score = v.applyAmpliconProfile(p, details, score)
+	p.Score = score
+	p.Thermo = details
 	return true, p, nil
 }
 
@@ -444,6 +844,8 @@ func (v Score) Visit(p engine.Product) (bool, engine.Product, error) {
 		return v.visitLegacyHeuristic(p)
 	case thermomodel.NNDuplexV1:
 		return v.visitNNDuplexV1(p)
+	case thermomodel.NNStructureV1:
+		return v.visitNNStructureV1(p)
 	default:
 		return false, p, fmt.Errorf("thermo model %q is not implemented", mode)
 	}

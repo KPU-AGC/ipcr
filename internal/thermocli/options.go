@@ -28,6 +28,7 @@ type Options struct {
 	AnnealTempC    float64
 	NaSpec         string
 	MgSpec         string
+	DntpSpec       string
 	PrimerConcSpec string
 	SaltModel      string
 	AllowIndel     bool
@@ -86,6 +87,7 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintf(out, "      --anneal-temp float    Annealing temperature (°C) [%s]\n", "60")
 		_, _ = fmt.Fprintf(out, "      --na string            Monovalent salt, e.g., 50mM [%s]\n", "50mM")
 		_, _ = fmt.Fprintf(out, "      --mg string            Mg2+, e.g., 3mM [%s]\n", "3mM")
+		_, _ = fmt.Fprintf(out, "      --dntp string          Total dNTP, e.g., 200uM [%s]\n", "0mM")
 		_, _ = fmt.Fprintf(out, "      --primer-conc string   Primer concentration, e.g., 250nM [%s]\n", "250nM")
 		_, _ = fmt.Fprintf(out, "      --salt-model string    Salt model: %s [%s]\n", thermo.KnownSaltModels(), thermo.SaltModelMonovalent)
 		_, _ = fmt.Fprintln(out, "      --allow-indel          Allow a single 1-nt gap (bulge) per primer [false]")
@@ -148,6 +150,7 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.Float64Var(&o.AnnealTempC, "anneal-temp", 60, "annealing temperature (°C)")
 	fs.StringVar(&o.NaSpec, "na", "50mM", "monovalent salt (e.g., 50mM)")
 	fs.StringVar(&o.MgSpec, "mg", "3mM", "Mg2+ (e.g., 3mM)")
+	fs.StringVar(&o.DntpSpec, "dntp", "0mM", "total dNTP concentration (e.g., 200uM)")
 	fs.StringVar(&o.PrimerConcSpec, "primer-conc", "250nM", "primer concentration (e.g., 250nM)")
 	fs.StringVar(&o.SaltModel, "salt-model", thermo.SaltModelMonovalent.String(), "salt model: "+thermo.KnownSaltModels())
 

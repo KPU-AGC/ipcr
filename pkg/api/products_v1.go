@@ -28,6 +28,11 @@ type ProductV1 struct {
 type ThermoDetailsV1 struct {
 	Model                   string             `json:"model"`
 	SaltModel               string             `json:"salt_model"`
+	NaM                     float64            `json:"na_m,omitempty"`
+	MgM                     float64            `json:"mg_m,omitempty"`
+	DntpM                   float64            `json:"dntp_m,omitempty"`
+	EffectiveNaM            float64            `json:"effective_na_m,omitempty"`
+	FreeMgM                 float64            `json:"free_mg_m,omitempty"`
 	AnnealTempC             float64            `json:"anneal_temp_c"`
 	IUPACPolicy             string             `json:"iupac_policy"`
 	MismatchPolicy          string             `json:"mismatch_policy"`
@@ -55,21 +60,30 @@ type ThermoDetailsV1 struct {
 
 // ThermoStructureV1 describes a secondary-structure competitor.
 type ThermoStructureV1 struct {
-	Kind                 string  `json:"kind"`
-	QueryA               string  `json:"query_a,omitempty"`
-	QueryB               string  `json:"query_b,omitempty"`
-	DeltaGAtAnnealKcal   float64 `json:"delta_g_at_anneal_kcal"`
-	TmC                  float64 `json:"tm_c"`
-	AnnealMarginC        float64 `json:"anneal_margin_c"`
-	StemLen              int     `json:"stem_len"`
-	LoopLen              int     `json:"loop_len,omitempty"`
-	AStart               int     `json:"a_start"`
-	AEnd                 int     `json:"a_end"`
-	BStart               int     `json:"b_start"`
-	BEnd                 int     `json:"b_end"`
-	ThreePrimeAnchored   bool    `json:"three_prime_anchored"`
-	BothThreePrimeAnchor bool    `json:"both_three_prime_anchor,omitempty"`
-	PenaltyC             float64 `json:"penalty_c,omitempty"`
+	Kind                        string  `json:"kind"`
+	Model                       string  `json:"model,omitempty"`
+	QueryA                      string  `json:"query_a,omitempty"`
+	QueryB                      string  `json:"query_b,omitempty"`
+	DeltaGAtAnnealKcal          float64 `json:"delta_g_at_anneal_kcal"`
+	TmC                         float64 `json:"tm_c"`
+	AnnealMarginC               float64 `json:"anneal_margin_c"`
+	StemLen                     int     `json:"stem_len"`
+	LoopLen                     int     `json:"loop_len,omitempty"`
+	AStart                      int     `json:"a_start"`
+	AEnd                        int     `json:"a_end"`
+	BStart                      int     `json:"b_start"`
+	BEnd                        int     `json:"b_end"`
+	ThreePrimeAnchored          bool    `json:"three_prime_anchored"`
+	BothThreePrimeAnchor        bool    `json:"both_three_prime_anchor,omitempty"`
+	SegmentCount                int     `json:"segment_count,omitempty"`
+	BulgeCount                  int     `json:"bulge_count,omitempty"`
+	InternalLoopCount           int     `json:"internal_loop_count,omitempty"`
+	DanglingEndCount            int     `json:"dangling_end_count,omitempty"`
+	LoopPenaltyKcal             float64 `json:"loop_penalty_kcal,omitempty"`
+	BulgePenaltyKcal            float64 `json:"bulge_penalty_kcal,omitempty"`
+	InternalLoopPenaltyKcal     float64 `json:"internal_loop_penalty_kcal,omitempty"`
+	StructureDanglingDeltaGKcal float64 `json:"structure_dangling_delta_g_kcal,omitempty"`
+	PenaltyC                    float64 `json:"penalty_c,omitempty"`
 }
 
 // ThermoEndpointV1 describes a single primer-template endpoint.

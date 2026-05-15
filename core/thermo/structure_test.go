@@ -55,3 +55,86 @@ func TestBestCrossDimerIsSymmetricInEnergy(t *testing.T) {
 		t.Fatalf("expected symmetric dimer energy, got %g vs %g", ab.DeltaGAtAnnealKcal, ba.DeltaGAtAnnealKcal)
 	}
 }
+
+func TestBestCrossDimerV2ReportsBulgeCandidate(t *testing.T) {
+	opts := DefaultStructureOptions(DefaultConditions())
+	got, ok, err := BestCrossDimerV2("GCGCAAGCGC", "GCGCGCGC", opts)
+	if err != nil {
+		t.Fatalf("BestCrossDimerV2 error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected gapped cross-dimer")
+	}
+	if got.Model != StructureModelStemLoopV2 {
+		t.Fatalf("expected v2 model, got %+v", got)
+	}
+	if got.BulgeCount != 1 || got.InternalLoopCount != 0 || got.SegmentCount != 2 {
+		t.Fatalf("expected one bulge in two-segment structure, got %+v", got)
+	}
+	if got.StemLen < 8 || got.BulgePenaltyKcal <= 0 {
+		t.Fatalf("unexpected gapped-stem details: %+v", got)
+	}
+}
+
+func TestBestHairpinV2ReportsInternalLoopCandidate(t *testing.T) {
+	opts := DefaultStructureOptions(DefaultConditions())
+	got, ok, err := bestHairpinGapped("GCGCAAGCGCTTTTGCGCTTGCGC", opts)
+	if err != nil {
+		t.Fatalf("bestHairpinGapped error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected gapped hairpin")
+	}
+	if got.Model != StructureModelStemLoopV2 {
+		t.Fatalf("expected v2 model, got %+v", got)
+	}
+	if got.InternalLoopCount != 1 || got.SegmentCount != 2 {
+		t.Fatalf("expected one internal-loop two-segment hairpin, got %+v", got)
+	}
+	if got.InternalLoopPenaltyKcal <= 0 || got.LoopPenaltyKcal <= 0 {
+		t.Fatalf("expected loop penalties, got %+v", got)
+	}
+}
+
+func TestBestHairpinV2FindsBulgedStem(t *testing.T) {
+	opts := DefaultStructureOptions(DefaultConditions())
+	got, ok, err := BestHairpinV2("GCGCGCAAAAGCGTCGC", opts)
+	if err != nil {
+		t.Fatalf("BestHairpinV2 error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected v2 bulged hairpin candidate")
+	}
+	if got.Model != StructureModelStemLoopV2 || got.BulgeCount+got.InternalLoopCount == 0 {
+		t.Fatalf("expected v2 gapped hairpin metadata, got %+v", got)
+	}
+}
+
+func TestBestCrossDimerV2FindsBulgedDimer(t *testing.T) {
+	opts := DefaultStructureOptions(DefaultConditions())
+	got, ok, err := BestCrossDimerV2("TTTTTGCGCG", "AAAAAGCGTCG", opts)
+	if err != nil {
+		t.Fatalf("BestCrossDimerV2 error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected v2 bulged cross-dimer candidate")
+	}
+	if got.Model != StructureModelStemLoopV2 || got.StemLen < opts.MinStem || got.BulgeCount+got.InternalLoopCount == 0 {
+		t.Fatalf("unexpected v2 cross-dimer: %+v", got)
+	}
+}
+
+func TestBestStructureV2PreservesContiguousResult(t *testing.T) {
+	opts := DefaultStructureOptions(DefaultConditions())
+	v1, ok1, err1 := BestCrossDimer("TTTTTGCGC", "AAAAAGCGC", opts)
+	v2, ok2, err2 := BestCrossDimerV2("TTTTTGCGC", "AAAAAGCGC", opts)
+	if err1 != nil || err2 != nil {
+		t.Fatalf("unexpected errors: %v %v", err1, err2)
+	}
+	if !ok1 || !ok2 {
+		t.Fatalf("expected both v1 and v2 candidates: v1=%+v v2=%+v", v1, v2)
+	}
+	if v2.DeltaGAtAnnealKcal > v1.DeltaGAtAnnealKcal+1e-9 {
+		t.Fatalf("v2 should preserve or improve v1 result: v1=%+v v2=%+v", v1, v2)
+	}
+}

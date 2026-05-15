@@ -121,3 +121,25 @@ func TestParseArgs_ThermoDetailsFlag(t *testing.T) {
 		t.Fatal("expected --thermo-details to be enabled")
 	}
 }
+
+func TestParseArgs_Owczarzy08SaltModelAccepted(t *testing.T) {
+	args := append(minimalArgs(), "--salt-model", thermo.SaltModelOwczarzy08.String())
+	opts, err := parseArgsForTest(args...)
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if opts.SaltModel != thermo.SaltModelOwczarzy08.String() {
+		t.Fatalf("got salt model %q, want %q", opts.SaltModel, thermo.SaltModelOwczarzy08)
+	}
+}
+
+func TestParseArgs_DNTPFlag(t *testing.T) {
+	args := append(minimalArgs(), "--dntp", "800uM")
+	opts, err := parseArgsForTest(args...)
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if opts.DntpSpec != "800uM" {
+		t.Fatalf("got dNTP spec %q, want 800uM", opts.DntpSpec)
+	}
+}

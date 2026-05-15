@@ -22,5 +22,5 @@ func EffectiveMonovalent(naM, mgM float64) float64 {
 	if mode == thermo.SaltModelOwczarzyLite.String() {
 		model = thermo.SaltModelOwczarzyLite
 	}
-	return thermo.EffectiveMonovalent(naM, mgM, model)
+	return thermo.EffectiveMonovalent(naM, mgM, 0, model)
 }

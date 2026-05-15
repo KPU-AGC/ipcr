@@ -311,6 +311,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	// Parse solution conditions (warn and default on errors)
 	naM, errNa := parseMolar(opts.NaSpec)
 	mgM, errMg := parseMolar(opts.MgSpec)
+	dntpM, errDntp := parseMolar(opts.DntpSpec)
 	ctM, errCt := parseMolar(opts.PrimerConcSpec)
 	if errNa != nil {
 		cmdutil.Warnf(stderr, opts.Quiet, "bad --na %q: %v (using 50mM)", opts.NaSpec, errNa)
@@ -319,6 +320,10 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	if errMg != nil {
 		cmdutil.Warnf(stderr, opts.Quiet, "bad --mg %q: %v (using 3mM)", opts.MgSpec, errMg)
 		mgM = 0.003
+	}
+	if errDntp != nil {
+		cmdutil.Warnf(stderr, opts.Quiet, "bad --dntp %q: %v (using 0mM)", opts.DntpSpec, errDntp)
+		dntpM = 0
 	}
 	if errCt != nil {
 		cmdutil.Warnf(stderr, opts.Quiet, "bad --primer-conc %q: %v (using 250nM)", opts.PrimerConcSpec, errCt)
@@ -334,6 +339,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		AnnealC:      opts.AnnealTempC,
 		NaM:          naM,
 		MgM:          mgM,
+		DntpM:        dntpM,
 		PrimerTotalM: ctM,
 		SaltModel:    saltModel,
 	}

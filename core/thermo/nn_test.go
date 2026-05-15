@@ -82,12 +82,12 @@ func TestTm_InputValidation(t *testing.T) {
 			t.Fatalf("expected CT>0 error, got: %v", err)
 		}
 	})
-	t.Run("[Na+] must be > 0", func(t *testing.T) {
+	t.Run("salt must be > 0", func(t *testing.T) {
 		in := newInp()
 		in.Na = 0
 		_, err := Tm("AA", "TT", in)
-		if err == nil || !strings.Contains(err.Error(), "[Na+] must be > 0") {
-			t.Fatalf("expected [Na+]>0 error, got: %v", err)
+		if err == nil || !strings.Contains(err.Error(), "salt concentration must be > 0") {
+			t.Fatalf("expected salt concentration error, got: %v", err)
 		}
 	})
 	t.Run("non-ACGT target", func(t *testing.T) {
@@ -258,5 +258,39 @@ func TestPerfectDuplexRejectsMismatch(t *testing.T) {
 	_, err := PerfectDuplex(primer, string(target), DefaultConditions())
 	if err == nil || !strings.Contains(err.Error(), "non-WC pair") {
 		t.Fatalf("expected non-WC rejection, got %v", err)
+	}
+}
+
+func TestTm_Owczarzy08MixedSaltAndDNTPEffect(t *testing.T) {
+	primer := strings.ToUpper("GGGGCCCCGGGGCCCCGGGGCCCC")
+	target3to5 := comp(primer)
+
+	mono := newInp()
+	mono.Na = 0.05
+	mono.Mg = 0.003
+	mono.SaltModel = SaltModelMonovalent
+	resMono, err := Tm(primer, target3to5, mono)
+	if err != nil {
+		t.Fatalf("monovalent Tm: %v", err)
+	}
+
+	mixed := mono
+	mixed.SaltModel = SaltModelOwczarzy08
+	resMixed, err := Tm(primer, target3to5, mixed)
+	if err != nil {
+		t.Fatalf("owczarzy08 Tm: %v", err)
+	}
+	if math.Abs(resMixed.TmC-resMono.TmC) < 1e-9 {
+		t.Fatalf("expected owczarzy08 to differ from monovalent: mixed=%g mono=%g", resMixed.TmC, resMono.TmC)
+	}
+
+	withDntp := mixed
+	withDntp.Dntp = 0.0025
+	resDntp, err := Tm(primer, target3to5, withDntp)
+	if err != nil {
+		t.Fatalf("owczarzy08+dNTP Tm: %v", err)
+	}
+	if !(resDntp.TmC < resMixed.TmC) {
+		t.Fatalf("expected dNTP chelation to lower mixed-salt Tm: dntp=%g mixed=%g", resDntp.TmC, resMixed.TmC)
 	}
 }

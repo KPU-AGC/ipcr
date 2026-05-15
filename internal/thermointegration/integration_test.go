@@ -58,7 +58,7 @@ func TestThermo_EndToEnd_TSVWithThermoDetails(t *testing.T) {
 		t.Fatalf("exit %d err=%s", code, errB.String())
 	}
 	s := out.String()
-	if !bytes.Contains(out.Bytes(), []byte("thermo_model\tsalt_model\tanneal_temp_c\tscore_profile\tbase_score_c")) {
+	if !bytes.Contains(out.Bytes(), []byte("thermo_model\tsalt_model\tna_m\tmg_m\tdntp_m\teffective_na_m\tfree_mg_m\tanneal_temp_c")) {
 		t.Fatalf("expected thermo details header:\n%s", s)
 	}
 	if !bytes.Contains(out.Bytes(), []byte("nn-duplex-v1")) {

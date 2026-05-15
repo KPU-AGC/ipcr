@@ -34,7 +34,7 @@ func FormatRowTSVWithScore(p engine.Product) string {
 	return fmt.Sprintf("%s\t%g", base, p.Score)
 }
 
-const ThermoDetailsTSVHeader = "thermo_model\tsalt_model\tanneal_temp_c\tscore_profile\tbase_score_c\tfinal_score_c\tamplicon_adjustment_c\textension_logit\textension_bonus_c\tlength_penalty_c\tband_mass_bonus_c\tstructure_penalty_c\tlimiting_side\tfwd_tm_c\trev_tm_c\tfwd_margin_c\trev_margin_c\tfwd_dg_kcal\trev_dg_kcal\tfwd_mismatch_penalty_c\trev_mismatch_penalty_c\tfwd_mismatch_count\trev_mismatch_count\tfwd_3p_mismatch_count\trev_3p_mismatch_count\tfwd_mismatch_fallback_count\trev_mismatch_fallback_count\tfwd_mismatch_dg_kcal\trev_mismatch_dg_kcal\thairpin_penalty_c\tself_dimer_penalty_c\tcross_dimer_penalty_c\tpanel_cross_dimer_penalty_c\tpanel_cross_dimer_burden_c\tpanel_cross_dimer_count\tpanel_cross_dimer_partner"
+const ThermoDetailsTSVHeader = "thermo_model\tsalt_model\tanneal_temp_c\tscore_profile\tbase_score_c\tfinal_score_c\tamplicon_adjustment_c\textension_logit\textension_bonus_c\tlength_penalty_c\tband_mass_bonus_c\tstructure_penalty_c\tlimiting_side\tfwd_tm_c\trev_tm_c\tfwd_margin_c\trev_margin_c\tfwd_dg_kcal\trev_dg_kcal\tfwd_mismatch_penalty_c\trev_mismatch_penalty_c\tfwd_mismatch_count\trev_mismatch_count\tfwd_3p_mismatch_count\trev_3p_mismatch_count\tfwd_mismatch_fallback_count\trev_mismatch_fallback_count\tfwd_mismatch_dg_kcal\trev_mismatch_dg_kcal\tfwd_terminal_mismatch_penalty_c\trev_terminal_mismatch_penalty_c\tfwd_5p_terminal_mismatch_penalty_c\trev_5p_terminal_mismatch_penalty_c\tfwd_3p_terminal_mismatch_penalty_c\trev_3p_terminal_mismatch_penalty_c\tfwd_terminal_mismatch_dg_kcal\trev_terminal_mismatch_dg_kcal\tfwd_dangling_end_adjustment_c\trev_dangling_end_adjustment_c\tfwd_dangling_end_dg_kcal\trev_dangling_end_dg_kcal\tfwd_end_effect_policy\trev_end_effect_policy\thairpin_penalty_c\tself_dimer_penalty_c\tcross_dimer_penalty_c\tpanel_cross_dimer_penalty_c\tpanel_cross_dimer_burden_c\tpanel_cross_dimer_count\tpanel_cross_dimer_partner"
 
 func thermoFloat(x float64) string {
 	return strconv.FormatFloat(x, 'g', -1, 64)
@@ -90,22 +90,36 @@ func FormatThermoDetailsTSV(p engine.Product) string {
 	}
 	fields[27] = thermoFloat(t.Fwd.MismatchDeltaGKcal)
 	fields[28] = thermoFloat(t.Rev.MismatchDeltaGKcal)
+	fields[29] = thermoFloat(t.Fwd.TerminalMismatchPenaltyC)
+	fields[30] = thermoFloat(t.Rev.TerminalMismatchPenaltyC)
+	fields[31] = thermoFloat(t.Fwd.FivePrimeTerminalMismatchPenaltyC)
+	fields[32] = thermoFloat(t.Rev.FivePrimeTerminalMismatchPenaltyC)
+	fields[33] = thermoFloat(t.Fwd.ThreePrimeTerminalMismatchPenaltyC)
+	fields[34] = thermoFloat(t.Rev.ThreePrimeTerminalMismatchPenaltyC)
+	fields[35] = thermoFloat(t.Fwd.TerminalMismatchDeltaGKcal)
+	fields[36] = thermoFloat(t.Rev.TerminalMismatchDeltaGKcal)
+	fields[37] = thermoFloat(t.Fwd.DanglingEndAdjustmentC)
+	fields[38] = thermoFloat(t.Rev.DanglingEndAdjustmentC)
+	fields[39] = thermoFloat(t.Fwd.DanglingEndDeltaGKcal)
+	fields[40] = thermoFloat(t.Rev.DanglingEndDeltaGKcal)
+	fields[41] = t.Fwd.EndEffectPolicy
+	fields[42] = t.Rev.EndEffectPolicy
 	if t.WorstHairpin != nil {
-		fields[29] = thermoFloat(t.WorstHairpin.PenaltyC)
+		fields[43] = thermoFloat(t.WorstHairpin.PenaltyC)
 	}
 	if t.WorstSelfDimer != nil {
-		fields[30] = thermoFloat(t.WorstSelfDimer.PenaltyC)
+		fields[44] = thermoFloat(t.WorstSelfDimer.PenaltyC)
 	}
 	if t.CrossDimer != nil {
-		fields[31] = thermoFloat(t.CrossDimer.PenaltyC)
+		fields[45] = thermoFloat(t.CrossDimer.PenaltyC)
 	}
-	fields[32] = thermoFloat(t.PanelCrossDimerPenaltyC)
-	fields[33] = thermoFloat(t.PanelCrossDimerBurdenC)
+	fields[46] = thermoFloat(t.PanelCrossDimerPenaltyC)
+	fields[47] = thermoFloat(t.PanelCrossDimerBurdenC)
 	if t.PanelCrossDimerCount > 0 {
-		fields[34] = strconv.Itoa(t.PanelCrossDimerCount)
+		fields[48] = strconv.Itoa(t.PanelCrossDimerCount)
 	}
 	if t.PanelCrossDimer != nil {
-		fields[35] = t.PanelCrossDimer.QueryA + "~" + t.PanelCrossDimer.QueryB
+		fields[49] = t.PanelCrossDimer.QueryA + "~" + t.PanelCrossDimer.QueryB
 	}
 	return strings.Join(fields, "\t")
 }

@@ -82,3 +82,66 @@ func TestImperfectDuplexThreePrimeMismatchIsWeightedMoreStrongly(t *testing.T) {
 		t.Fatalf("terminal window counts missing: 3'=%+v 5'=%+v", three, five)
 	}
 }
+
+func TestImperfectDuplexReportsExplicitTerminalMismatchPenalty(t *testing.T) {
+	primer := "GGGGGGGGGG"
+	perfect := []byte(comp(primer))
+	terminalTarget := append([]byte(nil), perfect...)
+	terminalTarget[len(terminalTarget)-1] = 'A'
+
+	got, err := ImperfectDuplex(primer, string(terminalTarget), DefaultConditions())
+	if err != nil {
+		t.Fatalf("ImperfectDuplex: %v", err)
+	}
+	if got.ThreePrimeTerminalMismatchCount != 1 || got.TerminalMismatchCount != 1 {
+		t.Fatalf("expected one explicit 3' terminal mismatch, got %+v", got)
+	}
+	if got.ThreePrimeTerminalMismatchPenaltyC <= 0 || got.TerminalMismatchDeltaGKcal <= 0 {
+		t.Fatalf("expected explicit terminal penalty terms, got %+v", got)
+	}
+	if got.EndEffectPolicy != EndEffectPolicyTerminalMismatchV1 {
+		t.Fatalf("unexpected end-effect policy: %q", got.EndEffectPolicy)
+	}
+	if len(got.Contributions) != 1 || !got.Contributions[0].ThreePrimeTerminal || got.Contributions[0].TerminalPenaltyC <= 0 {
+		t.Fatalf("expected contribution-level terminal annotation, got %+v", got.Contributions)
+	}
+
+	internalTarget := append([]byte(nil), perfect...)
+	internalTarget[4] = 'A'
+	internal, err := ImperfectDuplex(primer, string(internalTarget), DefaultConditions())
+	if err != nil {
+		t.Fatalf("internal ImperfectDuplex: %v", err)
+	}
+	if internal.TerminalMismatchPenaltyC != 0 || internal.TerminalMismatchCount != 0 {
+		t.Fatalf("internal mismatch should not report terminal terms, got %+v", internal)
+	}
+}
+
+func TestImperfectDuplexDanglingEndContextRaisesMargin(t *testing.T) {
+	primer := "ACGTACGTACGTACGT"
+	target := comp(primer)
+	cond := DefaultConditions()
+	base, err := ImperfectDuplex(primer, target, cond)
+	if err != nil {
+		t.Fatalf("base ImperfectDuplex: %v", err)
+	}
+	got, err := ImperfectDuplexWithOptionsAndContext(
+		primer,
+		target,
+		cond,
+		DefaultImperfectDuplexOptions(),
+		DanglingEndContext{ThreePrimeBase: 'G'},
+	)
+	if err != nil {
+		t.Fatalf("dangling ImperfectDuplex: %v", err)
+	}
+	if got.DanglingEndCount != 1 || got.DanglingEndAdjustmentC <= 0 || got.DanglingEndDeltaGKcal >= 0 {
+		t.Fatalf("expected favorable dangling-end adjustment, got %+v", got)
+	}
+	if got.EndEffectPolicy != EndEffectPolicyTemplateDanglingV1 {
+		t.Fatalf("unexpected end-effect policy: %q", got.EndEffectPolicy)
+	}
+	if !(got.AnnealMarginC > base.AnnealMarginC && got.DeltaGAtAnnealKcal < base.DeltaGAtAnnealKcal) {
+		t.Fatalf("expected dangling context to stabilize endpoint: base=%+v got=%+v", base.DuplexResult, got.DuplexResult)
+	}
+}

@@ -415,3 +415,42 @@ func TestScore_GelProfileAddsAmpliconObservableTerms(t *testing.T) {
 		t.Fatalf("expected gel profile rank 339 > 882 > 155; got 339=%g 882=%g 155=%g", g339.Score, g882.Score, g155.Score)
 	}
 }
+
+func TestScore_NNDuplexReportsEndEffectComponents(t *testing.T) {
+	fwd := "ACGTACGTACGTACGTACGT"
+	rev := "ACGTACGTACGTACGTACGT"
+	amp := fwd + "GAAA" + rc5to3(rev)
+	p := engine.Product{FwdPrimer: fwd, RevPrimer: rev, Seq: amp, Length: len(amp), Type: "forward"}
+	v := Score{Model: thermomodel.NNDuplexV1, AnnealTempC: 60, Na_M: 0.05, PrimerConc_M: 2.5e-7}
+
+	_, got, err := v.Visit(p)
+	if err != nil {
+		t.Fatalf("NNDuplex Visit: %v", err)
+	}
+	if got.Thermo == nil {
+		t.Fatal("expected thermo details")
+	}
+	if got.Thermo.Fwd.DanglingEndCount != 1 || got.Thermo.Fwd.DanglingEndAdjustmentC <= 0 {
+		t.Fatalf("expected fwd dangling-end diagnostics, got %+v", got.Thermo.Fwd)
+	}
+	if got.Thermo.Fwd.EndEffectPolicy != thermo.EndEffectPolicyTemplateDanglingV1 {
+		t.Fatalf("unexpected fwd end-effect policy: %+v", got.Thermo.Fwd)
+	}
+
+	badAmp := []byte(amp)
+	badAmp[len(fwd)-1] = 'A'
+	if amp[len(fwd)-1] == 'A' {
+		badAmp[len(fwd)-1] = 'C'
+	}
+	p.Seq = string(badAmp)
+	_, mismatched, err := v.Visit(p)
+	if err != nil {
+		t.Fatalf("mismatched NNDuplex Visit: %v", err)
+	}
+	if mismatched.Thermo.Fwd.ThreePrimeTerminalMismatchCount != 1 || mismatched.Thermo.Fwd.TerminalMismatchPenaltyC <= 0 {
+		t.Fatalf("expected explicit 3' terminal mismatch diagnostics, got %+v", mismatched.Thermo.Fwd)
+	}
+	if mismatched.Thermo.Fwd.EndEffectPolicy != thermo.EndEffectPolicyTerminalMismatchV1 {
+		t.Fatalf("unexpected terminal end-effect policy: %+v", mismatched.Thermo.Fwd)
+	}
+}

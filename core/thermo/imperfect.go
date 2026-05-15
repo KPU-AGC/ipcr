@@ -25,14 +25,32 @@ const (
 	// that encountered an unsupported mismatch context and used the conservative
 	// default ΔTm fallback.
 	MismatchPolicyImperfectDefaultFallback = "nn-imperfect-v1-with-default-fallback"
+
+	// EndEffectPolicyNone identifies a duplex with no explicit terminal/dangling
+	// correction beyond the ordinary end-window mismatch multiplier.
+	EndEffectPolicyNone = "none"
+
+	// EndEffectPolicyTerminalMismatchV1 identifies the exact-terminal mismatch
+	// correction layer applied after ordinary 5'/3' end-window weighting.
+	EndEffectPolicyTerminalMismatchV1 = "nn-terminal-mismatch-v1"
+
+	// EndEffectPolicyTemplateDanglingV1 identifies the bounded v1 model for a
+	// template base adjacent to the primer-template duplex.
+	EndEffectPolicyTemplateDanglingV1 = "nn-template-dangling-end-v1"
+
+	// EndEffectPolicyTerminalAndDanglingV1 identifies rows where both v1 end-effect
+	// layers were applied.
+	EndEffectPolicyTerminalAndDanglingV1 = "nn-terminal-mismatch-template-dangling-v1"
 )
 
 const (
-	defaultFivePrimeMismatchWindow  = 3
-	defaultThreePrimeMismatchWindow = 3
-	defaultFivePrimeMismatchWeight  = 1.5
-	defaultThreePrimeMismatchWeight = 2.0
-	defaultMismatchDeltaTmC         = 4.0
+	defaultFivePrimeMismatchWindow   = 3
+	defaultThreePrimeMismatchWindow  = 3
+	defaultFivePrimeMismatchWeight   = 1.5
+	defaultThreePrimeMismatchWeight  = 2.0
+	defaultMismatchDeltaTmC          = 4.0
+	defaultFivePrimeTerminalPenalty  = 0.5
+	defaultThreePrimeTerminalPenalty = 1.5
 )
 
 // ImperfectDuplexOptions controls the positional weighting used by the current
@@ -43,18 +61,25 @@ type ImperfectDuplexOptions struct {
 	FivePrimeMultiplier    float64
 	ThreePrimeMultiplier   float64
 	DefaultMismatchDeltaTm float64
+
+	// Exact terminal mismatch penalties are added after the ordinary 5'/3' window
+	// multiplier. They are deliberately separate so diagnostics can distinguish a
+	// literal terminal-base mismatch from a broader end-window mismatch.
+	FivePrimeTerminalPenaltyC  float64
+	ThreePrimeTerminalPenaltyC float64
 }
 
 // DefaultImperfectDuplexOptions returns the positional weighting historically
-// used by ipcr-thermo: 3' mismatches are strongest, then 5' mismatches, then
-// internal mismatches.
+// used by ipcr-thermo, with an explicit extra term for literal terminal bases.
 func DefaultImperfectDuplexOptions() ImperfectDuplexOptions {
 	return ImperfectDuplexOptions{
-		FivePrimeWindow:        defaultFivePrimeMismatchWindow,
-		ThreePrimeWindow:       defaultThreePrimeMismatchWindow,
-		FivePrimeMultiplier:    defaultFivePrimeMismatchWeight,
-		ThreePrimeMultiplier:   defaultThreePrimeMismatchWeight,
-		DefaultMismatchDeltaTm: defaultMismatchDeltaTmC,
+		FivePrimeWindow:            defaultFivePrimeMismatchWindow,
+		ThreePrimeWindow:           defaultThreePrimeMismatchWindow,
+		FivePrimeMultiplier:        defaultFivePrimeMismatchWeight,
+		ThreePrimeMultiplier:       defaultThreePrimeMismatchWeight,
+		DefaultMismatchDeltaTm:     defaultMismatchDeltaTmC,
+		FivePrimeTerminalPenaltyC:  defaultFivePrimeTerminalPenalty,
+		ThreePrimeTerminalPenaltyC: defaultThreePrimeTerminalPenalty,
 	}
 }
 
@@ -79,6 +104,16 @@ func (o ImperfectDuplexOptions) withDefaults() ImperfectDuplexOptions {
 	if o.DefaultMismatchDeltaTm == 0 {
 		o.DefaultMismatchDeltaTm = d.DefaultMismatchDeltaTm
 	}
+	if o.FivePrimeTerminalPenaltyC < 0 {
+		o.FivePrimeTerminalPenaltyC = 0
+	} else if o.FivePrimeTerminalPenaltyC == 0 {
+		o.FivePrimeTerminalPenaltyC = d.FivePrimeTerminalPenaltyC
+	}
+	if o.ThreePrimeTerminalPenaltyC < 0 {
+		o.ThreePrimeTerminalPenaltyC = 0
+	} else if o.ThreePrimeTerminalPenaltyC == 0 {
+		o.ThreePrimeTerminalPenaltyC = d.ThreePrimeTerminalPenaltyC
+	}
 	return o
 }
 
@@ -93,6 +128,20 @@ func (o ImperfectDuplexOptions) posMultiplier(i, n int) float64 {
 	return 1
 }
 
+func (o ImperfectDuplexOptions) terminalPenalty(i, n int) float64 {
+	o = o.withDefaults()
+	switch {
+	case n <= 0:
+		return 0
+	case i == n-1:
+		return o.ThreePrimeTerminalPenaltyC
+	case i == 0:
+		return o.FivePrimeTerminalPenaltyC
+	default:
+		return 0
+	}
+}
+
 // MismatchContribution describes one non-Watson-Crick primer-template column.
 type MismatchContribution struct {
 	Pos                int
@@ -105,6 +154,7 @@ type MismatchContribution struct {
 	Source             MismatchLookupSource
 	RawDeltaTmC        float64
 	WeightedDeltaTmC   float64
+	TerminalPenaltyC   float64
 	DeltaGPenaltyKcal  float64
 	PositionMultiplier float64
 	FivePrimeWindow    bool
@@ -113,25 +163,56 @@ type MismatchContribution struct {
 	ThreePrimeTerminal bool
 }
 
+// DanglingEndContext supplies target-strand bases adjacent to the duplex in
+// primer-aligned coordinates. In PCR-product scoring, the primer 3' adjacent
+// template base is usually available from the amplicon interior; the 5' outside
+// flank generally is not carried in engine.Product.
+type DanglingEndContext struct {
+	FivePrimeBase  byte
+	ThreePrimeBase byte
+}
+
+// DanglingEndContribution describes one bounded v1 template-adjacent dangling
+// base correction. AdjustmentC is positive when the base stabilizes the endpoint
+// and raises the effective annealing margin.
+type DanglingEndContribution struct {
+	Side        string
+	Base        byte
+	DeltaGKcal  float64
+	AdjustmentC float64
+}
+
 // ImperfectDuplexResult reports an approximate condition-aware imperfect
 // primer-template duplex. The base nearest-neighbor terms come from the perfect
-// primer/complement duplex; mismatch terms adjust Tm, ΔG(Tanneal), and margin.
+// primer/complement duplex; mismatch and end-effect terms adjust Tm, ΔG(Tanneal),
+// and margin.
 type ImperfectDuplexResult struct {
 	DuplexResult
-	MismatchPenaltyC        float64
-	DeltaGPenaltyKcal       float64
-	MismatchCount           int
-	FivePrimeMismatchCount  int
-	ThreePrimeMismatchCount int
-	TerminalMismatchCount   int
-	TripletTmCount          int
-	TripletDeltaGCount      int
-	HeuristicFallbackCount  int
-	DefaultFallbackCount    int
-	HasNonWatsonCrick       bool
-	UsedHeuristicAdjust     bool
-	MismatchPolicy          string
-	Contributions           []MismatchContribution
+	MismatchPenaltyC                   float64
+	DeltaGPenaltyKcal                  float64
+	TerminalMismatchPenaltyC           float64
+	TerminalMismatchDeltaGKcal         float64
+	DanglingEndAdjustmentC             float64
+	DanglingEndDeltaGKcal              float64
+	DanglingEndCount                   int
+	MismatchCount                      int
+	FivePrimeMismatchCount             int
+	ThreePrimeMismatchCount            int
+	FivePrimeTerminalMismatchCount     int
+	ThreePrimeTerminalMismatchCount    int
+	TerminalMismatchCount              int
+	FivePrimeTerminalMismatchPenaltyC  float64
+	ThreePrimeTerminalMismatchPenaltyC float64
+	EndEffectPolicy                    string
+	TripletTmCount                     int
+	TripletDeltaGCount                 int
+	HeuristicFallbackCount             int
+	DefaultFallbackCount               int
+	HasNonWatsonCrick                  bool
+	UsedHeuristicAdjust                bool
+	MismatchPolicy                     string
+	Contributions                      []MismatchContribution
+	DanglingContributions              []DanglingEndContribution
 }
 
 // ImperfectDuplex computes an imperfect primer-template duplex using default
@@ -144,6 +225,13 @@ func ImperfectDuplex(primer5to3, target3to5 string, cond Conditions) (ImperfectD
 // quantities for equal-length A/C/G/T primers against A/C/G/T/N target sites.
 // The target strand must be supplied 3'→5' in primer-aligned coordinates.
 func ImperfectDuplexWithOptions(primer5to3, target3to5 string, cond Conditions, opts ImperfectDuplexOptions) (ImperfectDuplexResult, error) {
+	return ImperfectDuplexWithOptionsAndContext(primer5to3, target3to5, cond, opts, DanglingEndContext{})
+}
+
+// ImperfectDuplexWithOptionsAndContext computes condition-aware primer-template
+// duplex quantities and applies optional template-adjacent dangling-end terms
+// when flanking target bases are supplied.
+func ImperfectDuplexWithOptionsAndContext(primer5to3, target3to5 string, cond Conditions, opts ImperfectDuplexOptions, ctx DanglingEndContext) (ImperfectDuplexResult, error) {
 	var out ImperfectDuplexResult
 	p := strings.ToUpper(strings.TrimSpace(primer5to3))
 	t := strings.ToUpper(strings.TrimSpace(target3to5))
@@ -206,7 +294,8 @@ func ImperfectDuplexWithOptions(primer5to3, target3to5 string, cond Conditions, 
 		}
 
 		mult := opts.posMultiplier(i, n)
-		weighted := rawTm * mult
+		terminalPenalty := opts.terminalPenalty(i, n)
+		weighted := rawTm*mult + terminalPenalty
 		if weighted < 0 {
 			// Preserve the historical confidence cap: a mismatch should not make
 			// the imperfect duplex better than the perfect complement.
@@ -224,6 +313,15 @@ func ImperfectDuplexWithOptions(primer5to3, target3to5 string, cond Conditions, 
 		}
 		if i == 0 || i == n-1 {
 			out.TerminalMismatchCount++
+			out.TerminalMismatchPenaltyC += terminalPenalty
+		}
+		if i == 0 {
+			out.FivePrimeTerminalMismatchCount++
+			out.FivePrimeTerminalMismatchPenaltyC += terminalPenalty
+		}
+		if i == n-1 {
+			out.ThreePrimeTerminalMismatchCount++
+			out.ThreePrimeTerminalMismatchPenaltyC += terminalPenalty
 		}
 		out.MismatchCount++
 		out.Contributions = append(out.Contributions, MismatchContribution{
@@ -237,7 +335,8 @@ func ImperfectDuplexWithOptions(primer5to3, target3to5 string, cond Conditions, 
 			Source:             source,
 			RawDeltaTmC:        rawTm,
 			WeightedDeltaTmC:   weighted,
-			DeltaGPenaltyKcal:  deltaG * mult,
+			TerminalPenaltyC:   terminalPenalty,
+			DeltaGPenaltyKcal:  deltaG*mult + terminalPenalty*denom/1000.0,
 			PositionMultiplier: mult,
 			FivePrimeWindow:    fiveWindow,
 			ThreePrimeWindow:   threeWindow,
@@ -251,9 +350,10 @@ func ImperfectDuplexWithOptions(primer5to3, target3to5 string, cond Conditions, 
 		penaltyC = 0
 	}
 	deltaGPenalty := penaltyC * denom / 1000.0
-	adjusted.TmC = base.TmC - penaltyC
+	danglingAdjustmentC, danglingDeltaG, dangling := danglingEndAdjustment(ctx, p, t, denom)
+	adjusted.TmC = base.TmC - penaltyC + danglingAdjustmentC
 	adjusted.AnnealMarginC = adjusted.TmC - cond.WithDefaults().AnnealC
-	adjusted.DeltaGAtAnnealKcal = base.DeltaGAtAnnealKcal + deltaGPenalty
+	adjusted.DeltaGAtAnnealKcal = base.DeltaGAtAnnealKcal + deltaGPenalty + danglingDeltaG
 	adjusted.EffectiveDenomCalK = denom
 
 	policy := MismatchPolicyPerfect
@@ -269,10 +369,94 @@ func ImperfectDuplexWithOptions(primer5to3, target3to5 string, cond Conditions, 
 	out.DuplexResult = adjusted
 	out.MismatchPenaltyC = penaltyC
 	out.DeltaGPenaltyKcal = deltaGPenalty
+	out.TerminalMismatchDeltaGKcal = out.TerminalMismatchPenaltyC * denom / 1000.0
+	out.DanglingEndAdjustmentC = danglingAdjustmentC
+	out.DanglingEndDeltaGKcal = danglingDeltaG
+	out.DanglingEndCount = len(dangling)
+	out.DanglingContributions = dangling
+	out.EndEffectPolicy = endEffectPolicy(out.TerminalMismatchPenaltyC > 0, len(dangling) > 0)
 	out.HasNonWatsonCrick = out.MismatchCount > 0
 	out.UsedHeuristicAdjust = out.HeuristicFallbackCount > 0 || out.DefaultFallbackCount > 0
 	out.MismatchPolicy = policy
 	return out, nil
+}
+
+func endEffectPolicy(hasTerminalMismatch, hasDangling bool) string {
+	switch {
+	case hasTerminalMismatch && hasDangling:
+		return EndEffectPolicyTerminalAndDanglingV1
+	case hasDangling:
+		return EndEffectPolicyTemplateDanglingV1
+	case hasTerminalMismatch:
+		return EndEffectPolicyTerminalMismatchV1
+	default:
+		return EndEffectPolicyNone
+	}
+}
+
+func danglingEndAdjustment(ctx DanglingEndContext, primer, target string, denom float64) (float64, float64, []DanglingEndContribution) {
+	if denom <= 0 || math.IsNaN(denom) || math.IsInf(denom, 0) || len(primer) == 0 || len(target) == 0 {
+		return 0, 0, nil
+	}
+	contribs := make([]DanglingEndContribution, 0, 2)
+	add := func(side string, base byte, terminalWC bool, threePrime bool) {
+		if !terminalWC {
+			return
+		}
+		dg, ok := templateDanglingDeltaGKcal(base, threePrime)
+		if !ok || dg == 0 {
+			return
+		}
+		adjC := -dg * 1000.0 / denom
+		contribs = append(contribs, DanglingEndContribution{
+			Side:        side,
+			Base:        normalizeBase(base),
+			DeltaGKcal:  dg,
+			AdjustmentC: adjC,
+		})
+	}
+	add("primer-5p", ctx.FivePrimeBase, wc(primer[0], target[0]), false)
+	add("primer-3p", ctx.ThreePrimeBase, wc(primer[len(primer)-1], target[len(target)-1]), true)
+
+	adjustmentC := 0.0
+	deltaG := 0.0
+	for _, c := range contribs {
+		adjustmentC += c.AdjustmentC
+		deltaG += c.DeltaGKcal
+	}
+	return adjustmentC, deltaG, contribs
+}
+
+func templateDanglingDeltaGKcal(base byte, threePrime bool) (float64, bool) {
+	switch normalizeBase(base) {
+	case 'G', 'C':
+		if threePrime {
+			return -0.12, true
+		}
+		return -0.07, true
+	case 'A', 'T':
+		if threePrime {
+			return -0.08, true
+		}
+		return -0.04, true
+	default:
+		return 0, false
+	}
+}
+
+func normalizeBase(b byte) byte {
+	switch b {
+	case 'a', 'A':
+		return 'A'
+	case 'c', 'C':
+		return 'C'
+	case 'g', 'G':
+		return 'G'
+	case 't', 'T':
+		return 'T'
+	default:
+		return 'N'
+	}
 }
 
 func mismatchAt(s string, idx int) byte {

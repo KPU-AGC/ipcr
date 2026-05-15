@@ -180,7 +180,7 @@ func TestThermo_NNDuplexJSONIncludesThermoComponents(t *testing.T) {
 		"--self=false",
 		"--thermo-model", "nn-duplex-v1",
 	})
-	for _, want := range []string{`"thermo"`, `"model": "nn-duplex-v1"`, `"anneal_margin_c"`, `"delta_g_at_anneal_kcal"`} {
+	for _, want := range []string{`"thermo"`, `"model": "nn-duplex-v1"`, `"anneal_margin_c"`, `"delta_g_at_anneal_kcal"`, `"dangling_end_adjustment_c"`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expected JSON output to contain %s; got:\n%s", want, out)
 		}

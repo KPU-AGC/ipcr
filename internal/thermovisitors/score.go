@@ -432,6 +432,7 @@ func endpointFromDuplex(side string, d thermo.DuplexResult, mismatchPenaltyC flo
 		MismatchPenaltyC:    mismatchPenaltyC,
 		EffectiveDenomCalK:  absFiniteOrFallback(d.EffectiveDenomCalK, 200.0),
 		MismatchPolicy:      policy,
+		EndEffectPolicy:     thermo.EndEffectPolicyNone,
 		HasNonWatsonCrick:   hasNonWC,
 		UsedHeuristicAdjust: heuristic,
 	}
@@ -439,26 +440,36 @@ func endpointFromDuplex(side string, d thermo.DuplexResult, mismatchPenaltyC flo
 
 func endpointFromImperfect(side string, d thermo.ImperfectDuplexResult) engine.ThermoEndpoint {
 	return engine.ThermoEndpoint{
-		Side:                    side,
-		TmC:                     d.TmC,
-		AnnealMarginC:           d.AnnealMarginC,
-		DeltaGAtAnnealKcal:      d.DeltaGAtAnnealKcal,
-		MismatchPenaltyC:        d.MismatchPenaltyC,
-		MismatchDeltaGKcal:      d.DeltaGPenaltyKcal,
-		MismatchCount:           d.MismatchCount,
-		FivePrimeMismatchCount:  d.FivePrimeMismatchCount,
-		ThreePrimeMismatchCount: d.ThreePrimeMismatchCount,
-		TerminalMismatchCount:   d.TerminalMismatchCount,
-		MismatchFallbackCount:   d.HeuristicFallbackCount + d.DefaultFallbackCount,
-		MismatchTripletCount:    d.TripletTmCount + d.TripletDeltaGCount,
-		EffectiveDenomCalK:      absFiniteOrFallback(d.EffectiveDenomCalK, 200.0),
-		MismatchPolicy:          d.MismatchPolicy,
-		HasNonWatsonCrick:       d.HasNonWatsonCrick,
-		UsedHeuristicAdjust:     d.UsedHeuristicAdjust,
+		Side:                               side,
+		TmC:                                d.TmC,
+		AnnealMarginC:                      d.AnnealMarginC,
+		DeltaGAtAnnealKcal:                 d.DeltaGAtAnnealKcal,
+		MismatchPenaltyC:                   d.MismatchPenaltyC,
+		MismatchDeltaGKcal:                 d.DeltaGPenaltyKcal,
+		TerminalMismatchPenaltyC:           d.TerminalMismatchPenaltyC,
+		TerminalMismatchDeltaGKcal:         d.TerminalMismatchDeltaGKcal,
+		DanglingEndAdjustmentC:             d.DanglingEndAdjustmentC,
+		DanglingEndDeltaGKcal:              d.DanglingEndDeltaGKcal,
+		DanglingEndCount:                   d.DanglingEndCount,
+		MismatchCount:                      d.MismatchCount,
+		FivePrimeMismatchCount:             d.FivePrimeMismatchCount,
+		ThreePrimeMismatchCount:            d.ThreePrimeMismatchCount,
+		FivePrimeTerminalMismatchCount:     d.FivePrimeTerminalMismatchCount,
+		ThreePrimeTerminalMismatchCount:    d.ThreePrimeTerminalMismatchCount,
+		TerminalMismatchCount:              d.TerminalMismatchCount,
+		FivePrimeTerminalMismatchPenaltyC:  d.FivePrimeTerminalMismatchPenaltyC,
+		ThreePrimeTerminalMismatchPenaltyC: d.ThreePrimeTerminalMismatchPenaltyC,
+		MismatchFallbackCount:              d.HeuristicFallbackCount + d.DefaultFallbackCount,
+		MismatchTripletCount:               d.TripletTmCount + d.TripletDeltaGCount,
+		EffectiveDenomCalK:                 absFiniteOrFallback(d.EffectiveDenomCalK, 200.0),
+		MismatchPolicy:                     d.MismatchPolicy,
+		EndEffectPolicy:                    d.EndEffectPolicy,
+		HasNonWatsonCrick:                  d.HasNonWatsonCrick,
+		UsedHeuristicAdjust:                d.UsedHeuristicAdjust,
 	}
 }
 
-func (v Score) scoreNNDuplexEndpoint(side, primer5to3, target3to5 string) (engine.ThermoEndpoint, error) {
+func (v Score) scoreNNDuplexEndpoint(side, primer5to3, target3to5 string, dangling thermo.DanglingEndContext) (engine.ThermoEndpoint, error) {
 	primer := toUpperACGT(primer5to3)
 	if primer == "" {
 		return engine.ThermoEndpoint{}, fmt.Errorf("nn-duplex-v1 requires A/C/G/T primers; %s primer contains unsupported bases", side)
@@ -474,7 +485,7 @@ func (v Score) scoreNNDuplexEndpoint(side, primer5to3, target3to5 string) (engin
 	cond := v.conditions()
 	ssOn := v.SingleStranded || singleStrandedMode()
 	if !v.AllowIndels && !ssOn {
-		imperfect, err := thermo.ImperfectDuplex(primer, target, cond)
+		imperfect, err := thermo.ImperfectDuplexWithOptionsAndContext(primer, target, cond, thermo.DefaultImperfectDuplexOptions(), dangling)
 		if err != nil {
 			return engine.ThermoEndpoint{}, err
 		}
@@ -522,12 +533,27 @@ func (v Score) scoreNNDuplexComponents(p engine.Product) (engine.ThermoEndpoint,
 	// primer, so reversing the site gives the primer-aligned target strand 3'→5'.
 	fwdTarget3 := comp5to3(leftSite)
 	revTarget3 := rev(rightSite)
+	fwdDangling := thermo.DanglingEndContext{}
+	revDangling := thermo.DanglingEndContext{}
+	if len(p.Seq) > len(f) {
+		// Forward primer binds the bottom/complement strand; the amplicon-interior
+		// base after the forward site is converted to the aligned template base.
+		fwdDangling.ThreePrimeBase = compBase(byte(unicode.ToUpper(rune(p.Seq[len(f)]))))
+	}
+	if len(p.Seq) > len(r) {
+		idx := len(p.Seq) - len(r) - 1
+		if idx >= 0 {
+			// Reverse primer binds the top/reference strand; the amplicon-interior
+			// base before the reverse site is already the aligned template base.
+			revDangling.ThreePrimeBase = byte(unicode.ToUpper(rune(p.Seq[idx])))
+		}
+	}
 
-	fwd, err := v.scoreNNDuplexEndpoint("fwd", f, fwdTarget3)
+	fwd, err := v.scoreNNDuplexEndpoint("fwd", f, fwdTarget3, fwdDangling)
 	if err != nil {
 		return engine.ThermoEndpoint{}, engine.ThermoEndpoint{}, 0, "", thermo.Conditions{}, err
 	}
-	revEnd, err := v.scoreNNDuplexEndpoint("rev", r, revTarget3)
+	revEnd, err := v.scoreNNDuplexEndpoint("rev", r, revTarget3, revDangling)
 	if err != nil {
 		return engine.ThermoEndpoint{}, engine.ThermoEndpoint{}, 0, "", thermo.Conditions{}, err
 	}

@@ -3,6 +3,7 @@ package thermovisitors
 
 import (
 	"ipcr-core/engine"
+	"ipcr-core/thermo"
 	"ipcr/internal/thermomodel"
 	"math"
 	"strings"
@@ -235,6 +236,12 @@ func TestScore_NNDuplexMismatchUsesFallbackAndLowersScore(t *testing.T) {
 	}
 	if mismatched.Thermo == nil || !mismatched.Thermo.Fwd.HasNonWatsonCrick || !mismatched.Thermo.Fwd.UsedHeuristicAdjust {
 		t.Fatalf("expected fwd mismatch fallback details, got %+v", mismatched.Thermo)
+	}
+	if mismatched.Thermo.Fwd.MismatchCount != 1 || mismatched.Thermo.Fwd.ThreePrimeMismatchCount != 1 {
+		t.Fatalf("expected one 3' mismatch to be reported, got %+v", mismatched.Thermo.Fwd)
+	}
+	if mismatched.Thermo.Fwd.MismatchPolicy != thermo.MismatchPolicyImperfectHeuristicFallback {
+		t.Fatalf("unexpected mismatch policy: %+v", mismatched.Thermo.Fwd)
 	}
 }
 

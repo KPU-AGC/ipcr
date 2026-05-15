@@ -22,9 +22,9 @@ const (
 	PROBE_NOT_FOUND_PEN = 12.0
 
 	iupacPolicyStrictACGT           = "strict-acgt"
-	mismatchPolicyNNPerfect         = "nn-perfect"
-	mismatchPolicyHeuristicFallback = "heuristic-ddg-fallback"
-	mismatchPolicyMixed             = "nn-perfect-or-heuristic-ddg-fallback"
+	mismatchPolicyNNPerfect         = thermo.MismatchPolicyPerfect
+	mismatchPolicyHeuristicFallback = thermo.MismatchPolicyImperfectHeuristicFallback
+	mismatchPolicyMixed             = "nn-perfect-or-nn-imperfect-v1"
 	structurePolicyNNStemV1         = "nn-contiguous-stem-v1"
 
 	scoreProfileBinding = "binding"
@@ -437,6 +437,27 @@ func endpointFromDuplex(side string, d thermo.DuplexResult, mismatchPenaltyC flo
 	}
 }
 
+func endpointFromImperfect(side string, d thermo.ImperfectDuplexResult) engine.ThermoEndpoint {
+	return engine.ThermoEndpoint{
+		Side:                    side,
+		TmC:                     d.TmC,
+		AnnealMarginC:           d.AnnealMarginC,
+		DeltaGAtAnnealKcal:      d.DeltaGAtAnnealKcal,
+		MismatchPenaltyC:        d.MismatchPenaltyC,
+		MismatchDeltaGKcal:      d.DeltaGPenaltyKcal,
+		MismatchCount:           d.MismatchCount,
+		FivePrimeMismatchCount:  d.FivePrimeMismatchCount,
+		ThreePrimeMismatchCount: d.ThreePrimeMismatchCount,
+		TerminalMismatchCount:   d.TerminalMismatchCount,
+		MismatchFallbackCount:   d.HeuristicFallbackCount + d.DefaultFallbackCount,
+		MismatchTripletCount:    d.TripletTmCount + d.TripletDeltaGCount,
+		EffectiveDenomCalK:      absFiniteOrFallback(d.EffectiveDenomCalK, 200.0),
+		MismatchPolicy:          d.MismatchPolicy,
+		HasNonWatsonCrick:       d.HasNonWatsonCrick,
+		UsedHeuristicAdjust:     d.UsedHeuristicAdjust,
+	}
+}
+
 func (v Score) scoreNNDuplexEndpoint(side, primer5to3, target3to5 string) (engine.ThermoEndpoint, error) {
 	primer := toUpperACGT(primer5to3)
 	if primer == "" {
@@ -451,21 +472,24 @@ func (v Score) scoreNNDuplexEndpoint(side, primer5to3, target3to5 string) (engin
 	}
 
 	cond := v.conditions()
-	if actual, err := thermo.PerfectDuplex(primer, target, cond); err == nil {
-		return endpointFromDuplex(side, actual, 0, mismatchPolicyNNPerfect, false, false), nil
+	ssOn := v.SingleStranded || singleStrandedMode()
+	if !v.AllowIndels && !ssOn {
+		imperfect, err := thermo.ImperfectDuplex(primer, target, cond)
+		if err != nil {
+			return engine.ThermoEndpoint{}, err
+		}
+		return endpointFromImperfect(side, imperfect), nil
 	}
 
-	// Mismatched or N-containing target: anchor the thermodynamics in the perfect
-	// primer/complement duplex, then apply the currently curated mismatch layer.
-	// Triplet ΔTm/ΔΔG overrides are used when present; otherwise the existing
-	// pair/context heuristic is used explicitly and reported in the output.
+	// Gap-tolerant and ssDNA adjustments are not yet part of the NN imperfect
+	// duplex core. Preserve the historical DP fallback for those opt-in modes and
+	// label it explicitly.
 	perfectTarget := comp5to3(primer)
 	base, err := thermo.PerfectDuplex(primer, perfectTarget, cond)
 	if err != nil {
 		return engine.ThermoEndpoint{}, err
 	}
 	denom := absFiniteOrFallback(base.EffectiveDenomCalK, 200.0)
-	ssOn := v.SingleStranded || singleStrandedMode()
 	penaltyC := alignPenaltyC_contextualD_ss(primer, target, v.AllowIndels, denom, ssOn)
 	deltaGPenalty := penaltyC * denom / 1000.0
 

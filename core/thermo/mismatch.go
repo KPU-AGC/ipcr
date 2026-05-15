@@ -26,6 +26,17 @@ package thermo
 //   - When triplet overrides are missing, we apply a pair‑chemistry fallback
 //     with lightweight context adjustments (see LookupDeltaG).
 //
+
+// MismatchLookupSource labels where an individual mismatch term came from.
+type MismatchLookupSource string
+
+const (
+	MismatchSourceTripletDeltaTm  MismatchLookupSource = "triplet-dtm"
+	MismatchSourceTripletDeltaG   MismatchLookupSource = "triplet-ddg"
+	MismatchSourceHeuristicDeltaG MismatchLookupSource = "heuristic-ddg-fallback"
+	MismatchSourceDefaultDeltaTm  MismatchLookupSource = "default-dtm-fallback"
+)
+
 // Triplet context (primer and target bases are given as runes A/C/G/T; target is 3'→5').
 type MismatchKey struct {
 	P5, P, P3 byte // primer context
@@ -73,30 +84,43 @@ var pairDeltaG = map[[2]byte]float64{
 // It ONLY returns true when a triplet override is available. If not, return false
 // so callers can fall back to ΔΔG via LookupDeltaG + DeltaGToDeltaTm.
 func LookupDeltaTm(p5, p, p3, t5, t, t3 byte) (float64, bool) {
+	d, _, ok := LookupDeltaTmDetail(p5, p, p3, t5, t, t3)
+	return d, ok
+}
+
+// LookupDeltaTmDetail returns ΔTm plus a source label. It only succeeds for
+// curated triplet-level ΔTm entries.
+func LookupDeltaTmDetail(p5, p, p3, t5, t, t3 byte) (float64, MismatchLookupSource, bool) {
 	if !isACGT(p) || !isNT(t) {
-		return 0, false
+		return 0, "", false
 	}
 	// 1) exact triplet override if available
 	if isACGT(p5) && isACGT(p3) && isNT(t5) && isNT(t3) {
 		if d, ok := DeltaTmTriplet[MismatchKey{P5: p5, P: p, P3: p3, T5: t5, T: t, T3: t3}]; ok {
-			return d, true
+			return d, MismatchSourceTripletDeltaTm, true
 		}
 	}
 	// No pair fallback — let caller use ΔΔG.
-	return 0, false
+	return 0, "", false
 }
 
 // LookupDeltaG returns ΔΔG (kcal/mol) using precedence:
 // 1) triplet context if available, else 2) pair-only with context tweaks.
 // A negative value is allowed (rare stabilizing contexts).
 func LookupDeltaG(p5, p, p3, t5, t, t3 byte) (float64, bool) {
+	dg, _, ok := LookupDeltaGDetail(p5, p, p3, t5, t, t3)
+	return dg, ok
+}
+
+// LookupDeltaGDetail returns ΔΔG plus the source label used for diagnostics.
+func LookupDeltaGDetail(p5, p, p3, t5, t, t3 byte) (float64, MismatchLookupSource, bool) {
 	if !isACGT(p) || !isNT(t) {
-		return 0, false
+		return 0, "", false
 	}
 	// 1) exact triplet override
 	if isACGT(p5) && isACGT(p3) && isNT(t5) && isNT(t3) {
 		if dg, ok := DeltaGTriplet[MismatchKey{P5: p5, P: p, P3: p3, T5: t5, T: t, T3: t3}]; ok {
-			return dg, true
+			return dg, MismatchSourceTripletDeltaG, true
 		}
 	}
 
@@ -152,7 +176,7 @@ func LookupDeltaG(p5, p, p3, t5, t, t3 byte) (float64, bool) {
 	if base < -0.10 {
 		base = -0.10
 	}
-	return base, true
+	return base, MismatchSourceHeuristicDeltaG, true
 }
 
 // DeltaGToDeltaTm converts ΔΔG (kcal/mol) to ΔTm (°C) using an effective denominator D (cal/K/mol):

@@ -61,15 +61,22 @@ func ToAPIProduct(p engine.Product) api.ProductV1 {
 
 func toAPIThermoEndpoint(src engine.ThermoEndpoint) api.ThermoEndpointV1 {
 	return api.ThermoEndpointV1{
-		Side:                src.Side,
-		TmC:                 src.TmC,
-		AnnealMarginC:       src.AnnealMarginC,
-		DeltaGAtAnnealKcal:  src.DeltaGAtAnnealKcal,
-		MismatchPenaltyC:    src.MismatchPenaltyC,
-		EffectiveDenomCalK:  src.EffectiveDenomCalK,
-		MismatchPolicy:      src.MismatchPolicy,
-		HasNonWatsonCrick:   src.HasNonWatsonCrick,
-		UsedHeuristicAdjust: src.UsedHeuristicAdjust,
+		Side:                    src.Side,
+		TmC:                     src.TmC,
+		AnnealMarginC:           src.AnnealMarginC,
+		DeltaGAtAnnealKcal:      src.DeltaGAtAnnealKcal,
+		MismatchPenaltyC:        src.MismatchPenaltyC,
+		MismatchDeltaGKcal:      src.MismatchDeltaGKcal,
+		MismatchCount:           src.MismatchCount,
+		FivePrimeMismatchCount:  src.FivePrimeMismatchCount,
+		ThreePrimeMismatchCount: src.ThreePrimeMismatchCount,
+		TerminalMismatchCount:   src.TerminalMismatchCount,
+		MismatchFallbackCount:   src.MismatchFallbackCount,
+		MismatchTripletCount:    src.MismatchTripletCount,
+		EffectiveDenomCalK:      src.EffectiveDenomCalK,
+		MismatchPolicy:          src.MismatchPolicy,
+		HasNonWatsonCrick:       src.HasNonWatsonCrick,
+		UsedHeuristicAdjust:     src.UsedHeuristicAdjust,
 	}
 }
 

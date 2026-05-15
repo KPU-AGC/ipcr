@@ -69,15 +69,22 @@ type ThermoDetails struct {
 // coordinates. DeltaGAtAnnealKcal is an effective two-state binding term at the
 // configured annealing temperature; negative values are favorable.
 type ThermoEndpoint struct {
-	Side                string  `json:"side"`
-	TmC                 float64 `json:"tm_c"`
-	AnnealMarginC       float64 `json:"anneal_margin_c"`
-	DeltaGAtAnnealKcal  float64 `json:"delta_g_at_anneal_kcal"`
-	MismatchPenaltyC    float64 `json:"mismatch_penalty_c"`
-	EffectiveDenomCalK  float64 `json:"effective_denom_cal_per_k_mol"`
-	MismatchPolicy      string  `json:"mismatch_policy"`
-	HasNonWatsonCrick   bool    `json:"has_non_watson_crick"`
-	UsedHeuristicAdjust bool    `json:"used_heuristic_adjust"`
+	Side                    string  `json:"side"`
+	TmC                     float64 `json:"tm_c"`
+	AnnealMarginC           float64 `json:"anneal_margin_c"`
+	DeltaGAtAnnealKcal      float64 `json:"delta_g_at_anneal_kcal"`
+	MismatchPenaltyC        float64 `json:"mismatch_penalty_c"`
+	MismatchDeltaGKcal      float64 `json:"mismatch_delta_g_kcal,omitempty"`
+	MismatchCount           int     `json:"mismatch_count,omitempty"`
+	FivePrimeMismatchCount  int     `json:"five_prime_mismatch_count,omitempty"`
+	ThreePrimeMismatchCount int     `json:"three_prime_mismatch_count,omitempty"`
+	TerminalMismatchCount   int     `json:"terminal_mismatch_count,omitempty"`
+	MismatchFallbackCount   int     `json:"mismatch_fallback_count,omitempty"`
+	MismatchTripletCount    int     `json:"mismatch_triplet_count,omitempty"`
+	EffectiveDenomCalK      float64 `json:"effective_denom_cal_per_k_mol"`
+	MismatchPolicy          string  `json:"mismatch_policy"`
+	HasNonWatsonCrick       bool    `json:"has_non_watson_crick"`
+	UsedHeuristicAdjust     bool    `json:"used_heuristic_adjust"`
 }
 
 // ThermoStructure describes a primer secondary-structure candidate used by

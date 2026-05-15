@@ -34,7 +34,7 @@ func FormatRowTSVWithScore(p engine.Product) string {
 	return fmt.Sprintf("%s\t%g", base, p.Score)
 }
 
-const ThermoDetailsTSVHeader = "thermo_model\tsalt_model\tanneal_temp_c\tscore_profile\tbase_score_c\tfinal_score_c\tamplicon_adjustment_c\textension_logit\textension_bonus_c\tlength_penalty_c\tband_mass_bonus_c\tstructure_penalty_c\tlimiting_side\tfwd_tm_c\trev_tm_c\tfwd_margin_c\trev_margin_c\tfwd_dg_kcal\trev_dg_kcal\tfwd_mismatch_penalty_c\trev_mismatch_penalty_c\thairpin_penalty_c\tself_dimer_penalty_c\tcross_dimer_penalty_c\tpanel_cross_dimer_penalty_c\tpanel_cross_dimer_burden_c\tpanel_cross_dimer_count\tpanel_cross_dimer_partner"
+const ThermoDetailsTSVHeader = "thermo_model\tsalt_model\tanneal_temp_c\tscore_profile\tbase_score_c\tfinal_score_c\tamplicon_adjustment_c\textension_logit\textension_bonus_c\tlength_penalty_c\tband_mass_bonus_c\tstructure_penalty_c\tlimiting_side\tfwd_tm_c\trev_tm_c\tfwd_margin_c\trev_margin_c\tfwd_dg_kcal\trev_dg_kcal\tfwd_mismatch_penalty_c\trev_mismatch_penalty_c\tfwd_mismatch_count\trev_mismatch_count\tfwd_3p_mismatch_count\trev_3p_mismatch_count\tfwd_mismatch_fallback_count\trev_mismatch_fallback_count\tfwd_mismatch_dg_kcal\trev_mismatch_dg_kcal\thairpin_penalty_c\tself_dimer_penalty_c\tcross_dimer_penalty_c\tpanel_cross_dimer_penalty_c\tpanel_cross_dimer_burden_c\tpanel_cross_dimer_count\tpanel_cross_dimer_partner"
 
 func thermoFloat(x float64) string {
 	return strconv.FormatFloat(x, 'g', -1, 64)
@@ -70,22 +70,42 @@ func FormatThermoDetailsTSV(p engine.Product) string {
 	fields[18] = thermoFloat(t.Rev.DeltaGAtAnnealKcal)
 	fields[19] = thermoFloat(t.Fwd.MismatchPenaltyC)
 	fields[20] = thermoFloat(t.Rev.MismatchPenaltyC)
+	if t.Fwd.MismatchCount > 0 {
+		fields[21] = strconv.Itoa(t.Fwd.MismatchCount)
+	}
+	if t.Rev.MismatchCount > 0 {
+		fields[22] = strconv.Itoa(t.Rev.MismatchCount)
+	}
+	if t.Fwd.ThreePrimeMismatchCount > 0 {
+		fields[23] = strconv.Itoa(t.Fwd.ThreePrimeMismatchCount)
+	}
+	if t.Rev.ThreePrimeMismatchCount > 0 {
+		fields[24] = strconv.Itoa(t.Rev.ThreePrimeMismatchCount)
+	}
+	if t.Fwd.MismatchFallbackCount > 0 {
+		fields[25] = strconv.Itoa(t.Fwd.MismatchFallbackCount)
+	}
+	if t.Rev.MismatchFallbackCount > 0 {
+		fields[26] = strconv.Itoa(t.Rev.MismatchFallbackCount)
+	}
+	fields[27] = thermoFloat(t.Fwd.MismatchDeltaGKcal)
+	fields[28] = thermoFloat(t.Rev.MismatchDeltaGKcal)
 	if t.WorstHairpin != nil {
-		fields[21] = thermoFloat(t.WorstHairpin.PenaltyC)
+		fields[29] = thermoFloat(t.WorstHairpin.PenaltyC)
 	}
 	if t.WorstSelfDimer != nil {
-		fields[22] = thermoFloat(t.WorstSelfDimer.PenaltyC)
+		fields[30] = thermoFloat(t.WorstSelfDimer.PenaltyC)
 	}
 	if t.CrossDimer != nil {
-		fields[23] = thermoFloat(t.CrossDimer.PenaltyC)
+		fields[31] = thermoFloat(t.CrossDimer.PenaltyC)
 	}
-	fields[24] = thermoFloat(t.PanelCrossDimerPenaltyC)
-	fields[25] = thermoFloat(t.PanelCrossDimerBurdenC)
+	fields[32] = thermoFloat(t.PanelCrossDimerPenaltyC)
+	fields[33] = thermoFloat(t.PanelCrossDimerBurdenC)
 	if t.PanelCrossDimerCount > 0 {
-		fields[26] = strconv.Itoa(t.PanelCrossDimerCount)
+		fields[34] = strconv.Itoa(t.PanelCrossDimerCount)
 	}
 	if t.PanelCrossDimer != nil {
-		fields[27] = t.PanelCrossDimer.QueryA + "~" + t.PanelCrossDimer.QueryB
+		fields[35] = t.PanelCrossDimer.QueryA + "~" + t.PanelCrossDimer.QueryB
 	}
 	return strings.Join(fields, "\t")
 }

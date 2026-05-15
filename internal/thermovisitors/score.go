@@ -4,6 +4,7 @@ package thermovisitors
 import (
 	"fmt"
 	"ipcr-core/engine"
+	probeanno "ipcr-core/probe"
 	"ipcr-core/thermo"
 	"ipcr-core/thermoaddons"
 	"ipcr/internal/thermomodel"
@@ -31,6 +32,10 @@ const (
 	scoreProfileBinding = "binding"
 	scoreProfilePCR     = "pcr"
 	scoreProfileGel     = "gel"
+
+	probeScoreModeAnnotate = "annotate"
+	probeScoreModeGate     = "gate"
+	probeScoreModeBlend    = "blend"
 
 	defaultBandMassWeightC = 15.0
 	bandMassRefBP          = 100.0
@@ -72,6 +77,14 @@ type Score struct {
 	LenMaxPenC     float64
 	BindWeight     float64
 	BandMassWeight float64
+
+	ProbeSeq        string
+	ProbeName       string
+	ProbeMaxMM      int
+	ProbeThermo     bool
+	ProbeScoreMode  string
+	ProbeMinMarginC float64
+	ProbeWeight     float64
 
 	// Opt-in: compute ΔΔG→ΔTm denominator from solution conditions.
 	// Default false keeps the historical fixed D=200 path.
@@ -179,6 +192,41 @@ func (v Score) bandMassWeight() float64 {
 		return defaultBandMassWeightC
 	}
 	return v.BandMassWeight
+}
+
+func (v Score) probeName() string {
+	name := strings.TrimSpace(v.ProbeName)
+	if name == "" {
+		return "probe"
+	}
+	return name
+}
+
+func (v Score) probeScoreMode() string {
+	switch strings.ToLower(strings.TrimSpace(v.ProbeScoreMode)) {
+	case probeScoreModeAnnotate:
+		return probeScoreModeAnnotate
+	case "", probeScoreModeGate:
+		return probeScoreModeGate
+	case probeScoreModeBlend:
+		return probeScoreModeBlend
+	default:
+		return probeScoreModeGate
+	}
+}
+
+func (v Score) probeWeight() float64 {
+	if v.ProbeWeight < 0 {
+		return 0
+	}
+	if v.ProbeWeight > 1 {
+		return 1
+	}
+	return v.ProbeWeight
+}
+
+func (v Score) probeThermoEnabled() bool {
+	return strings.TrimSpace(v.ProbeSeq) != "" && v.ProbeThermo
 }
 
 // Public helper used by tests/tools.
@@ -1147,6 +1195,199 @@ func (v Score) visitNNStructureV1(p engine.Product) (bool, engine.Product, error
 	return v.visitNNWithIUPAC(p, v.visitNNStructureV1Strict)
 }
 
+type scoredProbeVariant struct {
+	Variant string
+	Result  thermo.ImperfectDuplexResult
+}
+
+func probeTarget3to5(strand, site string) string {
+	site = strings.ToUpper(site)
+	if strand == "-" {
+		return rev(site)
+	}
+	return comp5to3(site)
+}
+
+func probeVariantDetails(base engine.ProbeThermoDetails, chosen scoredProbeVariant, count int, capped bool, effective string) engine.ProbeThermoDetails {
+	res := chosen.Result
+	base.IUPACExpansionCount = count
+	base.IUPACExpansionCapped = capped
+	base.IUPACEffectiveVariant = effective
+	base.TmC = res.TmC
+	base.AnnealMarginC = res.AnnealMarginC
+	base.DeltaGAtAnnealKcal = res.DeltaGAtAnnealKcal
+	base.MismatchPenaltyC = res.MismatchPenaltyC
+	base.MismatchDeltaGKcal = res.DeltaGPenaltyKcal
+	base.MismatchCount = res.MismatchCount
+	base.MismatchFallbackCount = res.HeuristicFallbackCount + res.DefaultFallbackCount
+	base.MismatchTripletCount = res.TripletTmCount + res.TripletDeltaGCount
+	base.MismatchPolicy = res.MismatchPolicy
+	base.HasNonWatsonCrick = res.HasNonWatsonCrick
+	base.UsedHeuristicAdjust = res.UsedHeuristicAdjust
+	return base
+}
+
+func meanProbeDetails(base engine.ProbeThermoDetails, scored []scoredProbeVariant, capped bool, effective string) engine.ProbeThermoDetails {
+	base.IUPACExpansionCount = len(scored)
+	base.IUPACExpansionCapped = capped
+	base.IUPACEffectiveVariant = effective
+	if len(scored) == 0 {
+		return base
+	}
+	n := float64(len(scored))
+	for _, s := range scored {
+		res := s.Result
+		base.TmC += res.TmC
+		base.AnnealMarginC += res.AnnealMarginC
+		base.DeltaGAtAnnealKcal += res.DeltaGAtAnnealKcal
+		base.MismatchPenaltyC += res.MismatchPenaltyC
+		base.MismatchDeltaGKcal += res.DeltaGPenaltyKcal
+		if res.MismatchCount > base.MismatchCount {
+			base.MismatchCount = res.MismatchCount
+		}
+		fallbacks := res.HeuristicFallbackCount + res.DefaultFallbackCount
+		if fallbacks > base.MismatchFallbackCount {
+			base.MismatchFallbackCount = fallbacks
+		}
+		triplets := res.TripletTmCount + res.TripletDeltaGCount
+		if triplets > base.MismatchTripletCount {
+			base.MismatchTripletCount = triplets
+		}
+		if res.HasNonWatsonCrick {
+			base.HasNonWatsonCrick = true
+		}
+		if res.UsedHeuristicAdjust {
+			base.UsedHeuristicAdjust = true
+		}
+	}
+	base.TmC /= n
+	base.AnnealMarginC /= n
+	base.DeltaGAtAnnealKcal /= n
+	base.MismatchPenaltyC /= n
+	base.MismatchDeltaGKcal /= n
+	if base.MismatchFallbackCount > 0 {
+		base.MismatchPolicy = thermo.MismatchPolicyImperfectHeuristicFallback
+	} else if base.MismatchCount > 0 {
+		base.MismatchPolicy = thermo.MismatchPolicyImperfectV1
+	} else {
+		base.MismatchPolicy = thermo.MismatchPolicyPerfect
+	}
+	return base
+}
+
+func (v Score) scoreProbeThermoDetails(p engine.Product) (engine.ProbeThermoDetails, error) {
+	probeSeq := strings.ToUpper(strings.TrimSpace(v.ProbeSeq))
+	details := engine.ProbeThermoDetails{
+		Name:              v.probeName(),
+		Seq:               probeSeq,
+		ScoreMode:         v.probeScoreMode(),
+		MinMarginC:        v.ProbeMinMarginC,
+		IUPACThermoPolicy: v.iupacThermoPolicy(),
+	}
+	ann := probeanno.AnnotateAmplicon(p.Seq, probeSeq, v.ProbeMaxMM)
+	details.Found = ann.Found
+	details.Strand = ann.Strand
+	details.Pos = ann.Pos
+	details.MM = ann.MM
+	details.Site = ann.Site
+	if !ann.Found {
+		return details, nil
+	}
+
+	policy := v.iupacThermoPolicy()
+	expanded := []string{probeSeq}
+	capped := false
+	if policy == thermo.IUPACThermoPolicyStrict {
+		if !thermo.IsStrictACGT(probeSeq) {
+			return details, fmt.Errorf("--probe with --iupac-thermo-policy strict requires A/C/G/T probe sequence")
+		}
+	} else {
+		var err error
+		expanded, capped, err = thermo.ExpandIUPAC(probeSeq, v.iupacThermoMaxExpansions())
+		if err != nil {
+			return details, fmt.Errorf("--probe %q: %v", probeSeq, err)
+		}
+	}
+	if len(expanded) == 0 {
+		return details, fmt.Errorf("--probe IUPAC expansion produced no concrete probe variants")
+	}
+
+	target := probeTarget3to5(ann.Strand, ann.Site)
+	cond := v.conditions()
+	scored := make([]scoredProbeVariant, 0, len(expanded))
+	for _, variant := range expanded {
+		res, err := thermo.ImperfectDuplexWithOptions(variant, target, cond, thermo.DefaultImperfectDuplexOptions())
+		if err != nil {
+			return details, err
+		}
+		scored = append(scored, scoredProbeVariant{Variant: variant, Result: res})
+	}
+
+	bestIdx := 0
+	switch policy {
+	case thermo.IUPACThermoPolicyBest:
+		for i := 1; i < len(scored); i++ {
+			if scored[i].Result.AnnealMarginC > scored[bestIdx].Result.AnnealMarginC {
+				bestIdx = i
+			}
+		}
+		return probeVariantDetails(details, scored[bestIdx], len(scored), capped, scored[bestIdx].Variant), nil
+	case thermo.IUPACThermoPolicyMean:
+		return meanProbeDetails(details, scored, capped, "mean"), nil
+	case thermo.IUPACThermoPolicyEnumerate:
+		return meanProbeDetails(details, scored, capped, "enumerate"), nil
+	default:
+		// worst is the default for assay-design conservatism.
+		for i := 1; i < len(scored); i++ {
+			if scored[i].Result.AnnealMarginC < scored[bestIdx].Result.AnnealMarginC {
+				bestIdx = i
+			}
+		}
+		return probeVariantDetails(details, scored[bestIdx], len(scored), capped, scored[bestIdx].Variant), nil
+	}
+}
+
+func (v Score) applyProbeThermo(p engine.Product) (bool, engine.Product, error) {
+	if !v.probeThermoEnabled() || p.Thermo == nil {
+		return true, p, nil
+	}
+	details, err := v.scoreProbeThermoDetails(p)
+	if err != nil {
+		return false, p, err
+	}
+
+	oldScore := p.Score
+	switch details.ScoreMode {
+	case probeScoreModeGate:
+		if !details.Found {
+			details.GatePenaltyC = PROBE_NOT_FOUND_PEN
+			p.Thermo.Probe = &details
+			return false, p, nil
+		}
+		if details.AnnealMarginC < details.MinMarginC {
+			details.GatePenaltyC = details.MinMarginC - details.AnnealMarginC
+			p.Thermo.Probe = &details
+			return false, p, nil
+		}
+	case probeScoreModeBlend:
+		if !details.Found {
+			p.Score -= PROBE_NOT_FOUND_PEN
+		} else {
+			w := v.probeWeight()
+			limiting := math.Min(oldScore, details.AnnealMarginC)
+			p.Score = (1-w)*oldScore + w*limiting
+		}
+		details.ScoreContributionC = p.Score - oldScore
+	case probeScoreModeAnnotate:
+		// Deliberately leave the primer-derived score untouched.
+	}
+	if p.Thermo != nil {
+		p.Thermo.Probe = &details
+		p.Thermo.ScoreC = p.Score
+	}
+	return true, p, nil
+}
+
 // Visit implements the appcore visitor for ipcr-thermo.
 // It computes a small penalty for the forward end (and conservatively for the reverse end),
 // then sets Score = -penalty so that higher is better.
@@ -1155,16 +1396,25 @@ func (v Score) Visit(p engine.Product) (bool, engine.Product, error) {
 	if mode == "" {
 		mode = thermomodel.Default()
 	}
+	var (
+		ok  bool
+		out engine.Product
+		err error
+	)
 	switch mode {
 	case thermomodel.LegacyHeuristic:
 		return v.visitLegacyHeuristic(p)
 	case thermomodel.NNDuplexV1:
-		return v.visitNNDuplexV1(p)
+		ok, out, err = v.visitNNDuplexV1(p)
 	case thermomodel.NNStructureV1:
-		return v.visitNNStructureV1(p)
+		ok, out, err = v.visitNNStructureV1(p)
 	default:
 		return false, p, fmt.Errorf("thermo model %q is not implemented", mode)
 	}
+	if err != nil || !ok {
+		return ok, out, err
+	}
+	return v.applyProbeThermo(out)
 }
 
 func (v Score) visitLegacyHeuristic(p engine.Product) (bool, engine.Product, error) {

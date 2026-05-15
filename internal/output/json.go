@@ -55,6 +55,7 @@ func ToAPIProduct(p engine.Product) api.ProductV1 {
 			LimitingSide:            p.Thermo.LimitingSide,
 			Fwd:                     toAPIThermoEndpoint(p.Thermo.Fwd),
 			Rev:                     toAPIThermoEndpoint(p.Thermo.Rev),
+			Probe:                   toAPIProbeThermo(p.Thermo.Probe),
 			WorstHairpin:            toAPIThermoStructure(p.Thermo.WorstHairpin),
 			WorstSelfDimer:          toAPIThermoStructure(p.Thermo.WorstSelfDimer),
 			CrossDimer:              toAPIThermoStructure(p.Thermo.CrossDimer),
@@ -67,6 +68,40 @@ func ToAPIProduct(p engine.Product) api.ProductV1 {
 	// Conditionally attach Score (thermo-only).
 	applyScoreToAPI(&v, p)
 	return v
+}
+
+func toAPIProbeThermo(src *engine.ProbeThermoDetails) *api.ProbeThermoV1 {
+	if src == nil {
+		return nil
+	}
+	return &api.ProbeThermoV1{
+		Name:                  src.Name,
+		Seq:                   src.Seq,
+		Found:                 src.Found,
+		Strand:                src.Strand,
+		Pos:                   src.Pos,
+		MM:                    src.MM,
+		Site:                  src.Site,
+		ScoreMode:             src.ScoreMode,
+		MinMarginC:            src.MinMarginC,
+		ScoreContributionC:    src.ScoreContributionC,
+		GatePenaltyC:          src.GatePenaltyC,
+		IUPACThermoPolicy:     src.IUPACThermoPolicy,
+		IUPACExpansionCount:   src.IUPACExpansionCount,
+		IUPACExpansionCapped:  src.IUPACExpansionCapped,
+		IUPACEffectiveVariant: src.IUPACEffectiveVariant,
+		TmC:                   src.TmC,
+		AnnealMarginC:         src.AnnealMarginC,
+		DeltaGAtAnnealKcal:    src.DeltaGAtAnnealKcal,
+		MismatchPenaltyC:      src.MismatchPenaltyC,
+		MismatchDeltaGKcal:    src.MismatchDeltaGKcal,
+		MismatchCount:         src.MismatchCount,
+		MismatchFallbackCount: src.MismatchFallbackCount,
+		MismatchTripletCount:  src.MismatchTripletCount,
+		MismatchPolicy:        src.MismatchPolicy,
+		HasNonWatsonCrick:     src.HasNonWatsonCrick,
+		UsedHeuristicAdjust:   src.UsedHeuristicAdjust,
+	}
 }
 
 func toAPIIUPACVariants(src []engine.ThermoVariant) []api.ThermoIUPACVariantV1 {

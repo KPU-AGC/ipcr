@@ -12,3 +12,10 @@ func TestBestHit(t *testing.T) {
 		t.Fatalf("expected a hit on RC with mismatches")
 	}
 }
+
+func TestBestHitDegenerateProbeExactUsesIUPACMatcher(t *testing.T) {
+	h := BestHit("AAAGACCC", "GAY", 0)
+	if !h.Found || h.Strand != "+" || h.Pos != 3 || h.Site != "GAC" {
+		t.Fatalf("unexpected degenerate hit: %+v", h)
+	}
+}

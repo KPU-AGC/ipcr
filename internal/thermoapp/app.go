@@ -357,6 +357,12 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		_, _ = fmt.Fprintf(stderr, "--thermo-model %q is reserved for staged rollout but is not implemented yet; use %q\n", mode, thermomodel.LegacyHeuristic)
 		return 2
 	}
+	if mode == thermomodel.LegacyHeuristic && strings.TrimSpace(opts.Probe) != "" && opts.ProbeThermo {
+		// Probe thermodynamics requires NN endpoint details. Preserve legacy behavior
+		// for runs without probes, but make an explicit --probe-thermo request useful
+		// even when the user leaves --thermo-model at its historical default.
+		mode = thermomodel.NNDuplexV1
+	}
 	if mode == thermomodel.NNDuplexV1 || mode == thermomodel.NNStructureV1 {
 		if err := validateNNPrimers(mode, opts.IUPACThermoPolicy, pairs); err != nil {
 			_, _ = fmt.Fprintln(stderr, err)
@@ -388,6 +394,13 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		LenMaxPenC:               opts.LenMaxPenC,
 		BindWeight:               opts.BindWeight,
 		BandMassWeight:           opts.BandMassWeight,
+		ProbeSeq:                 opts.Probe,
+		ProbeName:                opts.ProbeName,
+		ProbeMaxMM:               opts.ProbeMaxMM,
+		ProbeThermo:              opts.ProbeThermo,
+		ProbeScoreMode:           opts.ProbeScoreMode,
+		ProbeMinMarginC:          opts.ProbeMinMarginC,
+		ProbeWeight:              opts.ProbeWeight,
 		// NEW: enable auto-denominator when requested
 		UseAutoDenom: strings.ToLower(opts.DenomMode) == "auto",
 	}

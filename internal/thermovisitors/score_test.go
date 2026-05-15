@@ -525,3 +525,94 @@ func TestScore_IUPACThermoExpansionCap(t *testing.T) {
 		t.Fatalf("expected capped IUPAC metadata, got %+v", got.Thermo)
 	}
 }
+
+func TestScore_ProbeThermoGateKeepsFoundProbeAndAnnotates(t *testing.T) {
+	fwd := "ACGTACGTACGTACGTACGT"
+	rev := "TGCATGCATGCATGCATGCA"
+	probe := "GATTACAGATTACAGATTAC"
+	amp := fwd + "AAAA" + probe + "AAAA" + rc5to3(rev)
+	p := engine.Product{FwdPrimer: fwd, RevPrimer: rev, Seq: amp, Length: len(amp), Type: "forward"}
+
+	v := Score{
+		Model:           thermomodel.NNDuplexV1,
+		AnnealTempC:     60,
+		Na_M:            0.05,
+		PrimerConc_M:    2.5e-7,
+		ProbeSeq:        probe,
+		ProbeName:       "p1",
+		ProbeThermo:     true,
+		ProbeScoreMode:  probeScoreModeGate,
+		ProbeMinMarginC: -100,
+	}
+	keep, got, err := v.Visit(p)
+	if err != nil {
+		t.Fatalf("Visit returned error: %v", err)
+	}
+	if !keep {
+		t.Fatal("expected probe-gated product to be kept")
+	}
+	if got.Thermo == nil || got.Thermo.Probe == nil {
+		t.Fatalf("expected probe thermo details, got %+v", got.Thermo)
+	}
+	pr := got.Thermo.Probe
+	if !pr.Found || pr.Name != "p1" || pr.Seq != probe || pr.ScoreMode != probeScoreModeGate {
+		t.Fatalf("unexpected probe annotation: %+v", pr)
+	}
+	if pr.TmC == 0 || pr.IUPACExpansionCount != 1 || pr.IUPACEffectiveVariant != probe {
+		t.Fatalf("expected populated probe thermo fields, got %+v", pr)
+	}
+}
+
+func TestScore_ProbeThermoGateDropsMissingProbe(t *testing.T) {
+	fwd := "ACGTACGTACGTACGTACGT"
+	rev := "TGCATGCATGCATGCATGCA"
+	amp := fwd + strings.Repeat("A", 40) + rc5to3(rev)
+	p := engine.Product{FwdPrimer: fwd, RevPrimer: rev, Seq: amp, Length: len(amp), Type: "forward"}
+
+	v := Score{
+		Model:          thermomodel.NNDuplexV1,
+		AnnealTempC:    60,
+		Na_M:           0.05,
+		PrimerConc_M:   2.5e-7,
+		ProbeSeq:       "GATTACAGATTACAGATTAC",
+		ProbeThermo:    true,
+		ProbeScoreMode: probeScoreModeGate,
+	}
+	keep, _, err := v.Visit(p)
+	if err != nil {
+		t.Fatalf("Visit returned error: %v", err)
+	}
+	if keep {
+		t.Fatal("expected gate mode to drop products missing the probe")
+	}
+}
+
+func TestScore_ProbeThermoBlendPenalizesMissingProbe(t *testing.T) {
+	fwd := "ACGTACGTACGTACGTACGT"
+	rev := "TGCATGCATGCATGCATGCA"
+	amp := fwd + strings.Repeat("A", 40) + rc5to3(rev)
+	p := engine.Product{FwdPrimer: fwd, RevPrimer: rev, Seq: amp, Length: len(amp), Type: "forward"}
+
+	base := Score{Model: thermomodel.NNDuplexV1, AnnealTempC: 60, Na_M: 0.05, PrimerConc_M: 2.5e-7}
+	_, withoutProbe, err := base.Visit(p)
+	if err != nil {
+		t.Fatalf("base Visit returned error: %v", err)
+	}
+	withProbe := base
+	withProbe.ProbeSeq = "GATTACAGATTACAGATTAC"
+	withProbe.ProbeThermo = true
+	withProbe.ProbeScoreMode = probeScoreModeBlend
+	keep, got, err := withProbe.Visit(p)
+	if err != nil {
+		t.Fatalf("probe Visit returned error: %v", err)
+	}
+	if !keep {
+		t.Fatal("blend mode should not drop missing-probe products")
+	}
+	if !(got.Score < withoutProbe.Score) {
+		t.Fatalf("expected missing probe to penalize score: base=%g got=%g", withoutProbe.Score, got.Score)
+	}
+	if got.Thermo == nil || got.Thermo.Probe == nil || got.Thermo.Probe.ScoreContributionC >= 0 {
+		t.Fatalf("expected negative probe score contribution, got %+v", got.Thermo)
+	}
+}

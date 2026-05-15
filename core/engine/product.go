@@ -38,41 +38,42 @@ type Product struct {
 // product. It is intentionally model-labelled because legacy heuristic scores
 // and NN-derived scores are not numerically comparable.
 type ThermoDetails struct {
-	Model                   string           `json:"model"`
-	SaltModel               string           `json:"salt_model"`
-	NaM                     float64          `json:"na_m,omitempty"`
-	MgM                     float64          `json:"mg_m,omitempty"`
-	DntpM                   float64          `json:"dntp_m,omitempty"`
-	EffectiveNaM            float64          `json:"effective_na_m,omitempty"`
-	FreeMgM                 float64          `json:"free_mg_m,omitempty"`
-	AnnealTempC             float64          `json:"anneal_temp_c"`
-	IUPACPolicy             string           `json:"iupac_policy"`
-	IUPACThermoPolicy       string           `json:"iupac_thermo_policy,omitempty"`
-	IUPACExpansionCount     int              `json:"iupac_expansion_count,omitempty"`
-	IUPACExpansionCapped    bool             `json:"iupac_expansion_capped,omitempty"`
-	IUPACEffectiveVariant   string           `json:"iupac_effective_variant,omitempty"`
-	IUPACVariants           []ThermoVariant  `json:"iupac_variants,omitempty"`
-	MismatchPolicy          string           `json:"mismatch_policy"`
-	StructurePolicy         string           `json:"structure_policy,omitempty"`
-	ScoreProfile            string           `json:"score_profile,omitempty"`
-	ScoreC                  float64          `json:"score_c"`
-	BaseScoreC              float64          `json:"base_score_c,omitempty"`
-	AmpliconAdjustmentC     float64          `json:"amplicon_adjustment_c,omitempty"`
-	ExtensionLogit          float64          `json:"extension_logit,omitempty"`
-	ExtensionBonusC         float64          `json:"extension_bonus_c,omitempty"`
-	LengthPenaltyC          float64          `json:"length_penalty_c,omitempty"`
-	BandMassBonusC          float64          `json:"band_mass_bonus_c,omitempty"`
-	StructurePenaltyC       float64          `json:"structure_penalty_c,omitempty"`
-	LimitingSide            string           `json:"limiting_side"`
-	Fwd                     ThermoEndpoint   `json:"fwd"`
-	Rev                     ThermoEndpoint   `json:"rev"`
-	WorstHairpin            *ThermoStructure `json:"worst_hairpin,omitempty"`
-	WorstSelfDimer          *ThermoStructure `json:"worst_self_dimer,omitempty"`
-	CrossDimer              *ThermoStructure `json:"cross_dimer,omitempty"`
-	PanelCrossDimer         *ThermoStructure `json:"panel_cross_dimer,omitempty"`
-	PanelCrossDimerPenaltyC float64          `json:"panel_cross_dimer_penalty_c,omitempty"`
-	PanelCrossDimerBurdenC  float64          `json:"panel_cross_dimer_burden_c,omitempty"`
-	PanelCrossDimerCount    int              `json:"panel_cross_dimer_count,omitempty"`
+	Model                   string              `json:"model"`
+	SaltModel               string              `json:"salt_model"`
+	NaM                     float64             `json:"na_m,omitempty"`
+	MgM                     float64             `json:"mg_m,omitempty"`
+	DntpM                   float64             `json:"dntp_m,omitempty"`
+	EffectiveNaM            float64             `json:"effective_na_m,omitempty"`
+	FreeMgM                 float64             `json:"free_mg_m,omitempty"`
+	AnnealTempC             float64             `json:"anneal_temp_c"`
+	IUPACPolicy             string              `json:"iupac_policy"`
+	IUPACThermoPolicy       string              `json:"iupac_thermo_policy,omitempty"`
+	IUPACExpansionCount     int                 `json:"iupac_expansion_count,omitempty"`
+	IUPACExpansionCapped    bool                `json:"iupac_expansion_capped,omitempty"`
+	IUPACEffectiveVariant   string              `json:"iupac_effective_variant,omitempty"`
+	IUPACVariants           []ThermoVariant     `json:"iupac_variants,omitempty"`
+	MismatchPolicy          string              `json:"mismatch_policy"`
+	StructurePolicy         string              `json:"structure_policy,omitempty"`
+	ScoreProfile            string              `json:"score_profile,omitempty"`
+	ScoreC                  float64             `json:"score_c"`
+	BaseScoreC              float64             `json:"base_score_c,omitempty"`
+	AmpliconAdjustmentC     float64             `json:"amplicon_adjustment_c,omitempty"`
+	ExtensionLogit          float64             `json:"extension_logit,omitempty"`
+	ExtensionBonusC         float64             `json:"extension_bonus_c,omitempty"`
+	LengthPenaltyC          float64             `json:"length_penalty_c,omitempty"`
+	BandMassBonusC          float64             `json:"band_mass_bonus_c,omitempty"`
+	StructurePenaltyC       float64             `json:"structure_penalty_c,omitempty"`
+	LimitingSide            string              `json:"limiting_side"`
+	Fwd                     ThermoEndpoint      `json:"fwd"`
+	Rev                     ThermoEndpoint      `json:"rev"`
+	Probe                   *ProbeThermoDetails `json:"probe,omitempty"`
+	WorstHairpin            *ThermoStructure    `json:"worst_hairpin,omitempty"`
+	WorstSelfDimer          *ThermoStructure    `json:"worst_self_dimer,omitempty"`
+	CrossDimer              *ThermoStructure    `json:"cross_dimer,omitempty"`
+	PanelCrossDimer         *ThermoStructure    `json:"panel_cross_dimer,omitempty"`
+	PanelCrossDimerPenaltyC float64             `json:"panel_cross_dimer_penalty_c,omitempty"`
+	PanelCrossDimerBurdenC  float64             `json:"panel_cross_dimer_burden_c,omitempty"`
+	PanelCrossDimerCount    int                 `json:"panel_cross_dimer_count,omitempty"`
 }
 
 // ThermoVariant summarizes one concrete A/C/G/T expansion of a degenerate
@@ -89,6 +90,38 @@ type ThermoVariant struct {
 	RevTmC            float64 `json:"rev_tm_c,omitempty"`
 	FwdMarginC        float64 `json:"fwd_margin_c,omitempty"`
 	RevMarginC        float64 `json:"rev_margin_c,omitempty"`
+}
+
+// ProbeThermoDetails contains internal-probe annotation plus NN probe-target
+// thermodynamics. It is populated by ipcr-thermo when --probe is supplied and
+// probe thermodynamics are enabled.
+type ProbeThermoDetails struct {
+	Name                  string  `json:"name"`
+	Seq                   string  `json:"seq"`
+	Found                 bool    `json:"found"`
+	Strand                string  `json:"strand,omitempty"`
+	Pos                   int     `json:"pos,omitempty"`
+	MM                    int     `json:"mm,omitempty"`
+	Site                  string  `json:"site,omitempty"`
+	ScoreMode             string  `json:"score_mode"`
+	MinMarginC            float64 `json:"min_margin_c,omitempty"`
+	ScoreContributionC    float64 `json:"score_contribution_c,omitempty"`
+	GatePenaltyC          float64 `json:"gate_penalty_c,omitempty"`
+	IUPACThermoPolicy     string  `json:"iupac_thermo_policy,omitempty"`
+	IUPACExpansionCount   int     `json:"iupac_expansion_count,omitempty"`
+	IUPACExpansionCapped  bool    `json:"iupac_expansion_capped,omitempty"`
+	IUPACEffectiveVariant string  `json:"iupac_effective_variant,omitempty"`
+	TmC                   float64 `json:"tm_c,omitempty"`
+	AnnealMarginC         float64 `json:"anneal_margin_c,omitempty"`
+	DeltaGAtAnnealKcal    float64 `json:"delta_g_at_anneal_kcal,omitempty"`
+	MismatchPenaltyC      float64 `json:"mismatch_penalty_c,omitempty"`
+	MismatchDeltaGKcal    float64 `json:"mismatch_delta_g_kcal,omitempty"`
+	MismatchCount         int     `json:"mismatch_count,omitempty"`
+	MismatchFallbackCount int     `json:"mismatch_fallback_count,omitempty"`
+	MismatchTripletCount  int     `json:"mismatch_triplet_count,omitempty"`
+	MismatchPolicy        string  `json:"mismatch_policy,omitempty"`
+	HasNonWatsonCrick     bool    `json:"has_non_watson_crick,omitempty"`
+	UsedHeuristicAdjust   bool    `json:"used_heuristic_adjust,omitempty"`
 }
 
 // ThermoEndpoint describes one primer-template endpoint in 5'→3' primer

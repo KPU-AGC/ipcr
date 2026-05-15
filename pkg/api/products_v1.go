@@ -54,6 +54,7 @@ type ThermoDetailsV1 struct {
 	LimitingSide            string                 `json:"limiting_side"`
 	Fwd                     ThermoEndpointV1       `json:"fwd"`
 	Rev                     ThermoEndpointV1       `json:"rev"`
+	Probe                   *ProbeThermoV1         `json:"probe,omitempty"`
 	WorstHairpin            *ThermoStructureV1     `json:"worst_hairpin,omitempty"`
 	WorstSelfDimer          *ThermoStructureV1     `json:"worst_self_dimer,omitempty"`
 	CrossDimer              *ThermoStructureV1     `json:"cross_dimer,omitempty"`
@@ -61,6 +62,37 @@ type ThermoDetailsV1 struct {
 	PanelCrossDimerPenaltyC float64                `json:"panel_cross_dimer_penalty_c,omitempty"`
 	PanelCrossDimerBurdenC  float64                `json:"panel_cross_dimer_burden_c,omitempty"`
 	PanelCrossDimerCount    int                    `json:"panel_cross_dimer_count,omitempty"`
+}
+
+// ProbeThermoV1 records internal-probe annotation plus NN probe-target
+// thermodynamics for ipcr-thermo outputs.
+type ProbeThermoV1 struct {
+	Name                  string  `json:"name"`
+	Seq                   string  `json:"seq"`
+	Found                 bool    `json:"found"`
+	Strand                string  `json:"strand,omitempty"`
+	Pos                   int     `json:"pos,omitempty"`
+	MM                    int     `json:"mm,omitempty"`
+	Site                  string  `json:"site,omitempty"`
+	ScoreMode             string  `json:"score_mode"`
+	MinMarginC            float64 `json:"min_margin_c,omitempty"`
+	ScoreContributionC    float64 `json:"score_contribution_c,omitempty"`
+	GatePenaltyC          float64 `json:"gate_penalty_c,omitempty"`
+	IUPACThermoPolicy     string  `json:"iupac_thermo_policy,omitempty"`
+	IUPACExpansionCount   int     `json:"iupac_expansion_count,omitempty"`
+	IUPACExpansionCapped  bool    `json:"iupac_expansion_capped,omitempty"`
+	IUPACEffectiveVariant string  `json:"iupac_effective_variant,omitempty"`
+	TmC                   float64 `json:"tm_c,omitempty"`
+	AnnealMarginC         float64 `json:"anneal_margin_c,omitempty"`
+	DeltaGAtAnnealKcal    float64 `json:"delta_g_at_anneal_kcal,omitempty"`
+	MismatchPenaltyC      float64 `json:"mismatch_penalty_c,omitempty"`
+	MismatchDeltaGKcal    float64 `json:"mismatch_delta_g_kcal,omitempty"`
+	MismatchCount         int     `json:"mismatch_count,omitempty"`
+	MismatchFallbackCount int     `json:"mismatch_fallback_count,omitempty"`
+	MismatchTripletCount  int     `json:"mismatch_triplet_count,omitempty"`
+	MismatchPolicy        string  `json:"mismatch_policy,omitempty"`
+	HasNonWatsonCrick     bool    `json:"has_non_watson_crick,omitempty"`
+	UsedHeuristicAdjust   bool    `json:"used_heuristic_adjust,omitempty"`
 }
 
 // ThermoIUPACVariantV1 records one scored expansion of a degenerate primer pair.

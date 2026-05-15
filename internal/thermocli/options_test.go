@@ -178,3 +178,41 @@ func TestParseArgs_IUPACThermoPolicyRejectsInvalid(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
+
+func TestParseArgs_DefaultProbeScoreModeIsGate(t *testing.T) {
+	opts, err := parseArgsForTest(minimalArgs()...)
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if !opts.ProbeThermo {
+		t.Fatal("expected probe thermodynamics to be enabled by default")
+	}
+	if opts.ProbeScoreMode != "gate" {
+		t.Fatalf("got probe score mode %q, want gate", opts.ProbeScoreMode)
+	}
+}
+
+func TestParseArgs_ProbeScoreModeRejectsInvalid(t *testing.T) {
+	args := append(minimalArgs(), "--probe-score-mode", "median")
+	_, err := parseArgsForTest(args...)
+	if err == nil {
+		t.Fatal("expected probe score mode error")
+	}
+	if !strings.Contains(err.Error(), "--probe-score-mode") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestParseArgs_ProbeThermoCanBeDisabled(t *testing.T) {
+	args := append(minimalArgs(), "--probe-thermo=false", "--probe-score-mode", "annotate", "--probe-min-margin", "2.5")
+	opts, err := parseArgsForTest(args...)
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if opts.ProbeThermo {
+		t.Fatal("expected probe thermodynamics to be disabled")
+	}
+	if opts.ProbeScoreMode != "annotate" || opts.ProbeMinMarginC != 2.5 {
+		t.Fatalf("unexpected probe options: %+v", opts)
+	}
+}

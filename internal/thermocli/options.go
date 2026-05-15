@@ -51,10 +51,13 @@ type Options struct {
 	OligosTSV   string
 
 	// Probe
-	Probe       string
-	ProbeName   string
-	ProbeMaxMM  int
-	ProbeWeight float64
+	Probe           string
+	ProbeName       string
+	ProbeMaxMM      int
+	ProbeWeight     float64
+	ProbeThermo     bool
+	ProbeScoreMode  string
+	ProbeMinMarginC float64
 
 	// Ranking/output (NOTE: score is always included in ipcr-thermo)
 	Rank          string
@@ -105,6 +108,9 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintf(out, "      --probe string         Internal probe (5'→3') [%s]\n", "")
 		_, _ = fmt.Fprintf(out, "      --probe-name string    Probe label [%s]\n", "probe")
 		_, _ = fmt.Fprintf(out, "      --probe-max-mm int     Max probe mismatches allowed [%s]\n", "0")
+		_, _ = fmt.Fprintln(out, "      --probe-thermo         Score internal probe thermodynamics when --probe is supplied [true]")
+		_, _ = fmt.Fprintln(out, "      --probe-score-mode string  Probe thermo mode: annotate | gate | blend [gate]")
+		_, _ = fmt.Fprintf(out, "      --probe-min-margin float Minimum probe annealing margin for gate mode (°C) [%s]\n", "0")
 		_, _ = fmt.Fprintf(out, "      --probe-weight float   Blend [0..1]: (1=min of margins) [%s]\n", "1.0")
 
 		_, _ = fmt.Fprintln(out, "\nThermo extensions (scoring only; thermo binary):")
@@ -171,6 +177,9 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.StringVar(&o.Probe, "probe", "", "internal probe (5'→3') [optional]")
 	fs.StringVar(&o.ProbeName, "probe-name", "probe", "probe label")
 	fs.IntVar(&o.ProbeMaxMM, "probe-max-mm", 0, "max probe mismatches [0]")
+	fs.BoolVar(&o.ProbeThermo, "probe-thermo", true, "score internal probe thermodynamics when --probe is supplied; implies nn-duplex-v1 when the thermo model is left at legacy default")
+	fs.StringVar(&o.ProbeScoreMode, "probe-score-mode", "gate", "probe thermo mode: annotate | gate | blend")
+	fs.Float64Var(&o.ProbeMinMarginC, "probe-min-margin", 0, "minimum probe annealing margin for gate mode (°C)")
 	fs.Float64Var(&o.ProbeWeight, "probe-weight", 1.0, "blend [0..1]: 1 favors probe strongly")
 
 	fs.StringVar(&o.Rank, "rank", "score", "order by: score | coord")
@@ -275,6 +284,15 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	}
 	if o.BandMassWeight < 0 {
 		return o, fmt.Errorf("--band-mass-weight must be >= 0")
+	}
+	switch strings.ToLower(o.ProbeScoreMode) {
+	case "annotate", "gate", "blend":
+		o.ProbeScoreMode = strings.ToLower(o.ProbeScoreMode)
+	default:
+		return o, fmt.Errorf("--probe-score-mode must be 'annotate', 'gate', or 'blend'")
+	}
+	if o.ProbeMinMarginC < -100 || o.ProbeMinMarginC > 100 {
+		return o, fmt.Errorf("--probe-min-margin must be within [-100,100]")
 	}
 	if o.ProbeWeight < 0 || o.ProbeWeight > 1 {
 		return o, fmt.Errorf("--probe-weight must be in [0,1]")

@@ -34,7 +34,7 @@ func FormatRowTSVWithScore(p engine.Product) string {
 	return fmt.Sprintf("%s\t%g", base, p.Score)
 }
 
-const ThermoDetailsTSVHeader = "thermo_model\tsalt_model\tna_m\tmg_m\tdntp_m\teffective_na_m\tfree_mg_m\tanneal_temp_c\tiupac_thermo_policy\tiupac_expansion_count\tiupac_expansion_capped\tiupac_effective_variant\tscore_profile\tbase_score_c\tfinal_score_c\tamplicon_adjustment_c\textension_logit\textension_bonus_c\tlength_penalty_c\tband_mass_bonus_c\tstructure_penalty_c\tlimiting_side\tfwd_tm_c\trev_tm_c\tfwd_margin_c\trev_margin_c\tfwd_dg_kcal\trev_dg_kcal\tfwd_mismatch_penalty_c\trev_mismatch_penalty_c\tfwd_mismatch_count\trev_mismatch_count\tfwd_3p_mismatch_count\trev_3p_mismatch_count\tfwd_mismatch_fallback_count\trev_mismatch_fallback_count\tfwd_mismatch_dg_kcal\trev_mismatch_dg_kcal\tfwd_terminal_mismatch_penalty_c\trev_terminal_mismatch_penalty_c\tfwd_5p_terminal_mismatch_penalty_c\trev_5p_terminal_mismatch_penalty_c\tfwd_3p_terminal_mismatch_penalty_c\trev_3p_terminal_mismatch_penalty_c\tfwd_terminal_mismatch_dg_kcal\trev_terminal_mismatch_dg_kcal\tfwd_dangling_end_adjustment_c\trev_dangling_end_adjustment_c\tfwd_dangling_end_dg_kcal\trev_dangling_end_dg_kcal\tfwd_end_effect_policy\trev_end_effect_policy\thairpin_penalty_c\tself_dimer_penalty_c\tcross_dimer_penalty_c\tpanel_cross_dimer_penalty_c\tpanel_cross_dimer_burden_c\tpanel_cross_dimer_count\tpanel_cross_dimer_partner"
+const ThermoDetailsTSVHeader = "thermo_model\tsalt_model\tna_m\tmg_m\tdntp_m\teffective_na_m\tfree_mg_m\tanneal_temp_c\tiupac_thermo_policy\tiupac_expansion_count\tiupac_expansion_capped\tiupac_effective_variant\tscore_profile\tbase_score_c\tfinal_score_c\tamplicon_adjustment_c\textension_logit\textension_bonus_c\tlength_penalty_c\tband_mass_bonus_c\tstructure_penalty_c\tlimiting_side\tfwd_tm_c\trev_tm_c\tfwd_margin_c\trev_margin_c\tfwd_dg_kcal\trev_dg_kcal\tfwd_mismatch_penalty_c\trev_mismatch_penalty_c\tfwd_mismatch_count\trev_mismatch_count\tfwd_3p_mismatch_count\trev_3p_mismatch_count\tfwd_mismatch_fallback_count\trev_mismatch_fallback_count\tfwd_mismatch_dg_kcal\trev_mismatch_dg_kcal\tfwd_terminal_mismatch_penalty_c\trev_terminal_mismatch_penalty_c\tfwd_5p_terminal_mismatch_penalty_c\trev_5p_terminal_mismatch_penalty_c\tfwd_3p_terminal_mismatch_penalty_c\trev_3p_terminal_mismatch_penalty_c\tfwd_terminal_mismatch_dg_kcal\trev_terminal_mismatch_dg_kcal\tfwd_dangling_end_adjustment_c\trev_dangling_end_adjustment_c\tfwd_dangling_end_dg_kcal\trev_dangling_end_dg_kcal\tfwd_end_effect_policy\trev_end_effect_policy\thairpin_penalty_c\tself_dimer_penalty_c\tcross_dimer_penalty_c\tpanel_cross_dimer_penalty_c\tpanel_cross_dimer_burden_c\tpanel_cross_dimer_count\tpanel_cross_dimer_partner\tprobe_found\tprobe_score_mode\tprobe_name\tprobe_seq\tprobe_strand\tprobe_pos\tprobe_mm\tprobe_site\tprobe_tm_c\tprobe_margin_c\tprobe_dg_kcal\tprobe_mismatch_penalty_c\tprobe_mismatch_dg_kcal\tprobe_iupac_thermo_policy\tprobe_iupac_expansion_count\tprobe_iupac_expansion_capped\tprobe_iupac_effective_variant\tprobe_score_contribution_c\tprobe_gate_penalty_c"
 
 func thermoFloat(x float64) string {
 	return strconv.FormatFloat(x, 'g', -1, 64)
@@ -133,6 +133,37 @@ func FormatThermoDetailsTSV(p engine.Product) string {
 	}
 	if t.PanelCrossDimer != nil {
 		fields[58] = t.PanelCrossDimer.QueryA + "~" + t.PanelCrossDimer.QueryB
+	}
+	if t.Probe != nil {
+		if t.Probe.Found {
+			fields[59] = "true"
+		} else {
+			fields[59] = "false"
+		}
+		fields[60] = t.Probe.ScoreMode
+		fields[61] = t.Probe.Name
+		fields[62] = t.Probe.Seq
+		fields[63] = t.Probe.Strand
+		if t.Probe.Found {
+			fields[64] = strconv.Itoa(t.Probe.Pos)
+			fields[65] = strconv.Itoa(t.Probe.MM)
+		}
+		fields[66] = t.Probe.Site
+		fields[67] = thermoFloat(t.Probe.TmC)
+		fields[68] = thermoFloat(t.Probe.AnnealMarginC)
+		fields[69] = thermoFloat(t.Probe.DeltaGAtAnnealKcal)
+		fields[70] = thermoFloat(t.Probe.MismatchPenaltyC)
+		fields[71] = thermoFloat(t.Probe.MismatchDeltaGKcal)
+		fields[72] = t.Probe.IUPACThermoPolicy
+		if t.Probe.IUPACExpansionCount > 0 {
+			fields[73] = strconv.Itoa(t.Probe.IUPACExpansionCount)
+		}
+		if t.Probe.IUPACExpansionCapped {
+			fields[74] = "true"
+		}
+		fields[75] = t.Probe.IUPACEffectiveVariant
+		fields[76] = thermoFloat(t.Probe.ScoreContributionC)
+		fields[77] = thermoFloat(t.Probe.GatePenaltyC)
 	}
 	return strings.Join(fields, "\t")
 }

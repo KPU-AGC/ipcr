@@ -143,3 +143,38 @@ func TestParseArgs_DNTPFlag(t *testing.T) {
 		t.Fatalf("got dNTP spec %q, want 800uM", opts.DntpSpec)
 	}
 }
+
+func TestParseArgs_DefaultIUPACThermoPolicyIsWorst(t *testing.T) {
+	opts, err := parseArgsForTest(minimalArgs()...)
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if opts.IUPACThermoPolicy != thermo.IUPACThermoPolicyWorst {
+		t.Fatalf("got policy %q, want %q", opts.IUPACThermoPolicy, thermo.IUPACThermoPolicyWorst)
+	}
+	if opts.IUPACThermoMaxExpansions != 256 {
+		t.Fatalf("got max expansions %d, want 256", opts.IUPACThermoMaxExpansions)
+	}
+}
+
+func TestParseArgs_IUPACThermoPolicyAndCap(t *testing.T) {
+	args := append(minimalArgs(), "--iupac-thermo-policy", "enumerate", "--iupac-thermo-max-expansions", "17")
+	opts, err := parseArgsForTest(args...)
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if opts.IUPACThermoPolicy != thermo.IUPACThermoPolicyEnumerate || opts.IUPACThermoMaxExpansions != 17 {
+		t.Fatalf("unexpected IUPAC policy/cap: %+v", opts)
+	}
+}
+
+func TestParseArgs_IUPACThermoPolicyRejectsInvalid(t *testing.T) {
+	args := append(minimalArgs(), "--iupac-thermo-policy", "median")
+	_, err := parseArgsForTest(args...)
+	if err == nil {
+		t.Fatal("expected invalid IUPAC thermo policy error")
+	}
+	if !strings.Contains(err.Error(), "unknown IUPAC thermo policy") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

@@ -146,10 +146,13 @@ func isStrictACGTSeq(s string) bool {
 	return true
 }
 
-func validateNNPrimers(mode thermomodel.Mode, pairs []primer.Pair) error {
+func validateNNPrimers(mode thermomodel.Mode, iupacPolicy string, pairs []primer.Pair) error {
+	if iupacPolicy != thermo.IUPACThermoPolicyStrict {
+		return nil
+	}
 	for _, pair := range pairs {
 		if !isStrictACGTSeq(pair.Forward) || !isStrictACGTSeq(pair.Reverse) {
-			return fmt.Errorf("--thermo-model %s uses strict A/C/G/T primer thermodynamics; pair %q contains degenerate/IUPAC bases", mode, pair.ID)
+			return fmt.Errorf("--thermo-model %s with --iupac-thermo-policy strict requires A/C/G/T primers; pair %q contains degenerate/IUPAC bases", mode, pair.ID)
 		}
 	}
 	return nil
@@ -355,7 +358,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		return 2
 	}
 	if mode == thermomodel.NNDuplexV1 || mode == thermomodel.NNStructureV1 {
-		if err := validateNNPrimers(mode, pairs); err != nil {
+		if err := validateNNPrimers(mode, opts.IUPACThermoPolicy, pairs); err != nil {
 			_, _ = fmt.Fprintln(stderr, err)
 			return 2
 		}
@@ -363,26 +366,28 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	// Build scorer (visitor)
 	scorer := thermovisitors.Score{
-		Model:          mode,
-		Conditions:     conditions,
-		AnnealTempC:    opts.AnnealTempC,
-		Na_M:           naEff,
-		PrimerConc_M:   ctM,
-		AllowIndels:    opts.AllowIndel,
-		LengthBiasOn:   false, // reserved; keep behavior stable
-		SingleStranded: opts.SingleStranded,
-		StructHairpin:  opts.StructHairpin,
-		StructDimer:    opts.StructDimer,
-		StructScale:    opts.StructScale,
-		PanelPrimers:   panelRefs,
-		ScoreProfile:   opts.ScoreProfile,
-		ExtAlpha:       opts.ExtAlpha,
-		ExtWeight:      opts.ExtWeight,
-		LenKneeBP:      opts.LenKneeBP,
-		LenSteep:       opts.LenSteep,
-		LenMaxPenC:     opts.LenMaxPenC,
-		BindWeight:     opts.BindWeight,
-		BandMassWeight: opts.BandMassWeight,
+		Model:                    mode,
+		Conditions:               conditions,
+		AnnealTempC:              opts.AnnealTempC,
+		Na_M:                     naEff,
+		PrimerConc_M:             ctM,
+		AllowIndels:              opts.AllowIndel,
+		LengthBiasOn:             false, // reserved; keep behavior stable
+		SingleStranded:           opts.SingleStranded,
+		StructHairpin:            opts.StructHairpin,
+		StructDimer:              opts.StructDimer,
+		StructScale:              opts.StructScale,
+		PanelPrimers:             panelRefs,
+		IUPACThermoPolicy:        opts.IUPACThermoPolicy,
+		IUPACThermoMaxExpansions: opts.IUPACThermoMaxExpansions,
+		ScoreProfile:             opts.ScoreProfile,
+		ExtAlpha:                 opts.ExtAlpha,
+		ExtWeight:                opts.ExtWeight,
+		LenKneeBP:                opts.LenKneeBP,
+		LenSteep:                 opts.LenSteep,
+		LenMaxPenC:               opts.LenMaxPenC,
+		BindWeight:               opts.BindWeight,
+		BandMassWeight:           opts.BandMassWeight,
 		// NEW: enable auto-denominator when requested
 		UseAutoDenom: strings.ToLower(opts.DenomMode) == "auto",
 	}

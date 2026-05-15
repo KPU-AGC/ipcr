@@ -83,7 +83,7 @@ func TestProductWriter_TSVThermoDetailsHeaderAndRow(t *testing.T) {
 	if !strings.Contains(lines[0], "score\tthermo_model\tsalt_model\tna_m\tmg_m\tdntp_m\teffective_na_m\tfree_mg_m") || !strings.Contains(lines[0], "panel_cross_dimer_penalty_c") {
 		t.Fatalf("expected thermo details header, got: %q", lines[0])
 	}
-	if !strings.Contains(lines[1], "\tnn-structure-v1\tmonovalent\t0.05\t0.003\t0.0008\t0.05\t0.0022\t60\tbinding\t3.5\t1.5") || !strings.Contains(lines[1], "\t2\tfwd") {
+	if !strings.Contains(lines[1], "\tnn-structure-v1\tmonovalent\t0.05\t0.003\t0.0008\t0.05\t0.0022\t60\t\t\t\t\tbinding\t3.5\t1.5") || !strings.Contains(lines[1], "\t2\tfwd") {
 		t.Fatalf("expected thermo detail values, got: %q", lines[1])
 	}
 	if !strings.Contains(lines[1], "\t1.25\t2.75\t2\tfwd~external") {

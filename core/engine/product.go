@@ -47,6 +47,11 @@ type ThermoDetails struct {
 	FreeMgM                 float64          `json:"free_mg_m,omitempty"`
 	AnnealTempC             float64          `json:"anneal_temp_c"`
 	IUPACPolicy             string           `json:"iupac_policy"`
+	IUPACThermoPolicy       string           `json:"iupac_thermo_policy,omitempty"`
+	IUPACExpansionCount     int              `json:"iupac_expansion_count,omitempty"`
+	IUPACExpansionCapped    bool             `json:"iupac_expansion_capped,omitempty"`
+	IUPACEffectiveVariant   string           `json:"iupac_effective_variant,omitempty"`
+	IUPACVariants           []ThermoVariant  `json:"iupac_variants,omitempty"`
 	MismatchPolicy          string           `json:"mismatch_policy"`
 	StructurePolicy         string           `json:"structure_policy,omitempty"`
 	ScoreProfile            string           `json:"score_profile,omitempty"`
@@ -68,6 +73,22 @@ type ThermoDetails struct {
 	PanelCrossDimerPenaltyC float64          `json:"panel_cross_dimer_penalty_c,omitempty"`
 	PanelCrossDimerBurdenC  float64          `json:"panel_cross_dimer_burden_c,omitempty"`
 	PanelCrossDimerCount    int              `json:"panel_cross_dimer_count,omitempty"`
+}
+
+// ThermoVariant summarizes one concrete A/C/G/T expansion of a degenerate
+// primer pair under an IUPAC thermodynamics policy. It is populated only for
+// enumerate mode to keep ordinary JSON output compact.
+type ThermoVariant struct {
+	FwdPrimer         string  `json:"fwd_primer"`
+	RevPrimer         string  `json:"rev_primer"`
+	ScoreC            float64 `json:"score_c"`
+	BaseScoreC        float64 `json:"base_score_c,omitempty"`
+	StructurePenaltyC float64 `json:"structure_penalty_c,omitempty"`
+	LimitingSide      string  `json:"limiting_side,omitempty"`
+	FwdTmC            float64 `json:"fwd_tm_c,omitempty"`
+	RevTmC            float64 `json:"rev_tm_c,omitempty"`
+	FwdMarginC        float64 `json:"fwd_margin_c,omitempty"`
+	RevMarginC        float64 `json:"rev_margin_c,omitempty"`
 }
 
 // ThermoEndpoint describes one primer-template endpoint in 5'→3' primer

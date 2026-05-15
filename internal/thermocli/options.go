@@ -39,6 +39,10 @@ type Options struct {
 	// Model mode for staged thermodynamic implementations.
 	ThermoModel string
 
+	// Thermodynamic policy for degenerate/IUPAC primers in NN modes.
+	IUPACThermoPolicy        string
+	IUPACThermoMaxExpansions int
+
 	// Denominator mode for ΔΔG→ΔTm conversion: "fixed" (D=200) or "auto".
 	DenomMode string
 
@@ -93,6 +97,8 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintln(out, "      --allow-indel          Allow a single 1-nt gap (bulge) per primer [false]")
 		_, _ = fmt.Fprintln(out, "      --single-stranded      Treat target as ssDNA (BS-PCR): tiny dangling-end bonus + target-hairpin penalty [false]")
 		_, _ = fmt.Fprintf(out, "      --thermo-model string  Scoring model: %s [%s]\n", thermomodel.KnownList(), thermomodel.Default())
+		_, _ = fmt.Fprintln(out, "      --iupac-thermo-policy string  Degenerate-primer NN policy: strict | worst | best | mean | enumerate [worst]")
+		_, _ = fmt.Fprintln(out, "      --iupac-thermo-max-expansions int  Max concrete primer-pair expansions [256]")
 		_, _ = fmt.Fprintf(out, "      --denom string         ΔΔG→ΔTm denominator: fixed | auto [%s]\n", "fixed")
 
 		_, _ = fmt.Fprintln(out, "\nProbe (optional):")
@@ -158,6 +164,8 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.BoolVar(&o.SingleStranded, "single-stranded", false, "target is ssDNA (BS-PCR mode)")
 
 	fs.StringVar(&o.ThermoModel, "thermo-model", thermomodel.Default().String(), "scoring model: "+thermomodel.KnownList())
+	fs.StringVar(&o.IUPACThermoPolicy, "iupac-thermo-policy", thermo.IUPACThermoPolicyWorst, "degenerate-primer NN policy: strict | worst | best | mean | enumerate")
+	fs.IntVar(&o.IUPACThermoMaxExpansions, "iupac-thermo-max-expansions", 256, "max concrete primer-pair expansions")
 	fs.StringVar(&o.DenomMode, "denom", "fixed", "ΔΔG→ΔTm denominator: fixed | auto")
 
 	fs.StringVar(&o.Probe, "probe", "", "internal probe (5'→3') [optional]")
@@ -232,6 +240,15 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 		return o, err
 	}
 	o.SaltModel = modeSalt.String()
+
+	policy, err := thermo.ParseIUPACThermoPolicy(o.IUPACThermoPolicy)
+	if err != nil {
+		return o, err
+	}
+	o.IUPACThermoPolicy = policy
+	if o.IUPACThermoMaxExpansions < 1 {
+		return o, fmt.Errorf("--iupac-thermo-max-expansions must be >= 1")
+	}
 
 	switch strings.ToLower(o.DenomMode) {
 	case "fixed", "auto":

@@ -157,6 +157,7 @@ func TestThermo_NNDuplexModelAcceptedAndTemperatureAware(t *testing.T) {
 		"--rank", "score",
 		"--self=false",
 		"--thermo-model", "nn-duplex-v1",
+		"--iupac-thermo-policy", "strict",
 	}
 
 	lowAnneal := firstScoreFromTSV(t, runThermo(t, append(append([]string{}, baseArgs...), "--anneal-temp", "55")))
@@ -197,11 +198,12 @@ func TestThermo_NNDuplexModelRejectsDegeneratePrimers(t *testing.T) {
 		"--reverse", "GGTACC",
 		"--sequences", fa,
 		"--thermo-model", "nn-duplex-v1",
+		"--iupac-thermo-policy", "strict",
 	}, &out, &errB)
 	if code != 2 {
 		t.Fatalf("expected exit 2 for strict NN IUPAC policy, got %d stdout=%q stderr=%q", code, out.String(), errB.String())
 	}
-	if !strings.Contains(errB.String(), "strict A/C/G/T") {
+	if !strings.Contains(errB.String(), "strict requires A/C/G/T") {
 		t.Fatalf("unexpected stderr: %q", errB.String())
 	}
 }

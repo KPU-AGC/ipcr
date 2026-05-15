@@ -454,3 +454,74 @@ func TestScore_NNDuplexReportsEndEffectComponents(t *testing.T) {
 		t.Fatalf("unexpected terminal end-effect policy: %+v", mismatched.Thermo.Fwd)
 	}
 }
+
+func TestScore_IUPACThermoPolicyWorstBestMeanEnumerate(t *testing.T) {
+	fwdDegenerate := "ACGRACGTACGT"
+	fwdBestVariant := "ACGAACGTACGT"
+	rev := "ACGTACGTACGT"
+	amp := fwdBestVariant + strings.Repeat("A", 12) + rc5to3(rev)
+	p := engine.Product{FwdPrimer: fwdDegenerate, RevPrimer: rev, Seq: amp, Length: len(amp), Type: "forward"}
+	base := Score{Model: thermomodel.NNDuplexV1, AnnealTempC: 60, Na_M: 0.05, PrimerConc_M: 2.5e-7}
+
+	worstVisitor := base
+	worstVisitor.IUPACThermoPolicy = thermo.IUPACThermoPolicyWorst
+	_, worst, err := worstVisitor.Visit(p)
+	if err != nil {
+		t.Fatalf("worst Visit: %v", err)
+	}
+	bestVisitor := base
+	bestVisitor.IUPACThermoPolicy = thermo.IUPACThermoPolicyBest
+	_, best, err := bestVisitor.Visit(p)
+	if err != nil {
+		t.Fatalf("best Visit: %v", err)
+	}
+	meanVisitor := base
+	meanVisitor.IUPACThermoPolicy = thermo.IUPACThermoPolicyMean
+	_, mean, err := meanVisitor.Visit(p)
+	if err != nil {
+		t.Fatalf("mean Visit: %v", err)
+	}
+	enumVisitor := base
+	enumVisitor.IUPACThermoPolicy = thermo.IUPACThermoPolicyEnumerate
+	_, enumerated, err := enumVisitor.Visit(p)
+	if err != nil {
+		t.Fatalf("enumerate Visit: %v", err)
+	}
+
+	if best.Score <= worst.Score {
+		t.Fatalf("expected best score > worst score; best=%g worst=%g", best.Score, worst.Score)
+	}
+	if !(mean.Score > worst.Score && mean.Score < best.Score) {
+		t.Fatalf("expected mean between worst and best; mean=%g worst=%g best=%g", mean.Score, worst.Score, best.Score)
+	}
+	if worst.Thermo == nil || best.Thermo == nil || mean.Thermo == nil || enumerated.Thermo == nil {
+		t.Fatal("expected thermo details for all IUPAC policies")
+	}
+	if worst.Thermo.IUPACThermoPolicy != thermo.IUPACThermoPolicyWorst || worst.Thermo.IUPACExpansionCount != 2 {
+		t.Fatalf("unexpected worst metadata: %+v", worst.Thermo)
+	}
+	if worst.Thermo.IUPACEffectiveVariant == best.Thermo.IUPACEffectiveVariant {
+		t.Fatalf("expected worst and best to select different variants; both=%q", worst.Thermo.IUPACEffectiveVariant)
+	}
+	if !strings.Contains(worst.Thermo.IUPACEffectiveVariant, "fwd=") || !strings.Contains(best.Thermo.IUPACEffectiveVariant, "fwd=") {
+		t.Fatalf("expected concrete effective variants; worst=%q best=%q", worst.Thermo.IUPACEffectiveVariant, best.Thermo.IUPACEffectiveVariant)
+	}
+	if enumerated.Thermo.IUPACThermoPolicy != thermo.IUPACThermoPolicyEnumerate || len(enumerated.Thermo.IUPACVariants) != 2 {
+		t.Fatalf("expected enumerated variants, got %+v", enumerated.Thermo)
+	}
+}
+
+func TestScore_IUPACThermoExpansionCap(t *testing.T) {
+	fwd := "NNNN"
+	rev := "ACGT"
+	amp := "AAAA" + strings.Repeat("A", 12) + rc5to3(rev)
+	p := engine.Product{FwdPrimer: fwd, RevPrimer: rev, Seq: amp, Length: len(amp), Type: "forward"}
+	v := Score{Model: thermomodel.NNDuplexV1, AnnealTempC: 60, Na_M: 0.05, PrimerConc_M: 2.5e-7, IUPACThermoPolicy: thermo.IUPACThermoPolicyWorst, IUPACThermoMaxExpansions: 3}
+	_, got, err := v.Visit(p)
+	if err != nil {
+		t.Fatalf("Visit: %v", err)
+	}
+	if got.Thermo == nil || got.Thermo.IUPACExpansionCount != 3 || !got.Thermo.IUPACExpansionCapped {
+		t.Fatalf("expected capped IUPAC metadata, got %+v", got.Thermo)
+	}
+}

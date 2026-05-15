@@ -59,6 +59,9 @@ type Score struct {
 	StructScale    float64
 	PanelPrimers   []PrimerRef
 
+	IUPACThermoPolicy        string
+	IUPACThermoMaxExpansions int
+
 	// ScoreProfile controls whether NN model scores remain pure primer-template
 	// binding margins or include PCR/gel-observable amplicon-level terms.
 	ScoreProfile   string
@@ -103,6 +106,21 @@ func (v Score) scoreProfile() string {
 	default:
 		return scoreProfileBinding
 	}
+}
+
+func (v Score) iupacThermoPolicy() string {
+	policy, err := thermo.ParseIUPACThermoPolicy(v.IUPACThermoPolicy)
+	if err != nil {
+		return thermo.IUPACThermoPolicyWorst
+	}
+	return policy
+}
+
+func (v Score) iupacThermoMaxExpansions() int {
+	if v.IUPACThermoMaxExpansions < 1 {
+		return 256
+	}
+	return v.IUPACThermoMaxExpansions
 }
 
 func (v Score) extAlpha() float64 {
@@ -639,7 +657,224 @@ func (v Score) applyAmpliconProfile(p engine.Product, details *engine.ThermoDeta
 	return score
 }
 
-func (v Score) visitNNDuplexV1(p engine.Product) (bool, engine.Product, error) {
+type primerPairVariant struct {
+	Fwd string
+	Rev string
+}
+
+type nnVariantScorer func(engine.Product) (bool, engine.Product, error)
+
+func (v Score) primerPairVariants(p engine.Product) ([]primerPairVariant, bool, error) {
+	policy := v.iupacThermoPolicy()
+	if policy == thermo.IUPACThermoPolicyStrict {
+		f := toUpperACGT(p.FwdPrimer)
+		r := toUpperACGT(p.RevPrimer)
+		if f == "" || r == "" {
+			return nil, false, fmt.Errorf("NN thermodynamics with --iupac-thermo-policy strict requires A/C/G/T primers")
+		}
+		return []primerPairVariant{{Fwd: f, Rev: r}}, false, nil
+	}
+
+	maxExp := v.iupacThermoMaxExpansions()
+	fwdExp, fwdCapped, err := thermo.ExpandIUPAC(p.FwdPrimer, maxExp)
+	if err != nil {
+		return nil, false, fmt.Errorf("forward primer IUPAC expansion: %w", err)
+	}
+	revExp, revCapped, err := thermo.ExpandIUPAC(p.RevPrimer, maxExp)
+	if err != nil {
+		return nil, false, fmt.Errorf("reverse primer IUPAC expansion: %w", err)
+	}
+	out := make([]primerPairVariant, 0, minInt(maxExp, len(fwdExp)*len(revExp)))
+	capped := fwdCapped || revCapped
+	for _, f := range fwdExp {
+		for _, r := range revExp {
+			if len(out) >= maxExp {
+				return out, true, nil
+			}
+			out = append(out, primerPairVariant{Fwd: f, Rev: r})
+		}
+	}
+	return out, capped, nil
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func iupacVariantLabel(fwd, rev string) string {
+	return "fwd=" + fwd + ";rev=" + rev
+}
+
+func thermoVariantSummary(p engine.Product) engine.ThermoVariant {
+	out := engine.ThermoVariant{
+		FwdPrimer: p.FwdPrimer,
+		RevPrimer: p.RevPrimer,
+		ScoreC:    p.Score,
+	}
+	if p.Thermo != nil {
+		out.ScoreC = p.Thermo.ScoreC
+		out.BaseScoreC = p.Thermo.BaseScoreC
+		out.StructurePenaltyC = p.Thermo.StructurePenaltyC
+		out.LimitingSide = p.Thermo.LimitingSide
+		out.FwdTmC = p.Thermo.Fwd.TmC
+		out.RevTmC = p.Thermo.Rev.TmC
+		out.FwdMarginC = p.Thermo.Fwd.AnnealMarginC
+		out.RevMarginC = p.Thermo.Rev.AnnealMarginC
+	}
+	return out
+}
+
+func copyThermoDetails(src *engine.ThermoDetails) *engine.ThermoDetails {
+	if src == nil {
+		return nil
+	}
+	out := *src
+	if src.IUPACVariants != nil {
+		out.IUPACVariants = append([]engine.ThermoVariant(nil), src.IUPACVariants...)
+	}
+	return &out
+}
+
+func averageIUPACProducts(scored []engine.Product) engine.Product {
+	out := scored[0]
+	out.Thermo = copyThermoDetails(scored[0].Thermo)
+	n := float64(len(scored))
+	out.Score = 0
+	if out.Thermo != nil {
+		out.Thermo.ScoreC = 0
+		out.Thermo.BaseScoreC = 0
+		out.Thermo.AmpliconAdjustmentC = 0
+		out.Thermo.ExtensionLogit = 0
+		out.Thermo.ExtensionBonusC = 0
+		out.Thermo.LengthPenaltyC = 0
+		out.Thermo.BandMassBonusC = 0
+		out.Thermo.StructurePenaltyC = 0
+		out.Thermo.Fwd.TmC = 0
+		out.Thermo.Rev.TmC = 0
+		out.Thermo.Fwd.AnnealMarginC = 0
+		out.Thermo.Rev.AnnealMarginC = 0
+		out.Thermo.Fwd.DeltaGAtAnnealKcal = 0
+		out.Thermo.Rev.DeltaGAtAnnealKcal = 0
+	}
+	for _, p := range scored {
+		out.Score += p.Score
+		if out.Thermo != nil && p.Thermo != nil {
+			out.Thermo.ScoreC += p.Thermo.ScoreC
+			out.Thermo.BaseScoreC += p.Thermo.BaseScoreC
+			out.Thermo.AmpliconAdjustmentC += p.Thermo.AmpliconAdjustmentC
+			out.Thermo.ExtensionLogit += p.Thermo.ExtensionLogit
+			out.Thermo.ExtensionBonusC += p.Thermo.ExtensionBonusC
+			out.Thermo.LengthPenaltyC += p.Thermo.LengthPenaltyC
+			out.Thermo.BandMassBonusC += p.Thermo.BandMassBonusC
+			out.Thermo.StructurePenaltyC += p.Thermo.StructurePenaltyC
+			out.Thermo.Fwd.TmC += p.Thermo.Fwd.TmC
+			out.Thermo.Rev.TmC += p.Thermo.Rev.TmC
+			out.Thermo.Fwd.AnnealMarginC += p.Thermo.Fwd.AnnealMarginC
+			out.Thermo.Rev.AnnealMarginC += p.Thermo.Rev.AnnealMarginC
+			out.Thermo.Fwd.DeltaGAtAnnealKcal += p.Thermo.Fwd.DeltaGAtAnnealKcal
+			out.Thermo.Rev.DeltaGAtAnnealKcal += p.Thermo.Rev.DeltaGAtAnnealKcal
+		}
+	}
+	out.Score /= n
+	if out.Thermo != nil {
+		out.Thermo.ScoreC /= n
+		out.Thermo.BaseScoreC /= n
+		out.Thermo.AmpliconAdjustmentC /= n
+		out.Thermo.ExtensionLogit /= n
+		out.Thermo.ExtensionBonusC /= n
+		out.Thermo.LengthPenaltyC /= n
+		out.Thermo.BandMassBonusC /= n
+		out.Thermo.StructurePenaltyC /= n
+		out.Thermo.Fwd.TmC /= n
+		out.Thermo.Rev.TmC /= n
+		out.Thermo.Fwd.AnnealMarginC /= n
+		out.Thermo.Rev.AnnealMarginC /= n
+		out.Thermo.Fwd.DeltaGAtAnnealKcal /= n
+		out.Thermo.Rev.DeltaGAtAnnealKcal /= n
+		out.Thermo.LimitingSide = "mean"
+	}
+	return out
+}
+
+func annotateIUPACThermo(p *engine.Product, policy string, count int, capped bool, effective string, variants []engine.ThermoVariant) {
+	if p.Thermo == nil {
+		return
+	}
+	p.Thermo.IUPACThermoPolicy = policy
+	p.Thermo.IUPACExpansionCount = count
+	p.Thermo.IUPACExpansionCapped = capped
+	p.Thermo.IUPACEffectiveVariant = effective
+	p.Thermo.IUPACPolicy = "iupac-thermo-" + policy
+	if policy == thermo.IUPACThermoPolicyEnumerate {
+		p.Thermo.IUPACVariants = variants
+	}
+}
+
+func (v Score) visitNNWithIUPAC(p engine.Product, scorer nnVariantScorer) (bool, engine.Product, error) {
+	variants, capped, err := v.primerPairVariants(p)
+	if err != nil {
+		return false, p, err
+	}
+	if len(variants) == 0 {
+		return false, p, fmt.Errorf("IUPAC thermo expansion produced no concrete primer variants")
+	}
+	policy := v.iupacThermoPolicy()
+	scored := make([]engine.Product, 0, len(variants))
+	summaries := make([]engine.ThermoVariant, 0, len(variants))
+	for _, variant := range variants {
+		q := p
+		q.FwdPrimer = variant.Fwd
+		q.RevPrimer = variant.Rev
+		ok, got, err := scorer(q)
+		if err != nil {
+			return false, p, err
+		}
+		if !ok {
+			continue
+		}
+		scored = append(scored, got)
+		summaries = append(summaries, thermoVariantSummary(got))
+	}
+	if len(scored) == 0 {
+		return false, p, nil
+	}
+
+	bestIdx := 0
+	switch policy {
+	case thermo.IUPACThermoPolicyBest:
+		for i := 1; i < len(scored); i++ {
+			if scored[i].Score > scored[bestIdx].Score {
+				bestIdx = i
+			}
+		}
+		out := scored[bestIdx]
+		annotateIUPACThermo(&out, policy, len(scored), capped, iupacVariantLabel(out.FwdPrimer, out.RevPrimer), summaries)
+		return true, out, nil
+	case thermo.IUPACThermoPolicyMean, thermo.IUPACThermoPolicyEnumerate:
+		out := averageIUPACProducts(scored)
+		effective := "mean"
+		if policy == thermo.IUPACThermoPolicyEnumerate {
+			effective = "enumerate"
+		}
+		annotateIUPACThermo(&out, policy, len(scored), capped, effective, summaries)
+		return true, out, nil
+	default:
+		// worst is the default and the most conservative assay-design behavior.
+		for i := 1; i < len(scored); i++ {
+			if scored[i].Score < scored[bestIdx].Score {
+				bestIdx = i
+			}
+		}
+		out := scored[bestIdx]
+		annotateIUPACThermo(&out, policy, len(scored), capped, iupacVariantLabel(out.FwdPrimer, out.RevPrimer), summaries)
+		return true, out, nil
+	}
+}
+
+func (v Score) visitNNDuplexV1Strict(p engine.Product) (bool, engine.Product, error) {
 	fwd, revEnd, score, limitingSide, cond, err := v.scoreNNDuplexComponents(p)
 	if err != nil {
 		return false, p, err
@@ -649,6 +884,10 @@ func (v Score) visitNNDuplexV1(p engine.Product) (bool, engine.Product, error) {
 	p.Score = score
 	p.Thermo = details
 	return true, p, nil
+}
+
+func (v Score) visitNNDuplexV1(p engine.Product) (bool, engine.Product, error) {
+	return v.visitNNWithIUPAC(p, v.visitNNDuplexV1Strict)
 }
 
 func structureFromResult(src thermo.StructureResult, penaltyC float64) *engine.ThermoStructure {
@@ -729,23 +968,31 @@ func chooseWorseStructure(cur, cand *engine.ThermoStructure) *engine.ThermoStruc
 	return cur
 }
 
-func normalizePanelPrimers(refs []PrimerRef) []PrimerRef {
-	out := make([]PrimerRef, 0, len(refs))
+func (v Score) normalizePanelPrimers() []PrimerRef {
+	out := make([]PrimerRef, 0, len(v.PanelPrimers))
 	seen := map[string]struct{}{}
-	for _, ref := range refs {
-		seq := toUpperACGT(ref.Seq)
-		if seq == "" {
-			continue
-		}
+	maxExp := v.iupacThermoMaxExpansions()
+	for _, ref := range v.PanelPrimers {
 		id := strings.TrimSpace(ref.ID)
 		if id == "" {
-			id = seq
+			id = strings.ToUpper(ref.Seq)
 		}
-		if _, ok := seen[seq]; ok {
+		expanded, _, err := thermo.ExpandIUPAC(ref.Seq, maxExp)
+		if err != nil {
 			continue
 		}
-		seen[seq] = struct{}{}
-		out = append(out, PrimerRef{ID: id, Seq: seq})
+		for _, seq := range expanded {
+			key := seq
+			if _, ok := seen[key]; ok {
+				continue
+			}
+			seen[key] = struct{}{}
+			label := id
+			if len(expanded) > 1 {
+				label = id + "[" + seq + "]"
+			}
+			out = append(out, PrimerRef{ID: label, Seq: seq})
+		}
 	}
 	return out
 }
@@ -777,7 +1024,7 @@ func (v Score) bestPanelCrossDimer(fwdPrimer, revPrimer string, fwd, revEnd engi
 		{ID: "fwd", Seq: fwdPrimer, Binding: fwd},
 		{ID: "rev", Seq: revPrimer, Binding: revEnd},
 	}
-	panel := normalizePanelPrimers(v.PanelPrimers)
+	panel := v.normalizePanelPrimers()
 	seen := map[string]struct{}{}
 	var best panelCrossDimerHit
 	for _, q := range queries {
@@ -815,7 +1062,7 @@ func (v Score) bestPanelCrossDimer(fwdPrimer, revPrimer string, fwd, revEnd engi
 	return best
 }
 
-func (v Score) visitNNStructureV1(p engine.Product) (bool, engine.Product, error) {
+func (v Score) visitNNStructureV1Strict(p engine.Product) (bool, engine.Product, error) {
 	fwd, revEnd, baseScore, limitingSide, cond, err := v.scoreNNDuplexComponents(p)
 	if err != nil {
 		return false, p, err
@@ -894,6 +1141,10 @@ func (v Score) visitNNStructureV1(p engine.Product) (bool, engine.Product, error
 	p.Score = score
 	p.Thermo = details
 	return true, p, nil
+}
+
+func (v Score) visitNNStructureV1(p engine.Product) (bool, engine.Product, error) {
+	return v.visitNNWithIUPAC(p, v.visitNNStructureV1Strict)
 }
 
 // Visit implements the appcore visitor for ipcr-thermo.

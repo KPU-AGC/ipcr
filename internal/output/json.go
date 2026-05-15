@@ -36,6 +36,11 @@ func ToAPIProduct(p engine.Product) api.ProductV1 {
 			FreeMgM:                 p.Thermo.FreeMgM,
 			AnnealTempC:             p.Thermo.AnnealTempC,
 			IUPACPolicy:             p.Thermo.IUPACPolicy,
+			IUPACThermoPolicy:       p.Thermo.IUPACThermoPolicy,
+			IUPACExpansionCount:     p.Thermo.IUPACExpansionCount,
+			IUPACExpansionCapped:    p.Thermo.IUPACExpansionCapped,
+			IUPACEffectiveVariant:   p.Thermo.IUPACEffectiveVariant,
+			IUPACVariants:           toAPIIUPACVariants(p.Thermo.IUPACVariants),
 			MismatchPolicy:          p.Thermo.MismatchPolicy,
 			StructurePolicy:         p.Thermo.StructurePolicy,
 			ScoreProfile:            p.Thermo.ScoreProfile,
@@ -62,6 +67,28 @@ func ToAPIProduct(p engine.Product) api.ProductV1 {
 	// Conditionally attach Score (thermo-only).
 	applyScoreToAPI(&v, p)
 	return v
+}
+
+func toAPIIUPACVariants(src []engine.ThermoVariant) []api.ThermoIUPACVariantV1 {
+	if len(src) == 0 {
+		return nil
+	}
+	out := make([]api.ThermoIUPACVariantV1, len(src))
+	for i, v := range src {
+		out[i] = api.ThermoIUPACVariantV1{
+			FwdVariant:        v.FwdPrimer,
+			RevVariant:        v.RevPrimer,
+			ScoreC:            v.ScoreC,
+			BaseScoreC:        v.BaseScoreC,
+			StructurePenaltyC: v.StructurePenaltyC,
+			LimitingSide:      v.LimitingSide,
+			FwdTmC:            v.FwdTmC,
+			RevTmC:            v.RevTmC,
+			FwdMarginC:        v.FwdMarginC,
+			RevMarginC:        v.RevMarginC,
+		}
+	}
+	return out
 }
 
 func toAPIThermoEndpoint(src engine.ThermoEndpoint) api.ThermoEndpointV1 {

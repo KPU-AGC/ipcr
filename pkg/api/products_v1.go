@@ -26,36 +26,55 @@ type ProductV1 struct {
 
 // ThermoDetailsV1 is an optional extension object for ipcr-thermo NN modes.
 type ThermoDetailsV1 struct {
-	Model                   string             `json:"model"`
-	SaltModel               string             `json:"salt_model"`
-	NaM                     float64            `json:"na_m,omitempty"`
-	MgM                     float64            `json:"mg_m,omitempty"`
-	DntpM                   float64            `json:"dntp_m,omitempty"`
-	EffectiveNaM            float64            `json:"effective_na_m,omitempty"`
-	FreeMgM                 float64            `json:"free_mg_m,omitempty"`
-	AnnealTempC             float64            `json:"anneal_temp_c"`
-	IUPACPolicy             string             `json:"iupac_policy"`
-	MismatchPolicy          string             `json:"mismatch_policy"`
-	StructurePolicy         string             `json:"structure_policy,omitempty"`
-	ScoreProfile            string             `json:"score_profile,omitempty"`
-	ScoreC                  float64            `json:"score_c"`
-	BaseScoreC              float64            `json:"base_score_c,omitempty"`
-	AmpliconAdjustmentC     float64            `json:"amplicon_adjustment_c,omitempty"`
-	ExtensionLogit          float64            `json:"extension_logit,omitempty"`
-	ExtensionBonusC         float64            `json:"extension_bonus_c,omitempty"`
-	LengthPenaltyC          float64            `json:"length_penalty_c,omitempty"`
-	BandMassBonusC          float64            `json:"band_mass_bonus_c,omitempty"`
-	StructurePenaltyC       float64            `json:"structure_penalty_c,omitempty"`
-	LimitingSide            string             `json:"limiting_side"`
-	Fwd                     ThermoEndpointV1   `json:"fwd"`
-	Rev                     ThermoEndpointV1   `json:"rev"`
-	WorstHairpin            *ThermoStructureV1 `json:"worst_hairpin,omitempty"`
-	WorstSelfDimer          *ThermoStructureV1 `json:"worst_self_dimer,omitempty"`
-	CrossDimer              *ThermoStructureV1 `json:"cross_dimer,omitempty"`
-	PanelCrossDimer         *ThermoStructureV1 `json:"panel_cross_dimer,omitempty"`
-	PanelCrossDimerPenaltyC float64            `json:"panel_cross_dimer_penalty_c,omitempty"`
-	PanelCrossDimerBurdenC  float64            `json:"panel_cross_dimer_burden_c,omitempty"`
-	PanelCrossDimerCount    int                `json:"panel_cross_dimer_count,omitempty"`
+	Model                   string                 `json:"model"`
+	SaltModel               string                 `json:"salt_model"`
+	NaM                     float64                `json:"na_m,omitempty"`
+	MgM                     float64                `json:"mg_m,omitempty"`
+	DntpM                   float64                `json:"dntp_m,omitempty"`
+	EffectiveNaM            float64                `json:"effective_na_m,omitempty"`
+	FreeMgM                 float64                `json:"free_mg_m,omitempty"`
+	AnnealTempC             float64                `json:"anneal_temp_c"`
+	IUPACPolicy             string                 `json:"iupac_policy"`
+	IUPACThermoPolicy       string                 `json:"iupac_thermo_policy,omitempty"`
+	IUPACExpansionCount     int                    `json:"iupac_expansion_count,omitempty"`
+	IUPACExpansionCapped    bool                   `json:"iupac_expansion_capped,omitempty"`
+	IUPACEffectiveVariant   string                 `json:"iupac_effective_variant,omitempty"`
+	IUPACVariants           []ThermoIUPACVariantV1 `json:"iupac_variants,omitempty"`
+	MismatchPolicy          string                 `json:"mismatch_policy"`
+	StructurePolicy         string                 `json:"structure_policy,omitempty"`
+	ScoreProfile            string                 `json:"score_profile,omitempty"`
+	ScoreC                  float64                `json:"score_c"`
+	BaseScoreC              float64                `json:"base_score_c,omitempty"`
+	AmpliconAdjustmentC     float64                `json:"amplicon_adjustment_c,omitempty"`
+	ExtensionLogit          float64                `json:"extension_logit,omitempty"`
+	ExtensionBonusC         float64                `json:"extension_bonus_c,omitempty"`
+	LengthPenaltyC          float64                `json:"length_penalty_c,omitempty"`
+	BandMassBonusC          float64                `json:"band_mass_bonus_c,omitempty"`
+	StructurePenaltyC       float64                `json:"structure_penalty_c,omitempty"`
+	LimitingSide            string                 `json:"limiting_side"`
+	Fwd                     ThermoEndpointV1       `json:"fwd"`
+	Rev                     ThermoEndpointV1       `json:"rev"`
+	WorstHairpin            *ThermoStructureV1     `json:"worst_hairpin,omitempty"`
+	WorstSelfDimer          *ThermoStructureV1     `json:"worst_self_dimer,omitempty"`
+	CrossDimer              *ThermoStructureV1     `json:"cross_dimer,omitempty"`
+	PanelCrossDimer         *ThermoStructureV1     `json:"panel_cross_dimer,omitempty"`
+	PanelCrossDimerPenaltyC float64                `json:"panel_cross_dimer_penalty_c,omitempty"`
+	PanelCrossDimerBurdenC  float64                `json:"panel_cross_dimer_burden_c,omitempty"`
+	PanelCrossDimerCount    int                    `json:"panel_cross_dimer_count,omitempty"`
+}
+
+// ThermoIUPACVariantV1 records one scored expansion of a degenerate primer pair.
+type ThermoIUPACVariantV1 struct {
+	FwdVariant        string  `json:"fwd_variant"`
+	RevVariant        string  `json:"rev_variant"`
+	ScoreC            float64 `json:"score_c"`
+	BaseScoreC        float64 `json:"base_score_c,omitempty"`
+	StructurePenaltyC float64 `json:"structure_penalty_c,omitempty"`
+	LimitingSide      string  `json:"limiting_side,omitempty"`
+	FwdTmC            float64 `json:"fwd_tm_c,omitempty"`
+	RevTmC            float64 `json:"rev_tm_c,omitempty"`
+	FwdMarginC        float64 `json:"fwd_margin_c,omitempty"`
+	RevMarginC        float64 `json:"rev_margin_c,omitempty"`
 }
 
 // ThermoStructureV1 describes a secondary-structure competitor.

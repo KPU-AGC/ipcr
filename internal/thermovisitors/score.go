@@ -28,6 +28,7 @@ const (
 	mismatchPolicyMixed             = "nn-perfect-or-nn-imperfect-v1"
 	structurePolicyNNStemV1         = thermo.StructureModelContiguousStemV1
 	structurePolicyNNStemLoopV2     = thermo.StructureModelStemLoopV2
+	structurePolicyNNPartitionV1    = thermo.StructureModelPartitionV1
 
 	scoreProfileBinding = "binding"
 	scoreProfilePCR     = "pcr"
@@ -948,30 +949,39 @@ func structureFromResultWithLabels(src thermo.StructureResult, penaltyC float64,
 		return nil
 	}
 	return &engine.ThermoStructure{
-		Kind:                        src.Kind,
-		Model:                       src.Model,
-		QueryA:                      queryA,
-		QueryB:                      queryB,
-		DeltaGAtAnnealKcal:          src.DeltaGAtAnnealKcal,
-		TmC:                         src.TmC,
-		AnnealMarginC:               src.AnnealMarginC,
-		StemLen:                     src.StemLen,
-		LoopLen:                     src.LoopLen,
-		AStart:                      src.AStart,
-		AEnd:                        src.AEnd,
-		BStart:                      src.BStart,
-		BEnd:                        src.BEnd,
-		ThreePrimeAnchored:          src.ThreePrimeAnchored,
-		BothThreePrimeAnchor:        src.BothThreePrimeAnchor,
-		SegmentCount:                src.SegmentCount,
-		BulgeCount:                  src.BulgeCount,
-		InternalLoopCount:           src.InternalLoopCount,
-		DanglingEndCount:            src.DanglingEndCount,
-		LoopPenaltyKcal:             src.LoopPenaltyKcal,
-		BulgePenaltyKcal:            src.BulgePenaltyKcal,
-		InternalLoopPenaltyKcal:     src.InternalLoopPenaltyKcal,
-		StructureDanglingDeltaGKcal: src.DanglingAdjustmentKcal,
-		PenaltyC:                    penaltyC,
+		Kind:                         src.Kind,
+		Model:                        src.Model,
+		QueryA:                       queryA,
+		QueryB:                       queryB,
+		DeltaGAtAnnealKcal:           src.DeltaGAtAnnealKcal,
+		TmC:                          src.TmC,
+		AnnealMarginC:                src.AnnealMarginC,
+		StemLen:                      src.StemLen,
+		LoopLen:                      src.LoopLen,
+		AStart:                       src.AStart,
+		AEnd:                         src.AEnd,
+		BStart:                       src.BStart,
+		BEnd:                         src.BEnd,
+		ThreePrimeAnchored:           src.ThreePrimeAnchored,
+		BothThreePrimeAnchor:         src.BothThreePrimeAnchor,
+		SegmentCount:                 src.SegmentCount,
+		BulgeCount:                   src.BulgeCount,
+		InternalLoopCount:            src.InternalLoopCount,
+		DanglingEndCount:             src.DanglingEndCount,
+		LoopPenaltyKcal:              src.LoopPenaltyKcal,
+		BulgePenaltyKcal:             src.BulgePenaltyKcal,
+		InternalLoopPenaltyKcal:      src.InternalLoopPenaltyKcal,
+		StructureDanglingDeltaGKcal:  src.DanglingAdjustmentKcal,
+		EnsembleDeltaGAtAnnealKcal:   src.EnsembleDeltaGAtAnnealKcal,
+		PartitionFunction:            src.PartitionFunction,
+		EnsembleWeight:               src.EnsembleWeight,
+		EnsembleCandidateCount:       src.EnsembleCandidateCount,
+		DPCellCount:                  src.DPCellCount,
+		DPStateCount:                 src.DPStateCount,
+		DPExpectedPairs:              src.DPExpectedPairs,
+		DPMFEDeltaGAtAnnealKcal:      src.DPMFEDeltaGAtAnnealKcal,
+		DPEnsembleDeltaGAtAnnealKcal: src.DPEnsembleDeltaGAtAnnealKcal,
+		PenaltyC:                     penaltyC,
 	}
 }
 
@@ -1090,7 +1100,7 @@ func (v Score) bestPanelCrossDimer(fwdPrimer, revPrimer string, fwd, revEnd engi
 				continue
 			}
 			seen[key] = struct{}{}
-			res, ok, err := thermo.BestCrossDimerV2(qSeq, partner.Seq, thermo.DefaultStructureOptions(cond))
+			res, ok, err := thermo.BestCrossDimerPartition(qSeq, partner.Seq, thermo.DefaultStructureOptions(cond))
 			if err != nil || !ok {
 				continue
 			}
@@ -1125,17 +1135,17 @@ func (v Score) visitNNStructureV1Strict(p engine.Product) (bool, engine.Product,
 	}
 
 	details := nnThermoDetails(thermomodel.NNStructureV1, cond, fwd, revEnd, baseScore, limitingSide)
-	details.StructurePolicy = structurePolicyNNStemLoopV2
+	details.StructurePolicy = structurePolicyNNPartitionV1
 	details.BaseScoreC = baseScore
 
 	totalPenalty := 0.0
 	if v.StructHairpin {
-		if hp, ok, err := thermo.BestHairpinV2(f, thermo.DefaultStructureOptions(cond)); err == nil && ok {
+		if hp, ok, err := thermo.BestHairpinPartition(f, thermo.DefaultStructureOptions(cond)); err == nil && ok {
 			pen := structureCompetitionPenaltyC(hp, fwd)
 			details.WorstHairpin = chooseWorseStructure(details.WorstHairpin, structureFromResultWithLabels(hp, pen, "fwd", "fwd"))
 			totalPenalty += pen
 		}
-		if hp, ok, err := thermo.BestHairpinV2(r, thermo.DefaultStructureOptions(cond)); err == nil && ok {
+		if hp, ok, err := thermo.BestHairpinPartition(r, thermo.DefaultStructureOptions(cond)); err == nil && ok {
 			pen := structureCompetitionPenaltyC(hp, revEnd)
 			details.WorstHairpin = chooseWorseStructure(details.WorstHairpin, structureFromResultWithLabels(hp, pen, "rev", "rev"))
 			totalPenalty += pen
@@ -1143,17 +1153,17 @@ func (v Score) visitNNStructureV1Strict(p engine.Product) (bool, engine.Product,
 	}
 
 	if v.StructDimer {
-		if sd, ok, err := thermo.BestSelfDimerV2(f, thermo.DefaultStructureOptions(cond)); err == nil && ok {
+		if sd, ok, err := thermo.BestSelfDimerPartition(f, thermo.DefaultStructureOptions(cond)); err == nil && ok {
 			pen := structureCompetitionPenaltyC(sd, fwd)
 			details.WorstSelfDimer = chooseWorseStructure(details.WorstSelfDimer, structureFromResultWithLabels(sd, pen, "fwd", "fwd"))
 			totalPenalty += pen
 		}
-		if sd, ok, err := thermo.BestSelfDimerV2(r, thermo.DefaultStructureOptions(cond)); err == nil && ok {
+		if sd, ok, err := thermo.BestSelfDimerPartition(r, thermo.DefaultStructureOptions(cond)); err == nil && ok {
 			pen := structureCompetitionPenaltyC(sd, revEnd)
 			details.WorstSelfDimer = chooseWorseStructure(details.WorstSelfDimer, structureFromResultWithLabels(sd, pen, "rev", "rev"))
 			totalPenalty += pen
 		}
-		if xd, ok, err := thermo.BestCrossDimerV2(f, r, thermo.DefaultStructureOptions(cond)); err == nil && ok {
+		if xd, ok, err := thermo.BestCrossDimerPartition(f, r, thermo.DefaultStructureOptions(cond)); err == nil && ok {
 			pen := math.Max(structureCompetitionPenaltyC(xd, fwd), structureCompetitionPenaltyC(xd, revEnd))
 			details.CrossDimer = chooseWorseStructure(details.CrossDimer, structureFromResultWithLabels(xd, pen, "fwd", "rev"))
 			totalPenalty += pen

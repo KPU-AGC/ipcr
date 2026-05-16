@@ -13,6 +13,7 @@ const (
 
 	StructureModelContiguousStemV1 = "nn-contiguous-stem-v1"
 	StructureModelStemLoopV2       = "nn-stem-loop-v2"
+	StructureModelPartitionV1      = "nn-structure-partition-v1"
 )
 
 // StructureOptions configures the v1 secondary-structure evaluator.
@@ -26,6 +27,10 @@ type StructureOptions struct {
 	// strands. The defaults keep the search conservative for primer-scale oligos.
 	MaxBulge        int
 	MaxInternalLoop int
+
+	// PartitionMaxCandidates bounds the candidate ensemble used by the partition
+	// evaluator. Zero uses a conservative primer-scale default.
+	PartitionMaxCandidates int
 }
 
 // StructureResult describes the strongest contiguous nearest-neighbor structure
@@ -54,15 +59,32 @@ type StructureResult struct {
 	BulgePenaltyKcal        float64
 	InternalLoopPenaltyKcal float64
 	DanglingAdjustmentKcal  float64
+
+	// Ensemble fields are populated by StructureModelPartitionV1. The coordinate
+	// fields continue to describe the best MFE candidate; these fields describe
+	// the bounded Boltzmann ensemble around that candidate.
+	EnsembleDeltaGAtAnnealKcal float64
+	PartitionFunction          float64
+	EnsembleWeight             float64
+	EnsembleCandidateCount     int
+
+	// DP fields are populated by the non-crossing hairpin dynamic-programming
+	// partition layer. They are separate from candidate enumeration metadata.
+	DPCellCount                  int
+	DPStateCount                 int
+	DPExpectedPairs              float64
+	DPMFEDeltaGAtAnnealKcal      float64
+	DPEnsembleDeltaGAtAnnealKcal float64
 }
 
 func DefaultStructureOptions(cond Conditions) StructureOptions {
 	return StructureOptions{
-		Conditions:      cond.WithDefaults(),
-		MinStem:         4,
-		MinLoop:         3,
-		MaxBulge:        2,
-		MaxInternalLoop: 2,
+		Conditions:             cond.WithDefaults(),
+		MinStem:                4,
+		MinLoop:                3,
+		MaxBulge:               2,
+		MaxInternalLoop:        2,
+		PartitionMaxCandidates: 256,
 	}
 }
 
@@ -139,6 +161,32 @@ func BestSelfDimerV2(seq5to3 string, opts StructureOptions) (StructureResult, bo
 
 func BestCrossDimerV2(a5to3, b5to3 string, opts StructureOptions) (StructureResult, bool, error) {
 	return bestDimerV2(a5to3, b5to3, opts, StructureCrossDimer)
+}
+
+func BestHairpinPartition(seq5to3 string, opts StructureOptions) (StructureResult, bool, error) {
+	opts = normalizeStructureOptions(opts)
+	seq, ok := normalizeACGTStructure(seq5to3)
+	if !ok {
+		return StructureResult{}, false, errors.New("hairpin: sequence must be A/C/G/T")
+	}
+	candidates, err := hairpinPartitionCandidates(seq, opts)
+	if err != nil {
+		return StructureResult{}, false, err
+	}
+	best, ok, err := partitionStructureEnsemble(candidates, opts.Conditions)
+	if err != nil || !ok {
+		return best, ok, err
+	}
+	mergeHairpinDPEnsemble(&best, hairpinDPPartition(seq, opts))
+	return best, true, nil
+}
+
+func BestSelfDimerPartition(seq5to3 string, opts StructureOptions) (StructureResult, bool, error) {
+	return bestDimerPartition(seq5to3, seq5to3, opts, StructureSelfDimer)
+}
+
+func BestCrossDimerPartition(a5to3, b5to3 string, opts StructureOptions) (StructureResult, bool, error) {
+	return bestDimerPartition(a5to3, b5to3, opts, StructureCrossDimer)
 }
 
 func bestDimer(a5to3, b5to3 string, opts StructureOptions, kind string) (StructureResult, bool, error) {
@@ -478,6 +526,9 @@ func normalizeStructureOptions(opts StructureOptions) StructureOptions {
 	if opts.MaxInternalLoop <= 0 {
 		opts.MaxInternalLoop = 2
 	}
+	if opts.PartitionMaxCandidates <= 0 {
+		opts.PartitionMaxCandidates = 256
+	}
 	opts.Conditions = opts.Conditions.WithDefaults()
 	return opts
 }
@@ -541,4 +592,351 @@ func betterStructureResult(cand, best StructureResult) bool {
 		return cand.StemLen > best.StemLen
 	}
 	return false
+}
+
+func hairpinPartitionCandidates(seq5to3 string, opts StructureOptions) ([]StructureResult, error) {
+	opts = normalizeStructureOptions(opts)
+	seq, ok := normalizeACGTStructure(seq5to3)
+	if !ok {
+		return nil, errors.New("hairpin: sequence must be A/C/G/T")
+	}
+	out := make([]StructureResult, 0)
+	if len(seq) < 2*opts.MinStem+opts.MinLoop {
+		return out, nil
+	}
+
+	for i := 0; i <= len(seq)-opts.MinStem-opts.MinLoop-opts.MinStem; i++ {
+		for j := i + opts.MinStem + opts.MinLoop; j <= len(seq)-opts.MinStem; j++ {
+			maxStem := len(seq) - j
+			if byLoop := j - i - opts.MinLoop; byLoop < maxStem {
+				maxStem = byLoop
+			}
+			for stem := opts.MinStem; stem <= maxStem; stem++ {
+				if !hairpinStemWC(seq, i, j, stem) {
+					continue
+				}
+				loopLen := j - (i + stem)
+				top := seq[i : i+stem]
+				target3 := reverseStructure(seq[j : j+stem])
+				cand, err := stemThermo(StructureHairpin, top, target3, opts.Conditions, loopLen)
+				if err != nil {
+					continue
+				}
+				cand.AStart, cand.AEnd = i, i+stem
+				cand.BStart, cand.BEnd = j, j+stem
+				cand.ThreePrimeAnchored = cand.AEnd == len(seq) || cand.BEnd == len(seq)
+				out = appendPartitionCandidate(out, cand, opts)
+			}
+		}
+	}
+
+	for i := 0; i < len(seq); i++ {
+		for j := i + opts.MinStem + opts.MinLoop; j < len(seq); j++ {
+			rightArm := seq[j:]
+			target3 := reverseStructure(rightArm)
+			for _, cand := range enumerateGappedStemCandidates(seq, target3, i, 0, opts) {
+				loopLen := j - cand.aEnd()
+				if loopLen < opts.MinLoop || cand.bEnd() > len(target3) {
+					continue
+				}
+				res, err := gappedStemThermo(StructureHairpin, seq, target3, cand, opts.Conditions, loopLen)
+				if err != nil {
+					continue
+				}
+				res.AStart, res.AEnd = cand.aStart, cand.aEnd()
+				res.BStart, res.BEnd = j+len(rightArm)-cand.bEnd(), j+len(rightArm)-cand.bStart
+				res.ThreePrimeAnchored = res.AEnd == len(seq) || res.BEnd == len(seq)
+				out = appendPartitionCandidate(out, res, opts)
+			}
+		}
+	}
+	return out, nil
+}
+
+func bestDimerPartition(a5to3, b5to3 string, opts StructureOptions, kind string) (StructureResult, bool, error) {
+	candidates, err := dimerPartitionCandidates(a5to3, b5to3, opts, kind)
+	if err != nil {
+		return StructureResult{}, false, err
+	}
+	return partitionStructureEnsemble(candidates, normalizeStructureOptions(opts).Conditions)
+}
+
+func dimerPartitionCandidates(a5to3, b5to3 string, opts StructureOptions, kind string) ([]StructureResult, error) {
+	opts = normalizeStructureOptions(opts)
+	a, okA := normalizeACGTStructure(a5to3)
+	b, okB := normalizeACGTStructure(b5to3)
+	if !okA || !okB {
+		return nil, errors.New("dimer: sequences must be A/C/G/T")
+	}
+	out := make([]StructureResult, 0)
+	if len(a) < opts.MinStem || len(b) < opts.MinStem {
+		return out, nil
+	}
+
+	bTarget3 := reverseStructure(b)
+	for i := 0; i <= len(a)-opts.MinStem; i++ {
+		for j := 0; j <= len(bTarget3)-opts.MinStem; j++ {
+			run := 0
+			for i+run < len(a) && j+run < len(bTarget3) && wc(a[i+run], bTarget3[j+run]) {
+				run++
+			}
+			if run < opts.MinStem {
+				continue
+			}
+			for stem := opts.MinStem; stem <= run; stem++ {
+				cand, err := stemThermo(kind, a[i:i+stem], bTarget3[j:j+stem], opts.Conditions, 0)
+				if err != nil {
+					continue
+				}
+				cand.AStart, cand.AEnd = i, i+stem
+				cand.BStart, cand.BEnd = len(b)-(j+stem), len(b)-j
+				a3 := cand.AEnd == len(a)
+				b3 := cand.BEnd == len(b)
+				cand.ThreePrimeAnchored = a3 || b3
+				cand.BothThreePrimeAnchor = a3 && b3
+				out = appendPartitionCandidate(out, cand, opts)
+			}
+		}
+	}
+
+	for i := 0; i < len(a); i++ {
+		for j := 0; j < len(bTarget3); j++ {
+			for _, cand := range enumerateGappedStemCandidates(a, bTarget3, i, j, opts) {
+				if cand.aEnd() > len(a) || cand.bEnd() > len(bTarget3) {
+					continue
+				}
+				res, err := gappedStemThermo(kind, a, bTarget3, cand, opts.Conditions, 0)
+				if err != nil {
+					continue
+				}
+				res.AStart, res.AEnd = cand.aStart, cand.aEnd()
+				res.BStart, res.BEnd = len(b)-cand.bEnd(), len(b)-cand.bStart
+				a3 := res.AEnd == len(a)
+				b3 := res.BEnd == len(b)
+				res.ThreePrimeAnchored = a3 || b3
+				res.BothThreePrimeAnchor = a3 && b3
+				out = appendPartitionCandidate(out, res, opts)
+			}
+		}
+	}
+	return out, nil
+}
+
+func appendPartitionCandidate(out []StructureResult, cand StructureResult, opts StructureOptions) []StructureResult {
+	if cand.StemLen == 0 || math.IsNaN(cand.DeltaGAtAnnealKcal) || math.IsInf(cand.DeltaGAtAnnealKcal, 0) {
+		return out
+	}
+	out = append(out, cand)
+	if opts.PartitionMaxCandidates > 0 && len(out) >= opts.PartitionMaxCandidates {
+		return out[:opts.PartitionMaxCandidates]
+	}
+	return out
+}
+
+func partitionStructureEnsemble(candidates []StructureResult, cond Conditions) (StructureResult, bool, error) {
+	if len(candidates) == 0 {
+		return StructureResult{}, false, nil
+	}
+	cond = cond.WithDefaults()
+	best := candidates[0]
+	minDG := candidates[0].DeltaGAtAnnealKcal
+	for _, cand := range candidates[1:] {
+		if betterStructureResult(cand, best) {
+			best = cand
+		}
+		if cand.DeltaGAtAnnealKcal < minDG {
+			minDG = cand.DeltaGAtAnnealKcal
+		}
+	}
+
+	rt := (Rcal / 1000.0) * (cond.AnnealC + 273.15)
+	if rt <= 0 || math.IsNaN(rt) || math.IsInf(rt, 0) {
+		rt = (Rcal / 1000.0) * 333.15
+	}
+	partition := 0.0
+	bestWeightNumerator := 0.0
+	for _, cand := range candidates {
+		w := math.Exp(-(cand.DeltaGAtAnnealKcal - minDG) / rt)
+		partition += w
+		if sameStructureCoordinates(cand, best) && cand.DeltaGAtAnnealKcal == best.DeltaGAtAnnealKcal {
+			bestWeightNumerator += w
+		}
+	}
+	if partition <= 0 || math.IsNaN(partition) || math.IsInf(partition, 0) {
+		return best, true, nil
+	}
+	ensembleDG := minDG - rt*math.Log(partition)
+	best.Model = StructureModelPartitionV1
+	best.EnsembleDeltaGAtAnnealKcal = ensembleDG
+	best.PartitionFunction = partition
+	best.EnsembleWeight = bestWeightNumerator / partition
+	best.EnsembleCandidateCount = len(candidates)
+	best.DeltaGAtAnnealKcal = ensembleDG
+	best.AnnealMarginC = best.TmC - cond.AnnealC
+	return best, true, nil
+}
+
+func sameStructureCoordinates(a, b StructureResult) bool {
+	return a.Kind == b.Kind && a.AStart == b.AStart && a.AEnd == b.AEnd && a.BStart == b.BStart && a.BEnd == b.BEnd && a.StemLen == b.StemLen && a.SegmentCount == b.SegmentCount
+}
+
+type hairpinDPPartitionResult struct {
+	cellCount                  int
+	stateCount                 int
+	partitionFunction          float64
+	expectedPairs              float64
+	mfeDeltaGAtAnnealKcal      float64
+	ensembleDeltaGAtAnnealKcal float64
+}
+
+type hairpinDPCell struct {
+	z        float64
+	pairMass float64
+	mfe      float64
+	states   int
+}
+
+func hairpinDPPartition(seq string, opts StructureOptions) hairpinDPPartitionResult {
+	n := len(seq)
+	if n == 0 {
+		return hairpinDPPartitionResult{}
+	}
+	cond := opts.Conditions.WithDefaults()
+	tempK := cond.AnnealC + 273.15
+	rt := (Rcal / 1000.0) * tempK
+	if rt <= 0 || math.IsNaN(rt) || math.IsInf(rt, 0) {
+		rt = (Rcal / 1000.0) * 333.15
+	}
+
+	cells := make([][]hairpinDPCell, n)
+	for i := range cells {
+		cells[i] = make([]hairpinDPCell, n)
+		for j := range cells[i] {
+			cells[i][j] = hairpinDPCell{z: 1, mfe: 0}
+		}
+	}
+
+	cellCount := 0
+	for span := 1; span < n; span++ {
+		for i := 0; i+span < n; i++ {
+			j := i + span
+			cellCount++
+			z := dpZ(cells, i, j-1)
+			pairMass := dpPairMass(cells, i, j-1)
+			mfe := dpMFE(cells, i, j-1)
+			states := dpStates(cells, i, j-1)
+
+			if j-i > opts.MinLoop {
+				for k := i; k <= j-opts.MinLoop-1; k++ {
+					if !wc(seq[k], seq[j]) {
+						continue
+					}
+					bpDG := hairpinDPBasePairDeltaGKcal(seq[k], seq[j])
+					w := structureBoltzmannWeight(bpDG, tempK)
+					leftZ := dpZ(cells, i, k-1)
+					insideZ := dpZ(cells, k+1, j-1)
+					termZ := w * leftZ * insideZ
+					if termZ <= 0 || math.IsNaN(termZ) || math.IsInf(termZ, 0) {
+						continue
+					}
+					z += termZ
+					pairMass += termZ * (1 + dpPairMass(cells, i, k-1)/leftZ + dpPairMass(cells, k+1, j-1)/insideZ)
+					candidateMFE := bpDG + dpMFE(cells, i, k-1) + dpMFE(cells, k+1, j-1)
+					if candidateMFE < mfe {
+						mfe = candidateMFE
+					}
+					states += 1 + dpStates(cells, i, k-1) + dpStates(cells, k+1, j-1)
+				}
+			}
+			cells[i][j] = hairpinDPCell{z: z, pairMass: pairMass, mfe: mfe, states: states}
+		}
+	}
+
+	z := dpZ(cells, 0, n-1)
+	out := hairpinDPPartitionResult{
+		cellCount:             cellCount,
+		stateCount:            dpStates(cells, 0, n-1),
+		partitionFunction:     z,
+		expectedPairs:         dpPairMass(cells, 0, n-1) / z,
+		mfeDeltaGAtAnnealKcal: dpMFE(cells, 0, n-1),
+	}
+	if z > 1 {
+		out.ensembleDeltaGAtAnnealKcal = -rt * math.Log(z)
+	}
+	return out
+}
+
+func mergeHairpinDPEnsemble(dst *StructureResult, dp hairpinDPPartitionResult) {
+	if dst == nil || dp.partitionFunction <= 1 || dp.stateCount <= 0 {
+		return
+	}
+	dst.DPCellCount = dp.cellCount
+	dst.DPStateCount = dp.stateCount
+	dst.DPExpectedPairs = dp.expectedPairs
+	dst.DPMFEDeltaGAtAnnealKcal = dp.mfeDeltaGAtAnnealKcal
+	dst.DPEnsembleDeltaGAtAnnealKcal = dp.ensembleDeltaGAtAnnealKcal
+	if dp.ensembleDeltaGAtAnnealKcal != 0 && dp.ensembleDeltaGAtAnnealKcal < dst.EnsembleDeltaGAtAnnealKcal {
+		dst.EnsembleDeltaGAtAnnealKcal = dp.ensembleDeltaGAtAnnealKcal
+		dst.DeltaGAtAnnealKcal = dp.ensembleDeltaGAtAnnealKcal
+	}
+}
+
+func dpZ(cells [][]hairpinDPCell, i, j int) float64 {
+	if i > j || i < 0 || j < 0 || i >= len(cells) || j >= len(cells) {
+		return 1
+	}
+	z := cells[i][j].z
+	if z <= 0 || math.IsNaN(z) || math.IsInf(z, 0) {
+		return 1
+	}
+	return z
+}
+
+func dpPairMass(cells [][]hairpinDPCell, i, j int) float64 {
+	if i > j || i < 0 || j < 0 || i >= len(cells) || j >= len(cells) {
+		return 0
+	}
+	return cells[i][j].pairMass
+}
+
+func dpMFE(cells [][]hairpinDPCell, i, j int) float64 {
+	if i > j || i < 0 || j < 0 || i >= len(cells) || j >= len(cells) {
+		return 0
+	}
+	return cells[i][j].mfe
+}
+
+func dpStates(cells [][]hairpinDPCell, i, j int) int {
+	if i > j || i < 0 || j < 0 || i >= len(cells) || j >= len(cells) {
+		return 0
+	}
+	return cells[i][j].states
+}
+
+func structureBoltzmannWeight(deltaGKcal, tempK float64) float64 {
+	if tempK <= 0 || math.IsNaN(deltaGKcal) || math.IsInf(deltaGKcal, 0) {
+		return 0
+	}
+	rt := (Rcal / 1000.0) * tempK
+	if rt <= 0 {
+		return 0
+	}
+	x := -deltaGKcal / rt
+	if x > 700 {
+		x = 700
+	}
+	if x < -700 {
+		x = -700
+	}
+	return math.Exp(x)
+}
+
+func hairpinDPBasePairDeltaGKcal(a, b byte) float64 {
+	if !wc(a, b) {
+		return math.Inf(1)
+	}
+	if (a == 'G' && b == 'C') || (a == 'C' && b == 'G') {
+		return -2.2
+	}
+	return -1.1
 }

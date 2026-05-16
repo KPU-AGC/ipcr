@@ -138,3 +138,50 @@ func TestBestStructureV2PreservesContiguousResult(t *testing.T) {
 		t.Fatalf("v2 should preserve or improve v1 result: v1=%+v v2=%+v", v1, v2)
 	}
 }
+
+func TestBestCrossDimerPartitionReportsEnsembleAndDPMetadata(t *testing.T) {
+	opts := DefaultStructureOptions(DefaultConditions())
+	got, ok, err := BestCrossDimerPartition("TTTTTGCGCG", "AAAAAGCGTCG", opts)
+	if err != nil {
+		t.Fatalf("BestCrossDimerPartition error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected partition cross-dimer candidate")
+	}
+	if got.Model != StructureModelPartitionV1 {
+		t.Fatalf("expected partition model, got %+v", got)
+	}
+	if got.EnsembleCandidateCount <= 0 || got.PartitionFunction <= 0 || got.EnsembleWeight <= 0 || got.EnsembleWeight > 1 {
+		t.Fatalf("invalid ensemble metadata: %+v", got)
+	}
+	if got.EnsembleDeltaGAtAnnealKcal == 0 || got.DeltaGAtAnnealKcal != got.EnsembleDeltaGAtAnnealKcal {
+		t.Fatalf("expected ensemble ΔG to be represented in result, got %+v", got)
+	}
+}
+
+func TestBestHairpinPartitionAddsNonCrossingDPEnsemble(t *testing.T) {
+	opts := DefaultStructureOptions(DefaultConditions())
+	v2, ok2, err2 := BestHairpinV2("GCGCGCAAAAGCGTCGC", opts)
+	part, okPart, errPart := BestHairpinPartition("GCGCGCAAAAGCGTCGC", opts)
+	if err2 != nil || errPart != nil {
+		t.Fatalf("unexpected errors: v2=%v partition=%v", err2, errPart)
+	}
+	if !ok2 || !okPart {
+		t.Fatalf("expected both v2 and partition candidates: v2=%+v part=%+v", v2, part)
+	}
+	if part.Model != StructureModelPartitionV1 {
+		t.Fatalf("expected partition model, got %+v", part)
+	}
+	if part.EnsembleCandidateCount <= 0 || part.PartitionFunction <= 0 || part.EnsembleWeight <= 0 {
+		t.Fatalf("missing candidate ensemble metadata: %+v", part)
+	}
+	if part.DPCellCount <= 0 || part.DPStateCount <= 0 || part.DPExpectedPairs <= 0 {
+		t.Fatalf("missing DP partition metadata: %+v", part)
+	}
+	if part.DPEnsembleDeltaGAtAnnealKcal >= 0 || part.DPMFEDeltaGAtAnnealKcal >= 0 {
+		t.Fatalf("expected favorable DP ensemble/MFE terms: %+v", part)
+	}
+	if part.DeltaGAtAnnealKcal > v2.DeltaGAtAnnealKcal+1e-9 {
+		t.Fatalf("partition ensemble should not be weaker than v2 candidate: v2=%+v part=%+v", v2, part)
+	}
+}

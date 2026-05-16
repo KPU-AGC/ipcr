@@ -1,6 +1,7 @@
 # ipcr — fast in-silico PCR toolkit (primers, probes, nested & multiplex)
 
 [![CI](https://img.shields.io/github/actions/workflow/status/KPU-AGC/ipcr/ci.yml?branch=main&label=ci)](https://github.com/KPU-AGC/ipcr/actions/workflows/ci.yml)
+[![DOI](http://zenodo.org/badge/DOI/10.5281/zenodo.20232919.svg)](https://doi.org/10.5281/zenodo.20232919)
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/ipcr/badges/downloads.svg)](https://anaconda.org/bioconda/ipcr)
 [![install with bioconda](https://img.shields.io/badge/install%20with-bioconda-brightgreen.svg?style=flat)](http://bioconda.github.io/recipes/ipcr/README.html)
 [![Go](https://img.shields.io/badge/go-%3E=%201.22-blue)](https://golang.org)
@@ -220,12 +221,11 @@ See [docs/THERMO_MODELS.md](./docs/THERMO_MODELS.md) for the model matrix and fa
 
 ---
 
-## License & citation
+## Citation
 
-MIT. See [LICENSE](./LICENSE).
+If you use `ipcr`, please cite the archived software release:
 
-If you use **ipcr** in your work, please cite this repository (a manuscript is in progress).
-
+[https://doi.org/10.5281/zenodo.20232919](https://doi.org/10.5281/zenodo.20232919)
 ```
 
 ```

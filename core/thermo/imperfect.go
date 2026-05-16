@@ -137,20 +137,6 @@ func (o ImperfectDuplexOptions) posMultiplier(i, n int) float64 {
 	return 1
 }
 
-func (o ImperfectDuplexOptions) terminalPenalty(i, n int) float64 {
-	o = o.withDefaults()
-	switch {
-	case n <= 0:
-		return 0
-	case i == n-1:
-		return o.ThreePrimeTerminalPenaltyC
-	case i == 0:
-		return o.FivePrimeTerminalPenaltyC
-	default:
-		return 0
-	}
-}
-
 // MismatchContribution describes one non-Watson-Crick primer-template column.
 type MismatchContribution struct {
 	Pos                   int
@@ -420,15 +406,17 @@ func ImperfectDuplexWithOptionsAndContext(primer5to3, target3to5 string, cond Co
 
 	policy := MismatchPolicyPerfect
 	if out.MismatchCount > 0 {
-		policy = MismatchPolicyImperfectV1
-		if out.DefaultFallbackCount > 0 {
+		switch {
+		case out.DefaultFallbackCount > 0:
 			policy = MismatchPolicyImperfectDefaultFallback
-		} else if out.HeuristicFallbackCount > 0 {
+		case out.HeuristicFallbackCount > 0:
 			policy = MismatchPolicyImperfectHeuristicFallback
-		} else if out.TripletTmCount+out.TripletDeltaGCount > 0 {
+		case out.TripletTmCount+out.TripletDeltaGCount > 0:
 			policy = MismatchPolicyImperfectTriplet
-		} else if out.CuratedPairCount > 0 {
+		case out.CuratedPairCount > 0:
 			policy = MismatchPolicyImperfectCuratedPair
+		default:
+			policy = MismatchPolicyImperfectV1
 		}
 	}
 

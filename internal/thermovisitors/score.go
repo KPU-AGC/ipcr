@@ -491,6 +491,36 @@ func (v Score) denomForPrimer(primer5to3 string) float64 {
 	return D
 }
 
+func appendUniqueString(dst []string, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return dst
+	}
+	for _, existing := range dst {
+		if existing == value {
+			return dst
+		}
+	}
+	return append(dst, value)
+}
+
+func appendUniqueStrings(dst []string, values []string) []string {
+	for _, value := range values {
+		dst = appendUniqueString(dst, value)
+	}
+	return dst
+}
+
+func mismatchProvenance(contribs []thermo.MismatchContribution) (sources, parameterSets, citations, notes []string) {
+	for _, c := range contribs {
+		sources = appendUniqueString(sources, string(c.Source))
+		parameterSets = appendUniqueString(parameterSets, c.ParameterSet)
+		citations = appendUniqueString(citations, c.Citation)
+		notes = appendUniqueString(notes, c.ParameterNote)
+	}
+	return sources, parameterSets, citations, notes
+}
+
 func endpointFromDuplex(side string, d thermo.DuplexResult, mismatchPenaltyC float64, policy string, hasNonWC, heuristic bool) engine.ThermoEndpoint {
 	return engine.ThermoEndpoint{
 		Side:                side,
@@ -507,6 +537,7 @@ func endpointFromDuplex(side string, d thermo.DuplexResult, mismatchPenaltyC flo
 }
 
 func endpointFromImperfect(side string, d thermo.ImperfectDuplexResult) engine.ThermoEndpoint {
+	sources, parameterSets, citations, notes := mismatchProvenance(d.Contributions)
 	return engine.ThermoEndpoint{
 		Side:                               side,
 		TmC:                                d.TmC,
@@ -530,6 +561,10 @@ func endpointFromImperfect(side string, d thermo.ImperfectDuplexResult) engine.T
 		MismatchFallbackCount:              d.HeuristicFallbackCount + d.DefaultFallbackCount,
 		MismatchTripletCount:               d.TripletTmCount + d.TripletDeltaGCount,
 		MismatchCuratedPairCount:           d.CuratedPairCount,
+		MismatchSources:                    sources,
+		MismatchParameterSets:              parameterSets,
+		MismatchCitations:                  citations,
+		MismatchParameterNotes:             notes,
 		EffectiveDenomCalK:                 absFiniteOrFallback(d.EffectiveDenomCalK, 200.0),
 		MismatchPolicy:                     d.MismatchPolicy,
 		EndEffectPolicy:                    d.EndEffectPolicy,
@@ -1232,6 +1267,8 @@ func probeVariantDetails(base engine.ProbeThermoDetails, chosen scoredProbeVaria
 	base.MismatchCount = res.MismatchCount
 	base.MismatchFallbackCount = res.HeuristicFallbackCount + res.DefaultFallbackCount
 	base.MismatchTripletCount = res.TripletTmCount + res.TripletDeltaGCount
+	base.MismatchCuratedPairCount = res.CuratedPairCount
+	base.MismatchSources, base.MismatchParameterSets, base.MismatchCitations, base.MismatchParameterNotes = mismatchProvenance(res.Contributions)
 	base.MismatchPolicy = res.MismatchPolicy
 	base.HasNonWatsonCrick = res.HasNonWatsonCrick
 	base.UsedHeuristicAdjust = res.UsedHeuristicAdjust
@@ -1264,6 +1301,14 @@ func meanProbeDetails(base engine.ProbeThermoDetails, scored []scoredProbeVarian
 		if triplets > base.MismatchTripletCount {
 			base.MismatchTripletCount = triplets
 		}
+		if res.CuratedPairCount > base.MismatchCuratedPairCount {
+			base.MismatchCuratedPairCount = res.CuratedPairCount
+		}
+		sources, parameterSets, citations, notes := mismatchProvenance(res.Contributions)
+		base.MismatchSources = appendUniqueStrings(base.MismatchSources, sources)
+		base.MismatchParameterSets = appendUniqueStrings(base.MismatchParameterSets, parameterSets)
+		base.MismatchCitations = appendUniqueStrings(base.MismatchCitations, citations)
+		base.MismatchParameterNotes = appendUniqueStrings(base.MismatchParameterNotes, notes)
 		if res.HasNonWatsonCrick {
 			base.HasNonWatsonCrick = true
 		}
@@ -1278,6 +1323,10 @@ func meanProbeDetails(base engine.ProbeThermoDetails, scored []scoredProbeVarian
 	base.MismatchDeltaGKcal /= n
 	if base.MismatchFallbackCount > 0 {
 		base.MismatchPolicy = thermo.MismatchPolicyImperfectHeuristicFallback
+	} else if base.MismatchTripletCount > 0 {
+		base.MismatchPolicy = thermo.MismatchPolicyImperfectTriplet
+	} else if base.MismatchCuratedPairCount > 0 {
+		base.MismatchPolicy = thermo.MismatchPolicyImperfectCuratedPair
 	} else if base.MismatchCount > 0 {
 		base.MismatchPolicy = thermo.MismatchPolicyImperfectV1
 	} else {

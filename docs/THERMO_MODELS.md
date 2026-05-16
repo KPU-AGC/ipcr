@@ -13,15 +13,15 @@ The practical release claim is:
 
 Do not describe the current implementation as fully thermodynamically faithful
 PCR amplification modeling. PCR yield, gel brightness, polymerase kinetics,
-modified probes, and complete loop/mismatch parameter tables still require
-calibration or additional chemistry-specific parameters.
+modified probes, terminal/tandem mismatch chemistry, and complete loop tables
+still require calibration or additional chemistry-specific parameters.
 
 ## Thermodynamic implementation modes
 
 | Mode               | Purpose                                                               | Notes                                                                                                                    |
 | ------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `legacy-heuristic` | Historical score path                                                 | Maintained for backward compatibility. Scores are not directly comparable with NN modes.                                 |
-| `nn-duplex-v1`     | Primer-template nearest-neighbor duplex ranking                       | Uses runtime conditions, salt model, primer concentration, IUPAC thermo policy, and explicit mismatch fallback metadata. |
+| `nn-duplex-v1`     | Primer-template nearest-neighbor duplex ranking                       | Uses runtime conditions, salt model, primer concentration, IUPAC thermo policy, and explicit mismatch source/parameter-set metadata. |
 | `nn-structure-v1`  | `nn-duplex-v1` plus primer hairpin/self-dimer/cross-dimer competition | Uses the current secondary-structure evaluator and reports structure policy/model metadata.                              |
 
 ## Structure model labels
@@ -108,7 +108,7 @@ modifier model is added.
 Thermodynamic outputs should expose when approximate paths were used. The most
 important labels are:
 
-- mismatch policy and fallback counts,
+- mismatch policy, source labels, parameter sets, citations, and fallback counts,
 - structure policy/model,
 - salt model and free/effective ion concentrations,
 - IUPAC policy and expansion/capping status,
@@ -134,8 +134,10 @@ uses approximations, as long as the approximation is visible.
 The current thermodynamic implementation is intentionally transparent about these
 limits:
 
-1. Curated mismatch triplet tables are still incomplete; fallback mismatch terms
-   remain possible and must remain reported.
+1. Curated mismatch triplets are complete for isolated internal single-base
+   A/C/G/T DNA/DNA mismatches in Watson-Crick flanking contexts. Fallback terms
+   remain possible for terminal mismatches, tandem/clustered mismatches, target
+   `N`, degenerate/IUPAC-expanded edge cases, and modified-probe chemistry.
 2. `owczarzy08` uses a practical mixed-salt/free-Mg approximation, not a full
    activity-coefficient chemistry model.
 3. `nn-stem-loop-v2` is not a complete secondary-structure dynamic-programming

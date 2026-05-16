@@ -34,10 +34,14 @@ func FormatRowTSVWithScore(p engine.Product) string {
 	return fmt.Sprintf("%s\t%g", base, p.Score)
 }
 
-const ThermoDetailsTSVHeader = "thermo_model\tsalt_model\tna_m\tmg_m\tdntp_m\teffective_na_m\tfree_mg_m\tanneal_temp_c\tiupac_thermo_policy\tiupac_expansion_count\tiupac_expansion_capped\tiupac_effective_variant\tscore_profile\tbase_score_c\tfinal_score_c\tamplicon_adjustment_c\textension_logit\textension_bonus_c\tlength_penalty_c\tband_mass_bonus_c\tstructure_penalty_c\tlimiting_side\tfwd_tm_c\trev_tm_c\tfwd_margin_c\trev_margin_c\tfwd_dg_kcal\trev_dg_kcal\tfwd_mismatch_penalty_c\trev_mismatch_penalty_c\tfwd_mismatch_count\trev_mismatch_count\tfwd_3p_mismatch_count\trev_3p_mismatch_count\tfwd_mismatch_fallback_count\trev_mismatch_fallback_count\tfwd_mismatch_dg_kcal\trev_mismatch_dg_kcal\tfwd_terminal_mismatch_penalty_c\trev_terminal_mismatch_penalty_c\tfwd_5p_terminal_mismatch_penalty_c\trev_5p_terminal_mismatch_penalty_c\tfwd_3p_terminal_mismatch_penalty_c\trev_3p_terminal_mismatch_penalty_c\tfwd_terminal_mismatch_dg_kcal\trev_terminal_mismatch_dg_kcal\tfwd_dangling_end_adjustment_c\trev_dangling_end_adjustment_c\tfwd_dangling_end_dg_kcal\trev_dangling_end_dg_kcal\tfwd_end_effect_policy\trev_end_effect_policy\thairpin_penalty_c\tself_dimer_penalty_c\tcross_dimer_penalty_c\tpanel_cross_dimer_penalty_c\tpanel_cross_dimer_burden_c\tpanel_cross_dimer_count\tpanel_cross_dimer_partner\tprobe_found\tprobe_score_mode\tprobe_name\tprobe_seq\tprobe_strand\tprobe_pos\tprobe_mm\tprobe_site\tprobe_tm_c\tprobe_margin_c\tprobe_dg_kcal\tprobe_mismatch_penalty_c\tprobe_mismatch_dg_kcal\tprobe_iupac_thermo_policy\tprobe_iupac_expansion_count\tprobe_iupac_expansion_capped\tprobe_iupac_effective_variant\tprobe_score_contribution_c\tprobe_gate_penalty_c"
+const ThermoDetailsTSVHeader = "thermo_model\tsalt_model\tna_m\tmg_m\tdntp_m\teffective_na_m\tfree_mg_m\tanneal_temp_c\tiupac_thermo_policy\tiupac_expansion_count\tiupac_expansion_capped\tiupac_effective_variant\tscore_profile\tbase_score_c\tfinal_score_c\tamplicon_adjustment_c\textension_logit\textension_bonus_c\tlength_penalty_c\tband_mass_bonus_c\tstructure_penalty_c\tlimiting_side\tfwd_tm_c\trev_tm_c\tfwd_margin_c\trev_margin_c\tfwd_dg_kcal\trev_dg_kcal\tfwd_mismatch_penalty_c\trev_mismatch_penalty_c\tfwd_mismatch_count\trev_mismatch_count\tfwd_3p_mismatch_count\trev_3p_mismatch_count\tfwd_mismatch_fallback_count\trev_mismatch_fallback_count\tfwd_mismatch_dg_kcal\trev_mismatch_dg_kcal\tfwd_terminal_mismatch_penalty_c\trev_terminal_mismatch_penalty_c\tfwd_5p_terminal_mismatch_penalty_c\trev_5p_terminal_mismatch_penalty_c\tfwd_3p_terminal_mismatch_penalty_c\trev_3p_terminal_mismatch_penalty_c\tfwd_terminal_mismatch_dg_kcal\trev_terminal_mismatch_dg_kcal\tfwd_dangling_end_adjustment_c\trev_dangling_end_adjustment_c\tfwd_dangling_end_dg_kcal\trev_dangling_end_dg_kcal\tfwd_end_effect_policy\trev_end_effect_policy\thairpin_penalty_c\tself_dimer_penalty_c\tcross_dimer_penalty_c\tpanel_cross_dimer_penalty_c\tpanel_cross_dimer_burden_c\tpanel_cross_dimer_count\tpanel_cross_dimer_partner\tprobe_found\tprobe_score_mode\tprobe_name\tprobe_seq\tprobe_strand\tprobe_pos\tprobe_mm\tprobe_site\tprobe_tm_c\tprobe_margin_c\tprobe_dg_kcal\tprobe_mismatch_penalty_c\tprobe_mismatch_dg_kcal\tprobe_iupac_thermo_policy\tprobe_iupac_expansion_count\tprobe_iupac_expansion_capped\tprobe_iupac_effective_variant\tprobe_score_contribution_c\tprobe_gate_penalty_c	fwd_mismatch_policy	rev_mismatch_policy	fwd_mismatch_triplet_count	rev_mismatch_triplet_count	fwd_mismatch_curated_pair_count	rev_mismatch_curated_pair_count	fwd_mismatch_sources	rev_mismatch_sources	fwd_mismatch_parameter_sets	rev_mismatch_parameter_sets	fwd_mismatch_citations	rev_mismatch_citations	fwd_mismatch_parameter_notes	rev_mismatch_parameter_notes	probe_mismatch_count	probe_mismatch_fallback_count	probe_mismatch_triplet_count	probe_mismatch_curated_pair_count	probe_mismatch_policy	probe_mismatch_sources	probe_mismatch_parameter_sets	probe_mismatch_citations	probe_mismatch_parameter_notes"
 
 func thermoFloat(x float64) string {
 	return strconv.FormatFloat(x, 'g', -1, 64)
+}
+
+func thermoStrings(values []string) string {
+	return strings.Join(values, "|")
 }
 
 // FormatThermoDetailsTSV returns optional NN thermodynamic component columns.
@@ -164,6 +168,47 @@ func FormatThermoDetailsTSV(p engine.Product) string {
 		fields[75] = t.Probe.IUPACEffectiveVariant
 		fields[76] = thermoFloat(t.Probe.ScoreContributionC)
 		fields[77] = thermoFloat(t.Probe.GatePenaltyC)
+	}
+	fields[78] = t.Fwd.MismatchPolicy
+	fields[79] = t.Rev.MismatchPolicy
+	if t.Fwd.MismatchTripletCount > 0 {
+		fields[80] = strconv.Itoa(t.Fwd.MismatchTripletCount)
+	}
+	if t.Rev.MismatchTripletCount > 0 {
+		fields[81] = strconv.Itoa(t.Rev.MismatchTripletCount)
+	}
+	if t.Fwd.MismatchCuratedPairCount > 0 {
+		fields[82] = strconv.Itoa(t.Fwd.MismatchCuratedPairCount)
+	}
+	if t.Rev.MismatchCuratedPairCount > 0 {
+		fields[83] = strconv.Itoa(t.Rev.MismatchCuratedPairCount)
+	}
+	fields[84] = thermoStrings(t.Fwd.MismatchSources)
+	fields[85] = thermoStrings(t.Rev.MismatchSources)
+	fields[86] = thermoStrings(t.Fwd.MismatchParameterSets)
+	fields[87] = thermoStrings(t.Rev.MismatchParameterSets)
+	fields[88] = thermoStrings(t.Fwd.MismatchCitations)
+	fields[89] = thermoStrings(t.Rev.MismatchCitations)
+	fields[90] = thermoStrings(t.Fwd.MismatchParameterNotes)
+	fields[91] = thermoStrings(t.Rev.MismatchParameterNotes)
+	if t.Probe != nil {
+		if t.Probe.MismatchCount > 0 {
+			fields[92] = strconv.Itoa(t.Probe.MismatchCount)
+		}
+		if t.Probe.MismatchFallbackCount > 0 {
+			fields[93] = strconv.Itoa(t.Probe.MismatchFallbackCount)
+		}
+		if t.Probe.MismatchTripletCount > 0 {
+			fields[94] = strconv.Itoa(t.Probe.MismatchTripletCount)
+		}
+		if t.Probe.MismatchCuratedPairCount > 0 {
+			fields[95] = strconv.Itoa(t.Probe.MismatchCuratedPairCount)
+		}
+		fields[96] = t.Probe.MismatchPolicy
+		fields[97] = thermoStrings(t.Probe.MismatchSources)
+		fields[98] = thermoStrings(t.Probe.MismatchParameterSets)
+		fields[99] = thermoStrings(t.Probe.MismatchCitations)
+		fields[100] = thermoStrings(t.Probe.MismatchParameterNotes)
 	}
 	return strings.Join(fields, "\t")
 }

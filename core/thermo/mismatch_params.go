@@ -17,6 +17,7 @@ type MismatchParameterInfo struct {
 	DeltaDeltaGKcal float64
 	Source          MismatchLookupSource
 	ParameterSet    string
+	Citation        string
 	Note            string
 }
 
@@ -29,30 +30,39 @@ var DeltaGTripletSource = map[MismatchKey]MismatchLookupSource{}
 // entries for diagnostics or tests.
 var DeltaGTripletParameterSet = map[MismatchKey]string{}
 
+// DeltaGTripletCitation optionally records the source citation for triplet
+// ΔΔG entries. It is surfaced in JSON/JSONL and --thermo-details output for
+// auditability when a curated table entry is used.
+var DeltaGTripletCitation = map[MismatchKey]string{}
+
+// DeltaGTripletNote optionally records a human-readable curation note for a
+// triplet ΔΔG entry.
+var DeltaGTripletNote = map[MismatchKey]string{}
+
 // curatedDeltaGTriplet contains broad pair-family ΔΔG entries keyed with N
 // wildcards in the flanking positions. Values are deliberately conservative and
 // preserve the historical ipcr ordering while moving common A/C/G/T mismatches
 // out of the heuristic-fallback path.
 var curatedDeltaGTriplet = map[MismatchKey]MismatchParameterInfo{
-	broadMismatchKey('G', 'T'): {0.60, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "G/T wobble pair-family default"},
-	broadMismatchKey('T', 'G'): {0.60, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "T/G wobble pair-family default"},
+	broadMismatchKey('G', 'T'): {0.60, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "G/T wobble pair-family default"},
+	broadMismatchKey('T', 'G'): {0.60, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "T/G wobble pair-family default"},
 
-	broadMismatchKey('A', 'G'): {0.85, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "A/G transition pair-family default"},
-	broadMismatchKey('G', 'A'): {0.85, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "G/A transition pair-family default"},
-	broadMismatchKey('C', 'T'): {0.85, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "C/T transition pair-family default"},
-	broadMismatchKey('T', 'C'): {0.85, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "T/C transition pair-family default"},
+	broadMismatchKey('A', 'G'): {0.85, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "A/G transition pair-family default"},
+	broadMismatchKey('G', 'A'): {0.85, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "G/A transition pair-family default"},
+	broadMismatchKey('C', 'T'): {0.85, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "C/T transition pair-family default"},
+	broadMismatchKey('T', 'C'): {0.85, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "T/C transition pair-family default"},
 
-	broadMismatchKey('A', 'C'): {1.10, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "A/C transversion pair-family default"},
-	broadMismatchKey('C', 'A'): {1.10, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "C/A transversion pair-family default"},
-	broadMismatchKey('A', 'T'): {1.20, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "A/T transversion pair-family default"},
-	broadMismatchKey('T', 'A'): {1.20, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "T/A transversion pair-family default"},
-	broadMismatchKey('C', 'G'): {1.20, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "C/G transversion pair-family default"},
-	broadMismatchKey('G', 'C'): {1.20, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "G/C transversion pair-family default"},
+	broadMismatchKey('A', 'C'): {1.10, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "A/C transversion pair-family default"},
+	broadMismatchKey('C', 'A'): {1.10, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "C/A transversion pair-family default"},
+	broadMismatchKey('A', 'T'): {1.20, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "A/T transversion pair-family default"},
+	broadMismatchKey('T', 'A'): {1.20, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "T/A transversion pair-family default"},
+	broadMismatchKey('C', 'G'): {1.20, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "C/G transversion pair-family default"},
+	broadMismatchKey('G', 'C'): {1.20, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "G/C transversion pair-family default"},
 
-	broadMismatchKey('A', 'A'): {1.40, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "A/A like-with-like pair-family default"},
-	broadMismatchKey('T', 'T'): {1.40, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "T/T like-with-like pair-family default"},
-	broadMismatchKey('G', 'G'): {1.40, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "G/G like-with-like pair-family default"},
-	broadMismatchKey('C', 'C'): {1.40, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "C/C like-with-like pair-family default"},
+	broadMismatchKey('A', 'A'): {1.40, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "A/A like-with-like pair-family default"},
+	broadMismatchKey('T', 'T'): {1.40, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "T/T like-with-like pair-family default"},
+	broadMismatchKey('G', 'G'): {1.40, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "G/G like-with-like pair-family default"},
+	broadMismatchKey('C', 'C'): {1.40, MismatchSourceCuratedPairDeltaG, MismatchParameterSetPairFamilyV1, "", "C/C like-with-like pair-family default"},
 }
 
 func broadMismatchKey(p, t byte) MismatchKey {
@@ -94,17 +104,35 @@ func lookupDeltaTmTripletOverride(p5, p, p3, t5, t, t3 byte) (float64, bool) {
 	return 0, false
 }
 
-func lookupDeltaGTripletOverride(p5, p, p3, t5, t, t3 byte) (float64, MismatchLookupSource, bool) {
+func lookupDeltaGTripletInfo(p5, p, p3, t5, t, t3 byte) (MismatchParameterInfo, bool) {
 	for _, key := range mismatchCandidateKeys(p5, p, p3, t5, t, t3) {
 		if dg, ok := DeltaGTriplet[key]; ok {
+			set := DeltaGTripletParameterSet[key]
+			if set == "" {
+				set = "user-triplet-ddg"
+			}
 			src := DeltaGTripletSource[key]
 			if src == "" {
 				src = MismatchSourceTripletDeltaG
 			}
-			return dg, src, true
+			return MismatchParameterInfo{
+				DeltaDeltaGKcal: dg,
+				Source:          src,
+				ParameterSet:    set,
+				Citation:        DeltaGTripletCitation[key],
+				Note:            DeltaGTripletNote[key],
+			}, true
 		}
 	}
-	return 0, "", false
+	return MismatchParameterInfo{}, false
+}
+
+func lookupDeltaGTripletOverride(p5, p, p3, t5, t, t3 byte) (float64, MismatchLookupSource, bool) {
+	param, ok := lookupDeltaGTripletInfo(p5, p, p3, t5, t, t3)
+	if !ok {
+		return 0, "", false
+	}
+	return param.DeltaDeltaGKcal, param.Source, true
 }
 
 func lookupCuratedDeltaGTriplet(p5, p, p3, t5, t, t3 byte) (MismatchParameterInfo, bool) {
@@ -117,7 +145,7 @@ func lookupCuratedDeltaGTriplet(p5, p, p3, t5, t, t3 byte) (MismatchParameterInf
 }
 
 // LookupMismatchParameterInfo exposes metadata for an exact or wildcard
-// mismatch key. It is mostly used by tests and future report writers.
+// mismatch key. It is used by tests and report writers.
 func LookupMismatchParameterInfo(key MismatchKey) (MismatchParameterInfo, bool) {
 	if param, ok := curatedDeltaGTriplet[key]; ok {
 		return param, true
@@ -131,7 +159,27 @@ func LookupMismatchParameterInfo(key MismatchKey) (MismatchParameterInfo, bool) 
 		if src == "" {
 			src = MismatchSourceTripletDeltaG
 		}
-		return MismatchParameterInfo{DeltaDeltaGKcal: dg, Source: src, ParameterSet: set}, true
+		return MismatchParameterInfo{
+			DeltaDeltaGKcal: dg,
+			Source:          src,
+			ParameterSet:    set,
+			Citation:        DeltaGTripletCitation[key],
+			Note:            DeltaGTripletNote[key],
+		}, true
+	}
+	return MismatchParameterInfo{}, false
+}
+
+// LookupMismatchParameterInfoForContext returns the metadata that would be used
+// by LookupDeltaGDetail for the supplied local mismatch context. It follows the
+// same exact/wildcard precedence but intentionally does not synthesize metadata
+// for heuristic or default fallbacks.
+func LookupMismatchParameterInfoForContext(p5, p, p3, t5, t, t3 byte) (MismatchParameterInfo, bool) {
+	if param, ok := lookupDeltaGTripletInfo(p5, p, p3, t5, t, t3); ok {
+		return param, true
+	}
+	if param, ok := lookupCuratedDeltaGTriplet(p5, p, p3, t5, t, t3); ok {
+		return param, true
 	}
 	return MismatchParameterInfo{}, false
 }

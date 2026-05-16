@@ -160,6 +160,9 @@ type MismatchContribution struct {
 	T5                 byte
 	T3                 byte
 	Source             MismatchLookupSource
+	ParameterSet       string
+	Citation           string
+	ParameterNote      string
 	RawDeltaTmC        float64
 	WeightedDeltaTmC   float64
 	TerminalPenaltyC   float64
@@ -282,6 +285,9 @@ func ImperfectDuplexWithOptionsAndContext(primer5to3, target3to5 string, cond Co
 		rawTm := 0.0
 		source := MismatchSourceDefaultDeltaTm
 		deltaG := 0.0
+		parameterSet := ""
+		citation := ""
+		parameterNote := ""
 
 		if dTm, src, ok := LookupDeltaTmDetail(p5, pC, p3, t5, tC, t3); ok {
 			rawTm = dTm
@@ -291,6 +297,11 @@ func ImperfectDuplexWithOptionsAndContext(primer5to3, target3to5 string, cond Co
 			deltaG = dG
 			rawTm = DeltaGToDeltaTm(dG, denom)
 			source = src
+			if param, ok := LookupMismatchParameterInfoForContext(p5, pC, p3, t5, tC, t3); ok {
+				parameterSet = param.ParameterSet
+				citation = param.Citation
+				parameterNote = param.Note
+			}
 			switch src {
 			case MismatchSourceTripletDeltaG:
 				out.TripletDeltaGCount++
@@ -344,6 +355,9 @@ func ImperfectDuplexWithOptionsAndContext(primer5to3, target3to5 string, cond Co
 			T5:                 t5,
 			T3:                 t3,
 			Source:             source,
+			ParameterSet:       parameterSet,
+			Citation:           citation,
+			ParameterNote:      parameterNote,
 			RawDeltaTmC:        rawTm,
 			WeightedDeltaTmC:   weighted,
 			TerminalPenaltyC:   terminalPenalty,

@@ -47,7 +47,7 @@ when the corresponding layer is enabled:
 - `score_profile`
 - salt model and ionic concentrations (`na_m`, `mg_m`, `dntp_m`, free/effective ions)
 - IUPAC policy, expansion count, cap status, and effective variant
-- mismatch policy, fallback counts, and mismatch penalties
+- mismatch policy, fallback counts, source labels, parameter sets/citations, and mismatch penalties
 - terminal mismatch and dangling-end fields when present
 - structure policy/model and component penalties
 - probe score mode, probe margin, gate penalty, and probe IUPAC metadata
@@ -83,8 +83,9 @@ When adding or changing a model term:
 
 Document these until they are replaced with calibrated/literature-backed models:
 
-- Curated mismatch triplet tables are incomplete; fallback mismatch terms remain
-  part of the model.
+- Curated mismatch triplets cover isolated internal single-base A/C/G/T DNA/DNA
+  mismatches; fallback mismatch terms remain part of the model for terminal,
+  tandem/clustered, target-`N`, degenerate-edge, and modified-probe contexts.
 - `nn-stem-loop-v2` is a bounded structure approximation, not a full partition
   function or dynamic-programming thermodynamic structure engine.
 - `owczarzy08` and related salt handling are practical approximations that should

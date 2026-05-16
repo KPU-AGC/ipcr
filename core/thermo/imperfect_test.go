@@ -48,6 +48,16 @@ func TestImperfectDuplexMismatchLowersTmAndReportsTripletMetadata(t *testing.T) 
 	if got.MismatchPolicy != MismatchPolicyImperfectTriplet {
 		t.Fatalf("expected triplet mismatch policy, got %+v", got)
 	}
+	if len(got.Contributions) != 1 {
+		t.Fatalf("expected one mismatch contribution, got %+v", got.Contributions)
+	}
+	contrib := got.Contributions[0]
+	if contrib.ParameterSet != MismatchParameterSetSantaLuciaHicks2004CompiledDimerGaugeV1 {
+		t.Fatalf("expected triplet parameter set, got %+v", contrib)
+	}
+	if contrib.Citation == "" || contrib.ParameterNote == "" {
+		t.Fatalf("expected citation and curation note, got %+v", contrib)
+	}
 	base, err := PerfectDuplex(primer, comp(primer), DefaultConditions())
 	if err != nil {
 		t.Fatalf("PerfectDuplex: %v", err)

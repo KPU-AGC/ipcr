@@ -265,5 +265,7 @@ func init() {
 		DeltaGTriplet[p.Key] = p.DeltaDeltaG37kcal
 		DeltaGTripletSource[p.Key] = p.Source
 		DeltaGTripletParameterSet[p.Key] = p.ParameterSet
+		DeltaGTripletCitation[p.Key] = p.Citation
+		DeltaGTripletNote[p.Key] = p.Note
 	}
 }

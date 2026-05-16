@@ -1,0 +1,49 @@
+cff-version: 1.2.0
+message: "If you use ipcr in your work, please cite this software release."
+title: "ipcr: fast in-silico PCR toolkit with nearest-neighbor primer/probe scoring"
+type: software
+
+authors:
+  - family-names: "Samera"
+    given-names: "Gennerick J"
+    orcid: "https://orcid.org/0009-0007-4253-6718"
+
+version: "0.1.0"
+date-released: "2026-05-16"
+
+abstract: >
+  ipcr is a Go-based in-silico PCR toolkit for identifying primer-supported
+  amplicons and optionally ranking primer/probe binding with nearest-neighbor
+  thermodynamic scoring. The thermodynamic model includes Watson-Crick
+  nearest-neighbor duplex scoring, curated internal single-mismatch triplet
+  penalties, SantaLucia-Hicks terminal dangling-end parameters, and explicit
+  provenance/fallback metadata for approximation-sensitive contexts.
+
+keywords:
+  - in-silico PCR
+  - PCR
+  - primer search
+  - primer scoring
+  - probe scoring
+  - nearest-neighbor thermodynamics
+  - DNA mismatch
+  - bioinformatics
+  - Go
+
+license: MIT
+repository-code: "https://github.com/KPU-AGC/ipcr"
+url: "https://github.com/KPU-AGC/ipcr"
+
+preferred-citation:
+  type: software
+  title: "ipcr: fast in-silico PCR toolkit with nearest-neighbor primer/probe scoring"
+  authors:
+    - family-names: "Samera"
+      given-names: "Gennerick J"
+      orcid: "https://orcid.org/0009-0007-4253-6718"
+  version: "0.1.0"
+  date-released: "2026-05-16"
+  repository-code: "https://github.com/KPU-AGC/ipcr"
+  license: MIT
+  notes: >
+    Cite the archived Zenodo DOI for the exact version used when available.

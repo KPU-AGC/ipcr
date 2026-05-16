@@ -25,16 +25,16 @@ ready until CI or another machine has run it.
 Run at least one representative command for each row. Use real FASTA fixtures
 when available and keep the command/output in release notes or test artifacts.
 
-| Scenario | Example options | Expected check |
-| --- | --- | --- |
-| Legacy compatibility | default `ipcr-thermo` invocation | Existing historical rows still appear. |
-| NN duplex | `--thermo-model nn-duplex-v1 --thermo-details` | Output includes NN model, salt model, margins, mismatch metadata. |
-| NN structure | `--thermo-model nn-structure-v1 --thermo-details` | Output includes structure policy/model and dimer/hairpin fields. |
-| Score profiles | `--score-profile binding`, `pcr`, `gel` | Product order changes only for documented profile reasons. |
-| IUPAC thermo | `--iupac-thermo-policy worst` with a degenerate primer | Output includes expansion count, capped status, effective variant. |
-| Mixed salt/dNTP | `--salt-model owczarzy08 --mg 3mM --dntp 0.8mM` | Output includes raw/effective ion fields. |
-| Probe annotate | `--probe ... --probe-thermo --probe-score-mode annotate` | Probe fields populate without filtering the product. |
-| Probe gate | `--probe ... --probe-thermo --probe-score-mode gate` | Failing probes are filtered/penalized in a documented way. |
+| Scenario              | Example options                                               | Expected check                                                                  |
+| --------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| Legacy compatibility  | default `ipcr-thermo` invocation                              | Existing historical rows still appear.                                          |
+| NN duplex             | `--thermo-model nn-duplex-v1 --thermo-details`                | Output includes NN model, salt model, margins, mismatch metadata.               |
+| NN structure          | `--thermo-model nn-structure-v1 --thermo-details`             | Output includes structure policy/model and dimer/hairpin fields.                |
+| Score profiles        | `--score-profile binding`, `pcr`, `gel`                       | Product order changes only for documented profile reasons.                      |
+| IUPAC thermo          | `--iupac-thermo-policy worst` with a degenerate primer        | Output includes expansion count, capped status, effective variant.              |
+| Mixed salt/dNTP       | `--salt-model owczarzy08 --mg 3mM --dntp 0.8mM`               | Output includes raw/effective ion fields.                                       |
+| Probe annotate        | `--probe ... --probe-thermo --probe-score-mode annotate`      | Probe fields populate without filtering the product.                            |
+| Probe gate            | `--probe ... --probe-thermo --probe-score-mode gate`          | Failing probes are filtered/penalized in a documented way.                      |
 | Modified probe caveat | MGB/LNA style assay with `annotate` or `--probe-thermo=false` | Documentation says unmodified-DNA thermo is not calibrated for modified probes. |
 
 ## Output metadata checklist

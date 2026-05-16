@@ -18,18 +18,18 @@ calibration or additional chemistry-specific parameters.
 
 ## Thermodynamic implementation modes
 
-| Mode | Purpose | Notes |
-| --- | --- | --- |
-| `legacy-heuristic` | Historical score path | Maintained for backward compatibility. Scores are not directly comparable with NN modes. |
-| `nn-duplex-v1` | Primer-template nearest-neighbor duplex ranking | Uses runtime conditions, salt model, primer concentration, IUPAC thermo policy, and explicit mismatch fallback metadata. |
-| `nn-structure-v1` | `nn-duplex-v1` plus primer hairpin/self-dimer/cross-dimer competition | Uses the current secondary-structure evaluator and reports structure policy/model metadata. |
+| Mode               | Purpose                                                               | Notes                                                                                                                    |
+| ------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `legacy-heuristic` | Historical score path                                                 | Maintained for backward compatibility. Scores are not directly comparable with NN modes.                                 |
+| `nn-duplex-v1`     | Primer-template nearest-neighbor duplex ranking                       | Uses runtime conditions, salt model, primer concentration, IUPAC thermo policy, and explicit mismatch fallback metadata. |
+| `nn-structure-v1`  | `nn-duplex-v1` plus primer hairpin/self-dimer/cross-dimer competition | Uses the current secondary-structure evaluator and reports structure policy/model metadata.                              |
 
 ## Structure model labels
 
-| Label | Meaning |
-| --- | --- |
-| `nn-contiguous-stem-v1` | Contiguous Watson-Crick stem model. Preserved as the simplest secondary-structure baseline. |
-| `nn-stem-loop-v2` | Bounded gapped-stem model with bulges, small internal loops, asymmetric-loop penalties, and structure dangling-end approximations. |
+| Label                   | Meaning                                                                                                                            |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `nn-contiguous-stem-v1` | Contiguous Watson-Crick stem model. Preserved as the simplest secondary-structure baseline.                                        |
+| `nn-stem-loop-v2`       | Bounded gapped-stem model with bulges, small internal loops, asymmetric-loop penalties, and structure dangling-end approximations. |
 
 `nn-stem-loop-v2` is a bounded approximation. It does not replace a full dynamic
 programming secondary-structure engine with complete loop, bulge, dangling-end,
@@ -37,11 +37,11 @@ and coaxial-stacking parameter tables.
 
 ## Score profiles
 
-| Profile | Intended question | Formula sketch |
-| --- | --- | --- |
+| Profile   | Intended question                                                      | Formula sketch                                            |
+| --------- | ---------------------------------------------------------------------- | --------------------------------------------------------- |
 | `binding` | Which primer pair binds best under the configured thermodynamic model? | Primer-template score, minus enabled structure penalties. |
-| `pcr` | Which product is expected to amplify efficiently? | `binding + extension_bonus - length_penalty`. |
-| `gel` | Which product is expected to look strongest on an agarose gel? | `pcr + band_mass_bonus`. |
+| `pcr`     | Which product is expected to amplify efficiently?                      | `binding + extension_bonus - length_penalty`.             |
+| `gel`     | Which product is expected to look strongest on an agarose gel?         | `pcr + band_mass_bonus`.                                  |
 
 `pcr` and `gel` are empirical ranking profiles. They are useful for reproducing
 observed product dominance, but they are not calibrated polymerase kinetics or a
@@ -49,12 +49,12 @@ quantitative fluorescence/gel-intensity model.
 
 ### Choosing a profile
 
-| Use case | Recommended profile | Rationale |
-| --- | --- | --- |
-| Primer-design triage | `binding` | Least empirical; closest to primer-template/structure thermodynamics. |
-| Multiplex product prioritization | `pcr` | Adds extension and long-product penalties without treating band mass as signal. |
-| Comparing against agarose-gel band prominence | `gel` | Adds a band-mass proxy so short products are not automatically favored. |
-| Debugging model changes | `binding --thermo-details` | Keeps the score closest to the underlying terms and exposes metadata. |
+| Use case                                      | Recommended profile        | Rationale                                                                       |
+| --------------------------------------------- | -------------------------- | ------------------------------------------------------------------------------- |
+| Primer-design triage                          | `binding`                  | Least empirical; closest to primer-template/structure thermodynamics.           |
+| Multiplex product prioritization              | `pcr`                      | Adds extension and long-product penalties without treating band mass as signal. |
+| Comparing against agarose-gel band prominence | `gel`                      | Adds a band-mass proxy so short products are not automatically favored.         |
+| Debugging model changes                       | `binding --thermo-details` | Keeps the score closest to the underlying terms and exposes metadata.           |
 
 Scores from different profiles should be treated as different ranking scales. A
 `gel` score is not directly comparable with a `binding` score even when the same
@@ -62,11 +62,11 @@ amplicon and conditions are used.
 
 ## Salt and concentration models
 
-| Salt model | Meaning |
-| --- | --- |
-| `monovalent` | Monovalent nearest-neighbor salt correction. |
-| `owczarzy-lite` | Mg-to-effective-Na approximation for compatibility and continuity. |
-| `owczarzy08` | Mixed monovalent/divalent correction with dNTP-adjusted free Mg approximation. |
+| Salt model      | Meaning                                                                        |
+| --------------- | ------------------------------------------------------------------------------ |
+| `monovalent`    | Monovalent nearest-neighbor salt correction.                                   |
+| `owczarzy-lite` | Mg-to-effective-Na approximation for compatibility and continuity.             |
+| `owczarzy08`    | Mixed monovalent/divalent correction with dNTP-adjusted free Mg approximation. |
 
 When reporting results, keep the raw and effective ionic conditions visible:
 `na_m`, `mg_m`, `dntp_m`, `effective_na_m`, and `free_mg_m`.
@@ -75,13 +75,13 @@ When reporting results, keep the raw and effective ionic conditions visible:
 
 Thermodynamic scoring supports explicit IUPAC expansion policies:
 
-| Policy | Behavior |
-| --- | --- |
-| `strict` | Reject non-ACGT primers/probes in NN thermodynamics. |
-| `worst` | Expand concrete variants and use the weakest score. Recommended for conservative assay ranking. |
-| `best` | Use the strongest concrete variant. |
-| `mean` | Average concrete variants. |
-| `enumerate` | Emit per-expansion diagnostics where supported. |
+| Policy      | Behavior                                                                                        |
+| ----------- | ----------------------------------------------------------------------------------------------- |
+| `strict`    | Reject non-ACGT primers/probes in NN thermodynamics.                                            |
+| `worst`     | Expand concrete variants and use the weakest score. Recommended for conservative assay ranking. |
+| `best`      | Use the strongest concrete variant.                                                             |
+| `mean`      | Average concrete variants.                                                                      |
+| `enumerate` | Emit per-expansion diagnostics where supported.                                                 |
 
 Always report the IUPAC metadata when present:
 `iupac_thermo_policy`, `iupac_expansion_count`, `iupac_expansion_capped`, and
@@ -92,11 +92,11 @@ Always report the IUPAC metadata when present:
 Probe thermodynamics reuses the primer-template NN machinery for unmodified DNA
 probe/site duplexes. The current modes are:
 
-| Mode | Behavior |
-| --- | --- |
-| `annotate` | Compute and report probe thermodynamics without changing product score. |
-| `gate` | Penalize or suppress products that fail probe presence/margin requirements. |
-| `blend` | Blend probe margin into the product score using `--probe-weight`. |
+| Mode       | Behavior                                                                    |
+| ---------- | --------------------------------------------------------------------------- |
+| `annotate` | Compute and report probe thermodynamics without changing product score.     |
+| `gate`     | Penalize or suppress products that fail probe presence/margin requirements. |
+| `blend`    | Blend probe margin into the product score using `--probe-weight`.           |
 
 Modified probes are not fully modeled. In particular, MGB, LNA, molecular beacon,
 quencher, and dye effects are not automatically calibrated. For MGB assays, use

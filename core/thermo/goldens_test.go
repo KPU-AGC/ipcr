@@ -83,7 +83,7 @@ func assertNearGolden(t *testing.T, label string, got, want, tol float64) {
 }
 
 func TestGoldenPerfectDuplexes(t *testing.T) {
-	for _, row := range readGoldenTSV(t, "testdata/perfect_duplex_goldens.tsv") {
+	for _, row := range readGoldenTSV(t, "testdata/perfect_duplex_goldens.golden") {
 		row := row
 		t.Run(row["id"], func(t *testing.T) {
 			got, err := PerfectDuplex(row["seq"], row["target3to5"], goldenConditions(t, row))
@@ -99,7 +99,7 @@ func TestGoldenPerfectDuplexes(t *testing.T) {
 }
 
 func TestGoldenSaltModels(t *testing.T) {
-	for _, row := range readGoldenTSV(t, "testdata/salt_goldens.tsv") {
+	for _, row := range readGoldenTSV(t, "testdata/salt_goldens.golden") {
 		row := row
 		t.Run(row["id"], func(t *testing.T) {
 			cond := goldenConditions(t, row)
@@ -118,7 +118,7 @@ func TestGoldenSaltModels(t *testing.T) {
 }
 
 func TestGoldenImperfectDuplexes(t *testing.T) {
-	for _, row := range readGoldenTSV(t, "testdata/mismatch_goldens.tsv") {
+	for _, row := range readGoldenTSV(t, "testdata/mismatch_goldens.golden") {
 		row := row
 		t.Run(row["id"], func(t *testing.T) {
 			got, err := ImperfectDuplex(row["primer"], row["target3to5"], goldenConditions(t, row))
@@ -145,7 +145,7 @@ func TestGoldenImperfectDuplexes(t *testing.T) {
 }
 
 func TestGoldenStructures(t *testing.T) {
-	for _, row := range readGoldenTSV(t, "testdata/structure_goldens.tsv") {
+	for _, row := range readGoldenTSV(t, "testdata/structure_goldens.golden") {
 		row := row
 		t.Run(row["id"], func(t *testing.T) {
 			opts := DefaultStructureOptions(DefaultConditions())

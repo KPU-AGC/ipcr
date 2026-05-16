@@ -95,10 +95,8 @@ func LookupDeltaTmDetail(p5, p, p3, t5, t, t3 byte) (float64, MismatchLookupSour
 		return 0, "", false
 	}
 	// 1) exact triplet override if available
-	if isACGT(p5) && isACGT(p3) && isNT(t5) && isNT(t3) {
-		if d, ok := DeltaTmTriplet[MismatchKey{P5: p5, P: p, P3: p3, T5: t5, T: t, T3: t3}]; ok {
-			return d, MismatchSourceTripletDeltaTm, true
-		}
+	if d, ok := lookupDeltaTmTripletOverride(p5, p, p3, t5, t, t3); ok {
+		return d, MismatchSourceTripletDeltaTm, true
 	}
 	// No pair fallback — let caller use ΔΔG.
 	return 0, "", false
@@ -117,11 +115,12 @@ func LookupDeltaGDetail(p5, p, p3, t5, t, t3 byte) (float64, MismatchLookupSourc
 	if !isACGT(p) || !isNT(t) {
 		return 0, "", false
 	}
-	// 1) exact triplet override
-	if isACGT(p5) && isACGT(p3) && isNT(t5) && isNT(t3) {
-		if dg, ok := DeltaGTriplet[MismatchKey{P5: p5, P: p, P3: p3, T5: t5, T: t, T3: t3}]; ok {
-			return dg, MismatchSourceTripletDeltaG, true
-		}
+	// 1) exact or wildcard triplet override
+	if dg, src, ok := lookupDeltaGTripletOverride(p5, p, p3, t5, t, t3); ok {
+		return dg, src, true
+	}
+	if param, ok := lookupCuratedDeltaGTriplet(p5, p, p3, t5, t, t3); ok {
+		return param.DeltaDeltaGKcal, param.Source, true
 	}
 
 	// 2) pair-only baseline

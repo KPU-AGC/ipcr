@@ -149,6 +149,7 @@ func toAPIThermoEndpoint(src engine.ThermoEndpoint) api.ThermoEndpointV1 {
 		ThreePrimeTerminalMismatchPenaltyC: src.ThreePrimeTerminalMismatchPenaltyC,
 		MismatchFallbackCount:              src.MismatchFallbackCount,
 		MismatchTripletCount:               src.MismatchTripletCount,
+		MismatchCuratedPairCount:           src.MismatchCuratedPairCount,
 		EffectiveDenomCalK:                 src.EffectiveDenomCalK,
 		MismatchPolicy:                     src.MismatchPolicy,
 		EndEffectPolicy:                    src.EndEffectPolicy,

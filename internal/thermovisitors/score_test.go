@@ -234,13 +234,13 @@ func TestScore_NNDuplexMismatchUsesFallbackAndLowersScore(t *testing.T) {
 	if !(perfect.Score > mismatched.Score) {
 		t.Fatalf("expected mismatch to lower NN score: perfect=%g mismatched=%g", perfect.Score, mismatched.Score)
 	}
-	if mismatched.Thermo == nil || !mismatched.Thermo.Fwd.HasNonWatsonCrick || !mismatched.Thermo.Fwd.UsedHeuristicAdjust {
-		t.Fatalf("expected fwd mismatch fallback details, got %+v", mismatched.Thermo)
+	if mismatched.Thermo == nil || !mismatched.Thermo.Fwd.HasNonWatsonCrick || mismatched.Thermo.Fwd.MismatchCuratedPairCount != 1 || mismatched.Thermo.Fwd.UsedHeuristicAdjust {
+		t.Fatalf("expected fwd curated pair-family mismatch details, got %+v", mismatched.Thermo)
 	}
 	if mismatched.Thermo.Fwd.MismatchCount != 1 || mismatched.Thermo.Fwd.ThreePrimeMismatchCount != 1 {
 		t.Fatalf("expected one 3' mismatch to be reported, got %+v", mismatched.Thermo.Fwd)
 	}
-	if mismatched.Thermo.Fwd.MismatchPolicy != thermo.MismatchPolicyImperfectHeuristicFallback {
+	if mismatched.Thermo.Fwd.MismatchPolicy != thermo.MismatchPolicyImperfectCuratedPair {
 		t.Fatalf("unexpected mismatch policy: %+v", mismatched.Thermo.Fwd)
 	}
 }

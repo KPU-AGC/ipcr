@@ -24,7 +24,7 @@ func TestImperfectDuplexPerfectMatchesPerfectDuplex(t *testing.T) {
 	}
 }
 
-func TestImperfectDuplexMismatchLowersTmAndReportsFallback(t *testing.T) {
+func TestImperfectDuplexMismatchLowersTmAndReportsCuratedPairMetadata(t *testing.T) {
 	primer := "ACGTACGTACGTACGT"
 	target := []byte(comp(primer))
 	target[6] = 'A'
@@ -42,8 +42,11 @@ func TestImperfectDuplexMismatchLowersTmAndReportsFallback(t *testing.T) {
 	if got.MismatchPenaltyC <= 0 || got.DeltaGPenaltyKcal <= 0 {
 		t.Fatalf("expected positive mismatch penalty, got %+v", got)
 	}
-	if got.HeuristicFallbackCount != 1 || !got.UsedHeuristicAdjust || got.MismatchPolicy != MismatchPolicyImperfectHeuristicFallback {
-		t.Fatalf("expected explicit heuristic fallback metadata, got %+v", got)
+	if got.CuratedPairCount != 1 || got.HeuristicFallbackCount != 0 || got.UsedHeuristicAdjust {
+		t.Fatalf("expected curated pair-family metadata without heuristic fallback, got %+v", got)
+	}
+	if got.MismatchPolicy != MismatchPolicyImperfectCuratedPair {
+		t.Fatalf("expected curated pair-family mismatch policy, got %+v", got)
 	}
 	base, err := PerfectDuplex(primer, comp(primer), DefaultConditions())
 	if err != nil {
@@ -143,5 +146,15 @@ func TestImperfectDuplexDanglingEndContextRaisesMargin(t *testing.T) {
 	}
 	if !(got.AnnealMarginC > base.AnnealMarginC && got.DeltaGAtAnnealKcal < base.DeltaGAtAnnealKcal) {
 		t.Fatalf("expected dangling context to stabilize endpoint: base=%+v got=%+v", base.DuplexResult, got.DuplexResult)
+	}
+}
+
+func TestLookupMismatchParameterInfoCuratedPair(t *testing.T) {
+	param, ok := LookupMismatchParameterInfo(broadMismatchKey('G', 'T'))
+	if !ok {
+		t.Fatal("expected curated G/T pair-family parameter")
+	}
+	if param.Source != MismatchSourceCuratedPairDeltaG || param.ParameterSet != MismatchParameterSetPairFamilyV1 || param.DeltaDeltaGKcal <= 0 {
+		t.Fatalf("unexpected curated parameter: %+v", param)
 	}
 }

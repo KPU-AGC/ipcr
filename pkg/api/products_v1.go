@@ -160,6 +160,7 @@ type ThermoEndpointV1 struct {
 	ThreePrimeTerminalMismatchPenaltyC float64 `json:"three_prime_terminal_mismatch_penalty_c,omitempty"`
 	MismatchFallbackCount              int     `json:"mismatch_fallback_count,omitempty"`
 	MismatchTripletCount               int     `json:"mismatch_triplet_count,omitempty"`
+	MismatchCuratedPairCount           int     `json:"mismatch_curated_pair_count,omitempty"`
 	EffectiveDenomCalK                 float64 `json:"effective_denom_cal_per_k_mol"`
 	MismatchPolicy                     string  `json:"mismatch_policy"`
 	EndEffectPolicy                    string  `json:"end_effect_policy,omitempty"`

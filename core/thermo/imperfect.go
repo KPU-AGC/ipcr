@@ -16,9 +16,13 @@ const (
 	// applies context-aware mismatch terms at the configured annealing conditions.
 	MismatchPolicyImperfectV1 = "nn-imperfect-v1"
 
+	// MismatchPolicyImperfectCuratedPair identifies an imperfect-duplex result
+	// scored with the curated pair-family mismatch parameter registry.
+	MismatchPolicyImperfectCuratedPair = "nn-imperfect-v1-with-curated-pair-ddg"
+
 	// MismatchPolicyImperfectHeuristicFallback identifies an imperfect-duplex
 	// result that had to use the current pair/context ΔΔG fallback for at least
-	// one mismatch because no curated triplet parameter was available.
+	// one mismatch because no curated triplet/pair-family parameter was available.
 	MismatchPolicyImperfectHeuristicFallback = "nn-imperfect-v1-with-heuristic-ddg-fallback"
 
 	// MismatchPolicyImperfectDefaultFallback identifies an imperfect-duplex result
@@ -206,6 +210,7 @@ type ImperfectDuplexResult struct {
 	EndEffectPolicy                    string
 	TripletTmCount                     int
 	TripletDeltaGCount                 int
+	CuratedPairCount                   int
 	HeuristicFallbackCount             int
 	DefaultFallbackCount               int
 	HasNonWatsonCrick                  bool
@@ -285,6 +290,8 @@ func ImperfectDuplexWithOptionsAndContext(primer5to3, target3to5 string, cond Co
 			switch src {
 			case MismatchSourceTripletDeltaG:
 				out.TripletDeltaGCount++
+			case MismatchSourceCuratedPairDeltaG:
+				out.CuratedPairCount++
 			case MismatchSourceHeuristicDeltaG:
 				out.HeuristicFallbackCount++
 			}
@@ -363,6 +370,8 @@ func ImperfectDuplexWithOptionsAndContext(primer5to3, target3to5 string, cond Co
 			policy = MismatchPolicyImperfectDefaultFallback
 		} else if out.HeuristicFallbackCount > 0 {
 			policy = MismatchPolicyImperfectHeuristicFallback
+		} else if out.CuratedPairCount > 0 {
+			policy = MismatchPolicyImperfectCuratedPair
 		}
 	}
 

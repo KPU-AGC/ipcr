@@ -528,6 +528,7 @@ func endpointFromImperfect(side string, d thermo.ImperfectDuplexResult) engine.T
 		ThreePrimeTerminalMismatchPenaltyC: d.ThreePrimeTerminalMismatchPenaltyC,
 		MismatchFallbackCount:              d.HeuristicFallbackCount + d.DefaultFallbackCount,
 		MismatchTripletCount:               d.TripletTmCount + d.TripletDeltaGCount,
+		MismatchCuratedPairCount:           d.CuratedPairCount,
 		EffectiveDenomCalK:                 absFiniteOrFallback(d.EffectiveDenomCalK, 200.0),
 		MismatchPolicy:                     d.MismatchPolicy,
 		EndEffectPolicy:                    d.EndEffectPolicy,

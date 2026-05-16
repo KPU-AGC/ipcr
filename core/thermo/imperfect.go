@@ -153,26 +153,30 @@ func (o ImperfectDuplexOptions) terminalPenalty(i, n int) float64 {
 
 // MismatchContribution describes one non-Watson-Crick primer-template column.
 type MismatchContribution struct {
-	Pos                int
-	PrimerBase         byte
-	TargetBase         byte
-	P5                 byte
-	P3                 byte
-	T5                 byte
-	T3                 byte
-	Source             MismatchLookupSource
-	ParameterSet       string
-	Citation           string
-	ParameterNote      string
-	RawDeltaTmC        float64
-	WeightedDeltaTmC   float64
-	TerminalPenaltyC   float64
-	DeltaGPenaltyKcal  float64
-	PositionMultiplier float64
-	FivePrimeWindow    bool
-	ThreePrimeWindow   bool
-	FivePrimeTerminal  bool
-	ThreePrimeTerminal bool
+	Pos                   int
+	PrimerBase            byte
+	TargetBase            byte
+	P5                    byte
+	P3                    byte
+	T5                    byte
+	T3                    byte
+	Source                MismatchLookupSource
+	ParameterSet          string
+	Citation              string
+	ParameterNote         string
+	RawDeltaTmC           float64
+	WeightedDeltaTmC      float64
+	TerminalPenaltyC      float64
+	TerminalSource        string
+	TerminalParameterSet  string
+	TerminalCitation      string
+	TerminalParameterNote string
+	DeltaGPenaltyKcal     float64
+	PositionMultiplier    float64
+	FivePrimeWindow       bool
+	ThreePrimeWindow      bool
+	FivePrimeTerminal     bool
+	ThreePrimeTerminal    bool
 }
 
 // DanglingEndContext supplies target-strand bases adjacent to the duplex in
@@ -328,7 +332,24 @@ func ImperfectDuplexWithOptionsAndContext(primer5to3, target3to5 string, cond Co
 		}
 
 		mult := opts.posMultiplier(i, n)
-		terminalPenalty := opts.terminalPenalty(i, n)
+		terminalPenalty := 0.0
+		terminalSource := ""
+		terminalParameterSet := ""
+		terminalCitation := ""
+		terminalParameterNote := ""
+		if terminalKey, ok := TerminalMismatchKeyForPosition(p, t, i); ok {
+			if terminalParam, ok := LookupTerminalMismatchParameterWithFallback(terminalKey, opts); ok {
+				terminalSource = terminalParam.Source
+				terminalParameterSet = terminalParam.ParameterSet
+				terminalCitation = terminalParam.Citation
+				terminalParameterNote = terminalParam.Note
+				if terminalParam.HasDeltaTm {
+					terminalPenalty = terminalParam.DeltaTmC
+				} else if terminalParam.HasDeltaDeltaG37 {
+					terminalPenalty = DeltaGToDeltaTm(terminalParam.DeltaDeltaG37kcal, denom)
+				}
+			}
+		}
 		weighted := rawTm*mult + terminalPenalty
 		if weighted < 0 {
 			// Preserve the historical confidence cap: a mismatch should not make
@@ -359,26 +380,30 @@ func ImperfectDuplexWithOptionsAndContext(primer5to3, target3to5 string, cond Co
 		}
 		out.MismatchCount++
 		out.Contributions = append(out.Contributions, MismatchContribution{
-			Pos:                i,
-			PrimerBase:         pC,
-			TargetBase:         tC,
-			P5:                 p5,
-			P3:                 p3,
-			T5:                 t5,
-			T3:                 t3,
-			Source:             source,
-			ParameterSet:       parameterSet,
-			Citation:           citation,
-			ParameterNote:      parameterNote,
-			RawDeltaTmC:        rawTm,
-			WeightedDeltaTmC:   weighted,
-			TerminalPenaltyC:   terminalPenalty,
-			DeltaGPenaltyKcal:  deltaG*mult + terminalPenalty*denom/1000.0,
-			PositionMultiplier: mult,
-			FivePrimeWindow:    fiveWindow,
-			ThreePrimeWindow:   threeWindow,
-			FivePrimeTerminal:  i == 0,
-			ThreePrimeTerminal: i == n-1,
+			Pos:                   i,
+			PrimerBase:            pC,
+			TargetBase:            tC,
+			P5:                    p5,
+			P3:                    p3,
+			T5:                    t5,
+			T3:                    t3,
+			Source:                source,
+			ParameterSet:          parameterSet,
+			Citation:              citation,
+			ParameterNote:         parameterNote,
+			RawDeltaTmC:           rawTm,
+			WeightedDeltaTmC:      weighted,
+			TerminalPenaltyC:      terminalPenalty,
+			TerminalSource:        terminalSource,
+			TerminalParameterSet:  terminalParameterSet,
+			TerminalCitation:      terminalCitation,
+			TerminalParameterNote: terminalParameterNote,
+			DeltaGPenaltyKcal:     deltaG*mult + terminalPenalty*denom/1000.0,
+			PositionMultiplier:    mult,
+			FivePrimeWindow:       fiveWindow,
+			ThreePrimeWindow:      threeWindow,
+			FivePrimeTerminal:     i == 0,
+			ThreePrimeTerminal:    i == n-1,
 		})
 	}
 

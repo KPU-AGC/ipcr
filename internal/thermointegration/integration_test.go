@@ -152,6 +152,75 @@ func TestThermo_MismatchProvenanceAppearsInTSVJSONAndJSONL(t *testing.T) {
 	}
 }
 
+func TestThermo_TerminalMismatchProvenanceAppearsInTSVJSONAndJSONL(t *testing.T) {
+	fwd := "ACGTACGTACGTACGTACGT"
+	rev := "TTGCGTATCGATCGTACGTA"
+	leftSite := []byte(fwd)
+	leftSite[len(leftSite)-1] = 'A' // primer 3' terminal T/T mismatch after target-orientation conversion.
+	fa := writeFA(t, "thermo_terminal_mismatch_provenance.fa", ">s\n"+string(leftSite)+"AAAA"+rc5to3IT(rev)+"\n")
+	defer func() { _ = os.Remove(fa) }()
+
+	baseArgs := []string{
+		"--forward", fwd,
+		"--reverse", rev,
+		"--sequences", fa,
+		"--mismatches", "1",
+		"--terminal-window", "0",
+		"--seed-length", "-1",
+		"--thermo-model", "nn-duplex-v1",
+	}
+
+	var tsvOut, tsvErr bytes.Buffer
+	code := thermoapp.Run(append(append([]string{}, baseArgs...), "--output", "text", "--thermo-details"), &tsvOut, &tsvErr)
+	if code != 0 {
+		t.Fatalf("tsv exit %d err=%s", code, tsvErr.String())
+	}
+	tsv := tsvOut.String()
+	if got := tsvColumnValue(t, tsv, "fwd_terminal_mismatch_sources"); got != "ipcr-terminal-mismatch-heuristic" {
+		t.Fatalf("fwd_terminal_mismatch_sources: got %q\n%s", got, tsv)
+	}
+	if got := tsvColumnValue(t, tsv, "fwd_terminal_mismatch_parameter_sets"); got != "ipcr-terminal-mismatch-heuristic-v1" {
+		t.Fatalf("fwd_terminal_mismatch_parameter_sets: got %q\n%s", got, tsv)
+	}
+	if got := tsvColumnValue(t, tsv, "fwd_terminal_mismatch_citations"); !strings.Contains(got, "ipcr internal terminal-mismatch heuristic") {
+		t.Fatalf("fwd_terminal_mismatch_citations missing heuristic citation: got %q\n%s", got, tsv)
+	}
+	if got := tsvColumnValue(t, tsv, "fwd_terminal_mismatch_parameter_notes"); !strings.Contains(got, "Empirical fixed terminal mismatch") {
+		t.Fatalf("fwd_terminal_mismatch_parameter_notes missing heuristic note: got %q\n%s", got, tsv)
+	}
+	if got := tsvColumnValue(t, tsv, "fwd_terminal_mismatch_penalty_c"); got == "" || got == "0" {
+		t.Fatalf("expected nonzero fwd_terminal_mismatch_penalty_c, got %q\n%s", got, tsv)
+	}
+	if got := tsvColumnValue(t, tsv, "fwd_3p_terminal_mismatch_penalty_c"); got == "" || got == "0" {
+		t.Fatalf("expected nonzero fwd_3p_terminal_mismatch_penalty_c, got %q\n%s", got, tsv)
+	}
+	if got := tsvColumnValue(t, tsv, "fwd_terminal_mismatch_dg_kcal"); got == "" || got == "0" {
+		t.Fatalf("expected nonzero fwd_terminal_mismatch_dg_kcal, got %q\n%s", got, tsv)
+	}
+
+	for _, format := range []string{"json", "jsonl"} {
+		var out, errB bytes.Buffer
+		code := thermoapp.Run(append(append([]string{}, baseArgs...), "--output", format), &out, &errB)
+		if code != 0 {
+			t.Fatalf("%s exit %d err=%s", format, code, errB.String())
+		}
+		for _, want := range [][]byte{
+			[]byte("terminal_mismatch_sources"),
+			[]byte("ipcr-terminal-mismatch-heuristic"),
+			[]byte("terminal_mismatch_parameter_sets"),
+			[]byte("ipcr-terminal-mismatch-heuristic-v1"),
+			[]byte("terminal_mismatch_citations"),
+			[]byte("terminal_mismatch_parameter_notes"),
+			[]byte("terminal_mismatch_count"),
+			[]byte("terminal_mismatch_penalty_c"),
+		} {
+			if !bytes.Contains(out.Bytes(), want) {
+				t.Fatalf("expected %q in %s output:\n%s", want, format, out.String())
+			}
+		}
+	}
+}
+
 func TestThermo_ProbeThermoDefaultModelAutoPromotesToNNDuplex(t *testing.T) {
 	fwd := "GCGCGCGCGCGCGCGCGCGC"
 	rev := "CGCGCGCGCGCGCGCGCGCG"

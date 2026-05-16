@@ -96,37 +96,46 @@ type ThermoVariant struct {
 // thermodynamics. It is populated by ipcr-thermo when --probe is supplied and
 // probe thermodynamics are enabled.
 type ProbeThermoDetails struct {
-	Name                     string   `json:"name"`
-	Seq                      string   `json:"seq"`
-	Found                    bool     `json:"found"`
-	Strand                   string   `json:"strand,omitempty"`
-	Pos                      int      `json:"pos,omitempty"`
-	MM                       int      `json:"mm,omitempty"`
-	Site                     string   `json:"site,omitempty"`
-	ScoreMode                string   `json:"score_mode"`
-	MinMarginC               float64  `json:"min_margin_c,omitempty"`
-	ScoreContributionC       float64  `json:"score_contribution_c,omitempty"`
-	GatePenaltyC             float64  `json:"gate_penalty_c,omitempty"`
-	IUPACThermoPolicy        string   `json:"iupac_thermo_policy,omitempty"`
-	IUPACExpansionCount      int      `json:"iupac_expansion_count,omitempty"`
-	IUPACExpansionCapped     bool     `json:"iupac_expansion_capped,omitempty"`
-	IUPACEffectiveVariant    string   `json:"iupac_effective_variant,omitempty"`
-	TmC                      float64  `json:"tm_c,omitempty"`
-	AnnealMarginC            float64  `json:"anneal_margin_c,omitempty"`
-	DeltaGAtAnnealKcal       float64  `json:"delta_g_at_anneal_kcal,omitempty"`
-	MismatchPenaltyC         float64  `json:"mismatch_penalty_c,omitempty"`
-	MismatchDeltaGKcal       float64  `json:"mismatch_delta_g_kcal,omitempty"`
-	MismatchCount            int      `json:"mismatch_count,omitempty"`
-	MismatchFallbackCount    int      `json:"mismatch_fallback_count,omitempty"`
-	MismatchTripletCount     int      `json:"mismatch_triplet_count,omitempty"`
-	MismatchCuratedPairCount int      `json:"mismatch_curated_pair_count,omitempty"`
-	MismatchSources          []string `json:"mismatch_sources,omitempty"`
-	MismatchParameterSets    []string `json:"mismatch_parameter_sets,omitempty"`
-	MismatchCitations        []string `json:"mismatch_citations,omitempty"`
-	MismatchParameterNotes   []string `json:"mismatch_parameter_notes,omitempty"`
-	MismatchPolicy           string   `json:"mismatch_policy,omitempty"`
-	HasNonWatsonCrick        bool     `json:"has_non_watson_crick,omitempty"`
-	UsedHeuristicAdjust      bool     `json:"used_heuristic_adjust,omitempty"`
+	Name                            string   `json:"name"`
+	Seq                             string   `json:"seq"`
+	Found                           bool     `json:"found"`
+	Strand                          string   `json:"strand,omitempty"`
+	Pos                             int      `json:"pos,omitempty"`
+	MM                              int      `json:"mm,omitempty"`
+	Site                            string   `json:"site,omitempty"`
+	ScoreMode                       string   `json:"score_mode"`
+	MinMarginC                      float64  `json:"min_margin_c,omitempty"`
+	ScoreContributionC              float64  `json:"score_contribution_c,omitempty"`
+	GatePenaltyC                    float64  `json:"gate_penalty_c,omitempty"`
+	IUPACThermoPolicy               string   `json:"iupac_thermo_policy,omitempty"`
+	IUPACExpansionCount             int      `json:"iupac_expansion_count,omitempty"`
+	IUPACExpansionCapped            bool     `json:"iupac_expansion_capped,omitempty"`
+	IUPACEffectiveVariant           string   `json:"iupac_effective_variant,omitempty"`
+	TmC                             float64  `json:"tm_c,omitempty"`
+	AnnealMarginC                   float64  `json:"anneal_margin_c,omitempty"`
+	DeltaGAtAnnealKcal              float64  `json:"delta_g_at_anneal_kcal,omitempty"`
+	MismatchPenaltyC                float64  `json:"mismatch_penalty_c,omitempty"`
+	MismatchDeltaGKcal              float64  `json:"mismatch_delta_g_kcal,omitempty"`
+	MismatchCount                   int      `json:"mismatch_count,omitempty"`
+	MismatchFallbackCount           int      `json:"mismatch_fallback_count,omitempty"`
+	MismatchTripletCount            int      `json:"mismatch_triplet_count,omitempty"`
+	MismatchCuratedPairCount        int      `json:"mismatch_curated_pair_count,omitempty"`
+	MismatchSources                 []string `json:"mismatch_sources,omitempty"`
+	MismatchParameterSets           []string `json:"mismatch_parameter_sets,omitempty"`
+	MismatchCitations               []string `json:"mismatch_citations,omitempty"`
+	MismatchParameterNotes          []string `json:"mismatch_parameter_notes,omitempty"`
+	TerminalMismatchPenaltyC        float64  `json:"terminal_mismatch_penalty_c,omitempty"`
+	TerminalMismatchDeltaGKcal      float64  `json:"terminal_mismatch_delta_g_kcal,omitempty"`
+	TerminalMismatchCount           int      `json:"terminal_mismatch_count,omitempty"`
+	FivePrimeTerminalMismatchCount  int      `json:"five_prime_terminal_mismatch_count,omitempty"`
+	ThreePrimeTerminalMismatchCount int      `json:"three_prime_terminal_mismatch_count,omitempty"`
+	TerminalMismatchSources         []string `json:"terminal_mismatch_sources,omitempty"`
+	TerminalMismatchParameterSets   []string `json:"terminal_mismatch_parameter_sets,omitempty"`
+	TerminalMismatchCitations       []string `json:"terminal_mismatch_citations,omitempty"`
+	TerminalMismatchParameterNotes  []string `json:"terminal_mismatch_parameter_notes,omitempty"`
+	MismatchPolicy                  string   `json:"mismatch_policy,omitempty"`
+	HasNonWatsonCrick               bool     `json:"has_non_watson_crick,omitempty"`
+	UsedHeuristicAdjust             bool     `json:"used_heuristic_adjust,omitempty"`
 }
 
 // ThermoEndpoint describes one primer-template endpoint in 5'→3' primer
@@ -159,6 +168,10 @@ type ThermoEndpoint struct {
 	MismatchParameterSets              []string `json:"mismatch_parameter_sets,omitempty"`
 	MismatchCitations                  []string `json:"mismatch_citations,omitempty"`
 	MismatchParameterNotes             []string `json:"mismatch_parameter_notes,omitempty"`
+	TerminalMismatchSources            []string `json:"terminal_mismatch_sources,omitempty"`
+	TerminalMismatchParameterSets      []string `json:"terminal_mismatch_parameter_sets,omitempty"`
+	TerminalMismatchCitations          []string `json:"terminal_mismatch_citations,omitempty"`
+	TerminalMismatchParameterNotes     []string `json:"terminal_mismatch_parameter_notes,omitempty"`
 	EffectiveDenomCalK                 float64  `json:"effective_denom_cal_per_k_mol"`
 	MismatchPolicy                     string   `json:"mismatch_policy"`
 	EndEffectPolicy                    string   `json:"end_effect_policy,omitempty"`

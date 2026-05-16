@@ -118,6 +118,13 @@ func TestImperfectDuplexReportsExplicitTerminalMismatchPenalty(t *testing.T) {
 	if len(got.Contributions) != 1 || !got.Contributions[0].ThreePrimeTerminal || got.Contributions[0].TerminalPenaltyC <= 0 {
 		t.Fatalf("expected contribution-level terminal annotation, got %+v", got.Contributions)
 	}
+	contrib := got.Contributions[0]
+	if contrib.TerminalSource != TerminalMismatchSourceHeuristicPenalty || contrib.TerminalParameterSet != TerminalMismatchParameterSetHeuristicV1 {
+		t.Fatalf("expected named terminal mismatch fallback provenance, got %+v", contrib)
+	}
+	if contrib.TerminalCitation == "" || contrib.TerminalParameterNote == "" {
+		t.Fatalf("expected terminal mismatch citation and note, got %+v", contrib)
+	}
 
 	internalTarget := append([]byte(nil), perfect...)
 	internalTarget[4] = 'A'
@@ -127,6 +134,62 @@ func TestImperfectDuplexReportsExplicitTerminalMismatchPenalty(t *testing.T) {
 	}
 	if internal.TerminalMismatchPenaltyC != 0 || internal.TerminalMismatchCount != 0 {
 		t.Fatalf("internal mismatch should not report terminal terms, got %+v", internal)
+	}
+}
+
+func TestLookupTerminalMismatchHeuristicParameter(t *testing.T) {
+	key := TerminalMismatchKey{
+		PrimerEnd: TerminalMismatchPrimer3Prime,
+		P:         'G',
+		T:         'A',
+		PNeighbor: 'G',
+		TNeighbor: 'C',
+	}
+	param, ok := LookupTerminalMismatchParameterWithFallback(key, DefaultImperfectDuplexOptions())
+	if !ok {
+		t.Fatalf("expected terminal mismatch fallback parameter for %+v", key)
+	}
+	if param.Source != TerminalMismatchSourceHeuristicPenalty || param.ParameterSet != TerminalMismatchParameterSetHeuristicV1 {
+		t.Fatalf("unexpected terminal mismatch provenance: %+v", param)
+	}
+	if !param.HasDeltaTm || param.DeltaTmC != defaultThreePrimeTerminalPenalty || param.HasDeltaDeltaG37 {
+		t.Fatalf("unexpected terminal mismatch values: %+v", param)
+	}
+	if param.Citation == "" || param.Note == "" {
+		t.Fatalf("expected terminal mismatch citation/note: %+v", param)
+	}
+
+	if _, ok := LookupTerminalMismatchParameter(key); ok {
+		t.Fatalf("did not expect a curated terminal mismatch table entry before literature-backed values are added")
+	}
+
+	perfect := TerminalMismatchKey{PrimerEnd: TerminalMismatchPrimer3Prime, P: 'G', T: 'C', PNeighbor: 'G', TNeighbor: 'C'}
+	if _, ok := LookupTerminalMismatchParameterWithFallback(perfect, DefaultImperfectDuplexOptions()); ok {
+		t.Fatalf("Watson-Crick terminal pair should not produce a terminal mismatch parameter")
+	}
+
+	unknownTarget := TerminalMismatchKey{PrimerEnd: TerminalMismatchPrimer5Prime, P: 'A', T: 'N', PNeighbor: 'C', TNeighbor: 'G'}
+	param, ok = LookupTerminalMismatchParameterWithFallback(unknownTarget, DefaultImperfectDuplexOptions())
+	if !ok || param.DeltaTmC != defaultFivePrimeTerminalPenalty {
+		t.Fatalf("expected heuristic terminal fallback for target N, ok=%v param=%+v", ok, param)
+	}
+}
+
+func TestTerminalMismatchKeyForPosition(t *testing.T) {
+	key, ok := TerminalMismatchKeyForPosition("ACGT", "TGCG", 3)
+	if !ok {
+		t.Fatal("expected 3' terminal mismatch key")
+	}
+	want := TerminalMismatchKey{PrimerEnd: TerminalMismatchPrimer3Prime, P: 'T', T: 'G', PNeighbor: 'G', TNeighbor: 'C'}
+	if key != want {
+		t.Fatalf("unexpected terminal key: got %+v want %+v", key, want)
+	}
+
+	if _, ok := TerminalMismatchKeyForPosition("ACGT", "TGGA", 2); ok {
+		t.Fatal("internal mismatch/key position should not produce a terminal mismatch key")
+	}
+	if _, ok := TerminalMismatchKeyForPosition("ACGT", "TGCA", 3); ok {
+		t.Fatal("Watson-Crick terminal pair should not produce a terminal mismatch key")
 	}
 }
 

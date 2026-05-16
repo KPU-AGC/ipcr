@@ -521,6 +521,19 @@ func mismatchProvenance(contribs []thermo.MismatchContribution) (sources, parame
 	return sources, parameterSets, citations, notes
 }
 
+func terminalMismatchProvenance(contribs []thermo.MismatchContribution) (sources, parameterSets, citations, notes []string) {
+	for _, c := range contribs {
+		if c.TerminalPenaltyC == 0 && c.TerminalSource == "" && c.TerminalParameterSet == "" && c.TerminalCitation == "" && c.TerminalParameterNote == "" {
+			continue
+		}
+		sources = appendUniqueString(sources, c.TerminalSource)
+		parameterSets = appendUniqueString(parameterSets, c.TerminalParameterSet)
+		citations = appendUniqueString(citations, c.TerminalCitation)
+		notes = appendUniqueString(notes, c.TerminalParameterNote)
+	}
+	return sources, parameterSets, citations, notes
+}
+
 func endpointFromDuplex(side string, d thermo.DuplexResult, mismatchPenaltyC float64, policy string, hasNonWC, heuristic bool) engine.ThermoEndpoint {
 	return engine.ThermoEndpoint{
 		Side:                side,
@@ -538,6 +551,7 @@ func endpointFromDuplex(side string, d thermo.DuplexResult, mismatchPenaltyC flo
 
 func endpointFromImperfect(side string, d thermo.ImperfectDuplexResult) engine.ThermoEndpoint {
 	sources, parameterSets, citations, notes := mismatchProvenance(d.Contributions)
+	terminalSources, terminalParameterSets, terminalCitations, terminalNotes := terminalMismatchProvenance(d.Contributions)
 	return engine.ThermoEndpoint{
 		Side:                               side,
 		TmC:                                d.TmC,
@@ -565,6 +579,10 @@ func endpointFromImperfect(side string, d thermo.ImperfectDuplexResult) engine.T
 		MismatchParameterSets:              parameterSets,
 		MismatchCitations:                  citations,
 		MismatchParameterNotes:             notes,
+		TerminalMismatchSources:            terminalSources,
+		TerminalMismatchParameterSets:      terminalParameterSets,
+		TerminalMismatchCitations:          terminalCitations,
+		TerminalMismatchParameterNotes:     terminalNotes,
 		EffectiveDenomCalK:                 absFiniteOrFallback(d.EffectiveDenomCalK, 200.0),
 		MismatchPolicy:                     d.MismatchPolicy,
 		EndEffectPolicy:                    d.EndEffectPolicy,
@@ -1269,6 +1287,12 @@ func probeVariantDetails(base engine.ProbeThermoDetails, chosen scoredProbeVaria
 	base.MismatchTripletCount = res.TripletTmCount + res.TripletDeltaGCount
 	base.MismatchCuratedPairCount = res.CuratedPairCount
 	base.MismatchSources, base.MismatchParameterSets, base.MismatchCitations, base.MismatchParameterNotes = mismatchProvenance(res.Contributions)
+	base.TerminalMismatchPenaltyC = res.TerminalMismatchPenaltyC
+	base.TerminalMismatchDeltaGKcal = res.TerminalMismatchDeltaGKcal
+	base.TerminalMismatchCount = res.TerminalMismatchCount
+	base.FivePrimeTerminalMismatchCount = res.FivePrimeTerminalMismatchCount
+	base.ThreePrimeTerminalMismatchCount = res.ThreePrimeTerminalMismatchCount
+	base.TerminalMismatchSources, base.TerminalMismatchParameterSets, base.TerminalMismatchCitations, base.TerminalMismatchParameterNotes = terminalMismatchProvenance(res.Contributions)
 	base.MismatchPolicy = res.MismatchPolicy
 	base.HasNonWatsonCrick = res.HasNonWatsonCrick
 	base.UsedHeuristicAdjust = res.UsedHeuristicAdjust
@@ -1290,6 +1314,17 @@ func meanProbeDetails(base engine.ProbeThermoDetails, scored []scoredProbeVarian
 		base.DeltaGAtAnnealKcal += res.DeltaGAtAnnealKcal
 		base.MismatchPenaltyC += res.MismatchPenaltyC
 		base.MismatchDeltaGKcal += res.DeltaGPenaltyKcal
+		base.TerminalMismatchPenaltyC += res.TerminalMismatchPenaltyC
+		base.TerminalMismatchDeltaGKcal += res.TerminalMismatchDeltaGKcal
+		if res.TerminalMismatchCount > base.TerminalMismatchCount {
+			base.TerminalMismatchCount = res.TerminalMismatchCount
+		}
+		if res.FivePrimeTerminalMismatchCount > base.FivePrimeTerminalMismatchCount {
+			base.FivePrimeTerminalMismatchCount = res.FivePrimeTerminalMismatchCount
+		}
+		if res.ThreePrimeTerminalMismatchCount > base.ThreePrimeTerminalMismatchCount {
+			base.ThreePrimeTerminalMismatchCount = res.ThreePrimeTerminalMismatchCount
+		}
 		if res.MismatchCount > base.MismatchCount {
 			base.MismatchCount = res.MismatchCount
 		}
@@ -1309,6 +1344,11 @@ func meanProbeDetails(base engine.ProbeThermoDetails, scored []scoredProbeVarian
 		base.MismatchParameterSets = appendUniqueStrings(base.MismatchParameterSets, parameterSets)
 		base.MismatchCitations = appendUniqueStrings(base.MismatchCitations, citations)
 		base.MismatchParameterNotes = appendUniqueStrings(base.MismatchParameterNotes, notes)
+		terminalSources, terminalParameterSets, terminalCitations, terminalNotes := terminalMismatchProvenance(res.Contributions)
+		base.TerminalMismatchSources = appendUniqueStrings(base.TerminalMismatchSources, terminalSources)
+		base.TerminalMismatchParameterSets = appendUniqueStrings(base.TerminalMismatchParameterSets, terminalParameterSets)
+		base.TerminalMismatchCitations = appendUniqueStrings(base.TerminalMismatchCitations, terminalCitations)
+		base.TerminalMismatchParameterNotes = appendUniqueStrings(base.TerminalMismatchParameterNotes, terminalNotes)
 		if res.HasNonWatsonCrick {
 			base.HasNonWatsonCrick = true
 		}
@@ -1321,6 +1361,8 @@ func meanProbeDetails(base engine.ProbeThermoDetails, scored []scoredProbeVarian
 	base.DeltaGAtAnnealKcal /= n
 	base.MismatchPenaltyC /= n
 	base.MismatchDeltaGKcal /= n
+	base.TerminalMismatchPenaltyC /= n
+	base.TerminalMismatchDeltaGKcal /= n
 	if base.MismatchFallbackCount > 0 {
 		base.MismatchPolicy = thermo.MismatchPolicyImperfectHeuristicFallback
 	} else if base.MismatchTripletCount > 0 {

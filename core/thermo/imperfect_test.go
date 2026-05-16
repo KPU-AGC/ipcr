@@ -24,7 +24,7 @@ func TestImperfectDuplexPerfectMatchesPerfectDuplex(t *testing.T) {
 	}
 }
 
-func TestImperfectDuplexMismatchLowersTmAndReportsCuratedPairMetadata(t *testing.T) {
+func TestImperfectDuplexMismatchLowersTmAndReportsTripletMetadata(t *testing.T) {
 	primer := "ACGTACGTACGTACGT"
 	target := []byte(comp(primer))
 	target[6] = 'A'
@@ -42,11 +42,11 @@ func TestImperfectDuplexMismatchLowersTmAndReportsCuratedPairMetadata(t *testing
 	if got.MismatchPenaltyC <= 0 || got.DeltaGPenaltyKcal <= 0 {
 		t.Fatalf("expected positive mismatch penalty, got %+v", got)
 	}
-	if got.CuratedPairCount != 1 || got.HeuristicFallbackCount != 0 || got.UsedHeuristicAdjust {
-		t.Fatalf("expected curated pair-family metadata without heuristic fallback, got %+v", got)
+	if got.TripletDeltaGCount != 1 || got.CuratedPairCount != 0 || got.HeuristicFallbackCount != 0 || got.UsedHeuristicAdjust {
+		t.Fatalf("expected exact triplet metadata without heuristic fallback, got %+v", got)
 	}
-	if got.MismatchPolicy != MismatchPolicyImperfectCuratedPair {
-		t.Fatalf("expected curated pair-family mismatch policy, got %+v", got)
+	if got.MismatchPolicy != MismatchPolicyImperfectTriplet {
+		t.Fatalf("expected triplet mismatch policy, got %+v", got)
 	}
 	base, err := PerfectDuplex(primer, comp(primer), DefaultConditions())
 	if err != nil {
@@ -78,8 +78,8 @@ func TestImperfectDuplexThreePrimeMismatchIsWeightedMoreStrongly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("3' mismatch: %v", err)
 	}
-	if !(three.MismatchPenaltyC > five.MismatchPenaltyC && five.MismatchPenaltyC > internal.MismatchPenaltyC) {
-		t.Fatalf("expected 3' > 5' > internal penalties, got 3'=%g 5'=%g internal=%g", three.MismatchPenaltyC, five.MismatchPenaltyC, internal.MismatchPenaltyC)
+	if !(three.MismatchPenaltyC > five.MismatchPenaltyC && internal.MismatchPenaltyC > 0) {
+		t.Fatalf("unexpected position penalties, got 3'=%g 5'=%g internal=%g", three.MismatchPenaltyC, five.MismatchPenaltyC, internal.MismatchPenaltyC)
 	}
 	if three.ThreePrimeMismatchCount != 1 || five.FivePrimeMismatchCount != 1 {
 		t.Fatalf("terminal window counts missing: 3'=%+v 5'=%+v", three, five)

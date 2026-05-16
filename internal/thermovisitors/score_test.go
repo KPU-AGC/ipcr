@@ -52,28 +52,26 @@ func TestAlignPenalty_PositionEffects(t *testing.T) {
 	}
 	pIn := dpPenalty(pr, string(ti), false)
 
-	// Assert relative ordering: 3' > 5' > internal (position multiplier × chemistry)
-	if !(p3 > p5 && p5 > pIn) {
-		t.Fatalf("position penalties not ordered as expected: 3' %.2f, 5' %.2f, internal %.2f", p3, p5, pIn)
+	// Terminal-window weighting should still make the same terminal mismatch more
+	// severe at the 3' end than at the 5' end. Internal mismatch magnitude is now
+	// context dependent because exact SantaLucia-Hicks triplet overrides are used.
+	if !(p3 > p5 && pIn > 0) {
+		t.Fatalf("unexpected position penalties: 3' %.2f, 5' %.2f, internal %.2f", p3, p5, pIn)
 	}
 }
 
-func TestAlignPenalty_Chemistry_GTvsGA(t *testing.T) {
-	// Primer of G's so we can toggle the target at an internal position.
+func TestAlignPenalty_UsesExactGTTripletOverride(t *testing.T) {
+	// Primer of G's gives an internal G/T triplet key of:
+	// 5'-GGG-3' / 3'-CTC-5'. The curated SantaLucia-Hicks compiled-gauge
+	// ΔΔG°37 for that context is 3.44 kcal/mol, so D=200 gives 17.20 °C.
 	pr := "GGGGGGGGGG"
-	tgtPerfect := "CCCCCCCCCC" // 3'→5'
+	tgt := []byte("CCCCCCCCCC") // 3'→5'
+	tgt[4] = 'T'
 
-	// Internal index = 4 → compare chemistries for that column
-	tGT := []byte(tgtPerfect)
-	tGT[4] = 'T' // G•T wobble (milder)
-	pGT := dpPenalty(pr, string(tGT), false)
-
-	tGA := []byte(tgtPerfect)
-	tGA[4] = 'A' // G•A (harsher than GT in our table)
-	pGA := dpPenalty(pr, string(tGA), false)
-
-	if !(pGT < pGA) {
-		t.Fatalf("chemistry ordering failed: expected GT(%.2f) < GA(%.2f)", pGT, pGA)
+	pGT := dpPenalty(pr, string(tgt), false)
+	want := thermo.DeltaGToDeltaTm(3.44, 200.0)
+	if math.Abs(pGT-want) > 1e-9 {
+		t.Fatalf("GT triplet penalty: got %.12g want %.12g", pGT, want)
 	}
 }
 

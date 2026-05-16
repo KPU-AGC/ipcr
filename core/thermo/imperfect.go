@@ -16,6 +16,10 @@ const (
 	// applies context-aware mismatch terms at the configured annealing conditions.
 	MismatchPolicyImperfectV1 = "nn-imperfect-v1"
 
+	// MismatchPolicyImperfectTriplet identifies an imperfect-duplex result
+	// scored with exact triplet-level mismatch ΔΔG or ΔTm parameters.
+	MismatchPolicyImperfectTriplet = "nn-imperfect-v1-with-triplet-ddg"
+
 	// MismatchPolicyImperfectCuratedPair identifies an imperfect-duplex result
 	// scored with the curated pair-family mismatch parameter registry.
 	MismatchPolicyImperfectCuratedPair = "nn-imperfect-v1-with-curated-pair-ddg"
@@ -370,6 +374,8 @@ func ImperfectDuplexWithOptionsAndContext(primer5to3, target3to5 string, cond Co
 			policy = MismatchPolicyImperfectDefaultFallback
 		} else if out.HeuristicFallbackCount > 0 {
 			policy = MismatchPolicyImperfectHeuristicFallback
+		} else if out.TripletTmCount+out.TripletDeltaGCount > 0 {
+			policy = MismatchPolicyImperfectTriplet
 		} else if out.CuratedPairCount > 0 {
 			policy = MismatchPolicyImperfectCuratedPair
 		}

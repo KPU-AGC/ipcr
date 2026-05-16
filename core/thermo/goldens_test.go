@@ -144,6 +144,85 @@ func TestGoldenImperfectDuplexes(t *testing.T) {
 	}
 }
 
+func TestGoldenMismatchTriplets(t *testing.T) {
+	for _, row := range readGoldenTSV(t, "testdata/mismatch_triplet_goldens.golden") {
+		row := row
+		t.Run(row["id"], func(t *testing.T) {
+			model, err := ParseSaltModel(row["salt_model"])
+			if err != nil {
+				t.Fatalf("ParseSaltModel(%q): %v", row["salt_model"], err)
+			}
+			cond := Conditions{
+				AnnealC:      goldenFloat(t, row, "anneal_c"),
+				NaM:          goldenFloat(t, row, "na_m"),
+				MgM:          goldenFloat(t, row, "mg_m"),
+				DntpM:        goldenFloat(t, row, "dntp_m"),
+				PrimerTotalM: DefaultConditions().PrimerTotalM,
+				SaltModel:    model,
+			}
+
+			got, err := ImperfectDuplex(row["primer"], row["target"], cond)
+			if err != nil {
+				t.Fatalf("ImperfectDuplex: %v", err)
+			}
+			tol := goldenFloat(t, row, "tolerance_delta_g")
+			assertNearGolden(t, "delta_delta_g", got.DeltaGPenaltyKcal, goldenFloat(t, row, "expected_delta_delta_g_kcal"), tol)
+
+			if got.MismatchCount != goldenInt(t, row, "expected_mismatch_count") {
+				t.Fatalf("mismatch count: got %d want %s", got.MismatchCount, row["expected_mismatch_count"])
+			}
+			tripletCount := got.TripletTmCount + got.TripletDeltaGCount
+			if tripletCount != goldenInt(t, row, "expected_triplet_count") {
+				t.Fatalf("triplet count: got %d want %s; result=%+v", tripletCount, row["expected_triplet_count"], got)
+			}
+			fallbackCount := got.HeuristicFallbackCount + got.DefaultFallbackCount
+			if fallbackCount != goldenInt(t, row, "expected_fallback_count") {
+				t.Fatalf("fallback count: got %d want %s; result=%+v", fallbackCount, row["expected_fallback_count"], got)
+			}
+			if got.MismatchPolicy != MismatchPolicyImperfectTriplet {
+				t.Fatalf("policy: got %q want %q", got.MismatchPolicy, MismatchPolicyImperfectTriplet)
+			}
+
+			perfectTarget, ok := compStrict(row["primer"])
+			if !ok {
+				t.Fatalf("compStrict failed for %q", row["primer"])
+			}
+			perfect, err := PerfectDuplex(row["primer"], perfectTarget, cond)
+			if err != nil {
+				t.Fatalf("PerfectDuplex: %v", err)
+			}
+			switch row["expected_tm_direction"] {
+			case "decrease":
+				if !(got.TmC < perfect.TmC) {
+					t.Fatalf("expected mismatch to decrease Tm: perfect=%g got=%g", perfect.TmC, got.TmC)
+				}
+			case "increase":
+				if !(got.TmC > perfect.TmC) {
+					t.Fatalf("expected mismatch to increase Tm: perfect=%g got=%g", perfect.TmC, got.TmC)
+				}
+			default:
+				t.Fatalf("unknown expected_tm_direction %q", row["expected_tm_direction"])
+			}
+
+			if len(got.Contributions) != 1 {
+				t.Fatalf("expected one mismatch contribution, got %d: %+v", len(got.Contributions), got.Contributions)
+			}
+			c := got.Contributions[0]
+			key := MismatchKey{P5: c.P5, P: c.PrimerBase, P3: c.P3, T5: c.T5, T: c.TargetBase, T3: c.T3}
+			param, ok := LookupMismatchParameterInfo(key)
+			if !ok {
+				t.Fatalf("missing parameter info for %+v", key)
+			}
+			if param.Source != MismatchSourceTripletDeltaG {
+				t.Fatalf("source: got %q want %q for %+v", param.Source, MismatchSourceTripletDeltaG, key)
+			}
+			if param.ParameterSet != row["expected_parameter_set"] {
+				t.Fatalf("parameter set: got %q want %q", param.ParameterSet, row["expected_parameter_set"])
+			}
+		})
+	}
+}
+
 func TestGoldenStructures(t *testing.T) {
 	for _, row := range readGoldenTSV(t, "testdata/structure_goldens.golden") {
 		row := row

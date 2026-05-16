@@ -44,13 +44,13 @@ var dimerParams = map[string]NNParams{
 	"GC/CG": {-9.8, -24.4},
 	"GG/CC": {-8.0, -19.9},
 
-	// Synonym keys (reverse-orientation / swapped forms)
+	// Synonym keys from strand-interchange representations.
 	"TT/AA": {-7.9, -22.2}, // same as AA/TT
 	"CC/GG": {-8.0, -19.9}, // same as GG/CC
-	"AC/TG": {-8.5, -22.7}, // same as CA/GT
-	"TG/AC": {-8.4, -22.4}, // same as GT/CA
-	"AG/TC": {-8.2, -22.2}, // same as GA/CT
-	"TC/AG": {-7.8, -21.0}, // same as CT/GA
+	"AC/TG": {-8.4, -22.4}, // same as GT/CA
+	"TG/AC": {-8.5, -22.7}, // same as CA/GT
+	"AG/TC": {-7.8, -21.0}, // same as CT/GA
+	"TC/AG": {-8.2, -22.2}, // same as GA/CT
 }
 
 // Initiation / terminal / symmetry (1 M Na+).

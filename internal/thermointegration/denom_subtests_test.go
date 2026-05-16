@@ -131,8 +131,8 @@ func TestThermo_LegacyModelGoldenOutput(t *testing.T) {
 	}
 
 	want := "source_file\tsequence_id\texperiment_id\tstart\tend\tlength\ttype\tfwd_mm\trev_mm\tfwd_mm_i\trev_mm_i\tscore\n" +
-		"thermo_stage0.fa\ts\tmanual\t0\t18\t18\tforward\t1\t0\t1\t\t-6.375\n" +
-		"thermo_stage0.fa\ts\tmanual\t11\t18\t7\tforward\t1\t0\t1\t\t-8.25\n"
+		"thermo_stage0.fa\ts\tmanual\t0\t18\t18\tforward\t1\t0\t1\t\t-18.975\n" +
+		"thermo_stage0.fa\ts\tmanual\t11\t18\t7\tforward\t1\t0\t1\t\t-29.625\n"
 
 	gotDefault := runThermo(t, baseArgs)
 	if gotDefault != want {

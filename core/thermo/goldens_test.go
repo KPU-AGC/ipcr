@@ -59,6 +59,23 @@ func goldenInt(t *testing.T, row map[string]string, key string) int {
 	return v
 }
 
+func goldenBase(t *testing.T, row map[string]string, key string) byte {
+	t.Helper()
+	v := row[key]
+	if len(v) != 1 {
+		t.Fatalf("%s: expected one base, got %q", key, v)
+	}
+	return v[0]
+}
+
+func goldenOptionalBase(row map[string]string, key string) byte {
+	v := row[key]
+	if v == "" {
+		return 0
+	}
+	return []byte(v)[0]
+}
+
 func goldenConditions(t *testing.T, row map[string]string) Conditions {
 	t.Helper()
 	model, err := ParseSaltModel(row["salt_model"])
@@ -218,6 +235,92 @@ func TestGoldenMismatchTriplets(t *testing.T) {
 			}
 			if param.ParameterSet != row["expected_parameter_set"] {
 				t.Fatalf("parameter set: got %q want %q", param.ParameterSet, row["expected_parameter_set"])
+			}
+		})
+	}
+}
+
+func TestGoldenDanglingEnds(t *testing.T) {
+	rows := readGoldenTSV(t, "testdata/dangling_end_goldens.golden")
+	if len(rows) != len(CuratedDanglingEndParameters) {
+		t.Fatalf("dangling-end golden count: got %d want %d", len(rows), len(CuratedDanglingEndParameters))
+	}
+	for _, row := range rows {
+		row := row
+		t.Run(row["id"], func(t *testing.T) {
+			var strandEnd byte
+			switch row["template_end"] {
+			case "5p":
+				strandEnd = DanglingEndStrand5Prime
+			case "3p":
+				strandEnd = DanglingEndStrand3Prime
+			default:
+				t.Fatalf("unknown template_end %q", row["template_end"])
+			}
+
+			param, ok := LookupDanglingEndParameter(DanglingEndKey{
+				StrandEnd:    strandEnd,
+				DanglingBase: goldenBase(t, row, "dangling_base"),
+				PairedBase:   goldenBase(t, row, "terminal_target_base"),
+				OppositeBase: goldenBase(t, row, "terminal_primer_base"),
+			})
+			if !ok {
+				t.Fatalf("missing dangling-end parameter for row %+v", row)
+			}
+			tol := goldenFloat(t, row, "tolerance")
+			assertNearGolden(t, "delta_h", param.DeltaHkcal, goldenFloat(t, row, "expected_delta_h_kcal"), tol)
+			assertNearGolden(t, "delta_s", param.DeltaScalK, goldenFloat(t, row, "expected_delta_s_cal_k"), tol)
+			assertNearGolden(t, "delta_g37", param.DeltaG37kcal, goldenFloat(t, row, "expected_delta_g37_kcal"), tol)
+			if param.ParameterSet != row["expected_parameter_set"] || param.Source != row["source_id"] || param.Citation == "" || param.Note == "" {
+				t.Fatalf("parameter provenance missing/changed: %+v", param)
+			}
+		})
+	}
+}
+
+func TestGoldenDanglingEndContexts(t *testing.T) {
+	for _, row := range readGoldenTSV(t, "testdata/dangling_end_context_goldens.golden") {
+		row := row
+		t.Run(row["id"], func(t *testing.T) {
+			cond := goldenConditions(t, row)
+			base, err := ImperfectDuplex(row["primer"], row["target3to5"], cond)
+			if err != nil {
+				t.Fatalf("base ImperfectDuplex: %v", err)
+			}
+			got, err := ImperfectDuplexWithOptionsAndContext(
+				row["primer"],
+				row["target3to5"],
+				cond,
+				DefaultImperfectDuplexOptions(),
+				DanglingEndContext{
+					FivePrimeBase:  goldenOptionalBase(row, "five_prime_base"),
+					ThreePrimeBase: goldenOptionalBase(row, "three_prime_base"),
+				},
+			)
+			if err != nil {
+				t.Fatalf("dangling ImperfectDuplex: %v", err)
+			}
+			tol := goldenFloat(t, row, "tolerance_delta_g")
+			assertNearGolden(t, "dangling_delta_g", got.DanglingEndDeltaGKcal, goldenFloat(t, row, "expected_delta_g_kcal"), tol)
+			if got.DanglingEndCount != goldenInt(t, row, "expected_dangling_count") || len(got.DanglingContributions) != goldenInt(t, row, "expected_dangling_count") {
+				t.Fatalf("dangling count: got result=%+v row=%+v", got, row)
+			}
+			for _, c := range got.DanglingContributions {
+				if c.ParameterSet != row["expected_parameter_set"] || c.Source != row["source_id"] || c.Citation == "" || c.ParameterNote == "" {
+					t.Fatalf("dangling provenance missing/changed: %+v", c)
+				}
+			}
+			switch row["expected_tm_direction"] {
+			case "increase":
+				if !(got.TmC > base.TmC && got.DeltaGAtAnnealKcal < base.DeltaGAtAnnealKcal) {
+					t.Fatalf("expected dangling end to stabilize endpoint: base=%+v got=%+v", base.DuplexResult, got.DuplexResult)
+				}
+			case "decrease":
+				if !(got.TmC < base.TmC && got.DeltaGAtAnnealKcal > base.DeltaGAtAnnealKcal) {
+					t.Fatalf("expected dangling end to destabilize endpoint: base=%+v got=%+v", base.DuplexResult, got.DuplexResult)
+				}
+			default:
+				t.Fatalf("unknown expected_tm_direction %q", row["expected_tm_direction"])
 			}
 		})
 	}

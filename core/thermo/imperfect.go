@@ -42,8 +42,9 @@ const (
 	// correction layer applied after ordinary 5'/3' end-window weighting.
 	EndEffectPolicyTerminalMismatchV1 = "nn-terminal-mismatch-v1"
 
-	// EndEffectPolicyTemplateDanglingV1 identifies the bounded v1 model for a
-	// template base adjacent to the primer-template duplex.
+	// EndEffectPolicyTemplateDanglingV1 identifies the SantaLucia-Hicks
+	// sequence-context model for a template base adjacent to the primer-template
+	// duplex.
 	EndEffectPolicyTemplateDanglingV1 = "nn-template-dangling-end-v1"
 
 	// EndEffectPolicyTerminalAndDanglingV1 identifies rows where both v1 end-effect
@@ -183,14 +184,25 @@ type DanglingEndContext struct {
 	ThreePrimeBase byte
 }
 
-// DanglingEndContribution describes one bounded v1 template-adjacent dangling
-// base correction. AdjustmentC is positive when the base stabilizes the endpoint
-// and raises the effective annealing margin.
+// DanglingEndContribution describes one table-backed template-adjacent dangling
+// base correction. AdjustmentC is positive when the base stabilizes the endpoint,
+// and negative for the few experimentally observed destabilizing dangling ends.
 type DanglingEndContribution struct {
-	Side        string
-	Base        byte
-	DeltaGKcal  float64
-	AdjustmentC float64
+	Side               string
+	Base               byte
+	TerminalPrimerBase byte
+	TerminalTargetBase byte
+	DanglingStrandSide byte
+	Motif              string
+	DeltaHkcal         float64
+	DeltaScalK         float64
+	DeltaGKcal         float64
+	DeltaG37kcal       float64
+	AdjustmentC        float64
+	Source             string
+	ParameterSet       string
+	Citation           string
+	ParameterNote      string
 }
 
 // ImperfectDuplexResult reports an approximate condition-aware imperfect
@@ -428,24 +440,35 @@ func danglingEndAdjustment(ctx DanglingEndContext, primer, target string, denom 
 		return 0, 0, nil
 	}
 	contribs := make([]DanglingEndContribution, 0, 2)
-	add := func(side string, base byte, terminalWC bool, threePrime bool) {
-		if !terminalWC {
+	add := func(side string, base, terminalPrimer, terminalTarget byte) {
+		param, ok := LookupTemplateDanglingEndParameter(side, base, terminalPrimer, terminalTarget)
+		if !ok {
 			return
 		}
-		dg, ok := templateDanglingDeltaGKcal(base, threePrime)
-		if !ok || dg == 0 {
-			return
-		}
+		dg := param.DeltaG37kcal
 		adjC := -dg * 1000.0 / denom
 		contribs = append(contribs, DanglingEndContribution{
-			Side:        side,
-			Base:        normalizeBase(base),
-			DeltaGKcal:  dg,
-			AdjustmentC: adjC,
+			Side:               side,
+			DanglingStrandSide: param.Key.StrandEnd,
+			Base:               param.Key.DanglingBase,
+			TerminalPrimerBase: param.Key.OppositeBase,
+			TerminalTargetBase: param.Key.PairedBase,
+			Motif:              param.Motif,
+			DeltaHkcal:         param.DeltaHkcal,
+			DeltaScalK:         param.DeltaScalK,
+			DeltaGKcal:         dg,
+			DeltaG37kcal:       dg,
+			AdjustmentC:        adjC,
+			Source:             param.Source,
+			ParameterSet:       param.ParameterSet,
+			Citation:           param.Citation,
+			ParameterNote:      param.Note,
 		})
 	}
-	add("primer-5p", ctx.FivePrimeBase, wc(primer[0], target[0]), false)
-	add("primer-3p", ctx.ThreePrimeBase, wc(primer[len(primer)-1], target[len(target)-1]), true)
+	// Target/template 3' dangling bases sit beside the primer 5' end.
+	add("primer-5p", ctx.FivePrimeBase, primer[0], target[0])
+	// Target/template 5' dangling bases sit beside the primer 3' end.
+	add("primer-3p", ctx.ThreePrimeBase, primer[len(primer)-1], target[len(target)-1])
 
 	adjustmentC := 0.0
 	deltaG := 0.0
@@ -454,23 +477,6 @@ func danglingEndAdjustment(ctx DanglingEndContext, primer, target string, denom 
 		deltaG += c.DeltaGKcal
 	}
 	return adjustmentC, deltaG, contribs
-}
-
-func templateDanglingDeltaGKcal(base byte, threePrime bool) (float64, bool) {
-	switch normalizeBase(base) {
-	case 'G', 'C':
-		if threePrime {
-			return -0.12, true
-		}
-		return -0.07, true
-	case 'A', 'T':
-		if threePrime {
-			return -0.08, true
-		}
-		return -0.04, true
-	default:
-		return 0, false
-	}
 }
 
 func normalizeBase(b byte) byte {

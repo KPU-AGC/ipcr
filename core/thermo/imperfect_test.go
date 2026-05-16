@@ -143,7 +143,7 @@ func TestImperfectDuplexDanglingEndContextRaisesMargin(t *testing.T) {
 		target,
 		cond,
 		DefaultImperfectDuplexOptions(),
-		DanglingEndContext{ThreePrimeBase: 'G'},
+		DanglingEndContext{ThreePrimeBase: 'A'},
 	)
 	if err != nil {
 		t.Fatalf("dangling ImperfectDuplex: %v", err)
@@ -151,11 +151,116 @@ func TestImperfectDuplexDanglingEndContextRaisesMargin(t *testing.T) {
 	if got.DanglingEndCount != 1 || got.DanglingEndAdjustmentC <= 0 || got.DanglingEndDeltaGKcal >= 0 {
 		t.Fatalf("expected favorable dangling-end adjustment, got %+v", got)
 	}
+	if len(got.DanglingContributions) != 1 {
+		t.Fatalf("expected one dangling-end contribution, got %+v", got.DanglingContributions)
+	}
+	c := got.DanglingContributions[0]
+	if c.ParameterSet != DanglingEndParameterSetSantaLuciaHicks2004V1 || c.Source == "" || c.Citation == "" {
+		t.Fatalf("expected SantaLucia-Hicks dangling-end provenance, got %+v", c)
+	}
+	if c.Side != "primer-3p" || c.DanglingStrandSide != DanglingEndStrand5Prime || c.Base != 'A' || c.TerminalPrimerBase != 'T' || c.TerminalTargetBase != 'A' {
+		t.Fatalf("unexpected dangling-end key mapping: %+v", c)
+	}
+	if math.Abs(c.DeltaG37kcal-(-0.51)) > 1e-12 || math.Abs(c.DeltaHkcal-0.2) > 1e-12 {
+		t.Fatalf("unexpected dangling-end thermodynamics: %+v", c)
+	}
 	if got.EndEffectPolicy != EndEffectPolicyTemplateDanglingV1 {
 		t.Fatalf("unexpected end-effect policy: %q", got.EndEffectPolicy)
 	}
 	if !(got.AnnealMarginC > base.AnnealMarginC && got.DeltaGAtAnnealKcal < base.DeltaGAtAnnealKcal) {
 		t.Fatalf("expected dangling context to stabilize endpoint: base=%+v got=%+v", base.DuplexResult, got.DuplexResult)
+	}
+}
+
+func TestImperfectDuplexDanglingEndCanBeDestabilizing(t *testing.T) {
+	primer := "ACGTACGTACGTACGA"
+	target := comp(primer)
+	cond := DefaultConditions()
+	base, err := ImperfectDuplex(primer, target, cond)
+	if err != nil {
+		t.Fatalf("base ImperfectDuplex: %v", err)
+	}
+	got, err := ImperfectDuplexWithOptionsAndContext(
+		primer,
+		target,
+		cond,
+		DefaultImperfectDuplexOptions(),
+		DanglingEndContext{ThreePrimeBase: 'G'},
+	)
+	if err != nil {
+		t.Fatalf("dangling ImperfectDuplex: %v", err)
+	}
+	if got.DanglingEndCount != 1 || len(got.DanglingContributions) != 1 {
+		t.Fatalf("expected one dangling-end contribution, got %+v", got)
+	}
+	c := got.DanglingContributions[0]
+	if c.Side != "primer-3p" || c.DanglingStrandSide != DanglingEndStrand5Prime || c.Base != 'G' || c.TerminalPrimerBase != 'A' || c.TerminalTargetBase != 'T' {
+		t.Fatalf("unexpected dangling-end key mapping: %+v", c)
+	}
+	if math.Abs(c.DeltaG37kcal-0.48) > 1e-12 || c.AdjustmentC >= 0 || got.DanglingEndDeltaGKcal <= 0 {
+		t.Fatalf("expected destabilizing dangling-end term, got contribution=%+v result=%+v", c, got)
+	}
+	if !(got.AnnealMarginC < base.AnnealMarginC && got.DeltaGAtAnnealKcal > base.DeltaGAtAnnealKcal) {
+		t.Fatalf("expected dangling context to destabilize endpoint: base=%+v got=%+v", base.DuplexResult, got.DuplexResult)
+	}
+}
+
+func TestLookupDanglingEndParameterSantaLuciaHicksTable3(t *testing.T) {
+	if len(CuratedDanglingEnds) != 32 {
+		t.Fatalf("curated dangling-end count: got %d want 32", len(CuratedDanglingEnds))
+	}
+	cases := []struct {
+		name       string
+		key        DanglingEndKey
+		wantDH     float64
+		wantDG37   float64
+		wantMotif  string
+		mappedSide string
+	}{
+		{
+			name:      "5p_XT_A_positive",
+			key:       DanglingEndKey{StrandEnd: DanglingEndStrand5Prime, DanglingBase: 'G', PairedBase: 'T', OppositeBase: 'A'},
+			wantDH:    -4.2,
+			wantDG37:  0.48,
+			wantMotif: "GT/A",
+		},
+		{
+			name:      "3p_AX_T_positive",
+			key:       DanglingEndKey{StrandEnd: DanglingEndStrand3Prime, DanglingBase: 'C', PairedBase: 'A', OppositeBase: 'T'},
+			wantDH:    4.7,
+			wantDG37:  0.28,
+			wantMotif: "AC/T",
+		},
+		{
+			name:      "3p_GX_C_strong",
+			key:       DanglingEndKey{StrandEnd: DanglingEndStrand3Prime, DanglingBase: 'A', PairedBase: 'G', OppositeBase: 'C'},
+			wantDH:    -2.1,
+			wantDG37:  -0.92,
+			wantMotif: "GA/C",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := LookupDanglingEndParameter(tc.key)
+			if !ok {
+				t.Fatalf("missing dangling-end parameter for %+v", tc.key)
+			}
+			if got.ParameterSet != DanglingEndParameterSetSantaLuciaHicks2004V1 || got.Source == "" || got.Citation == "" {
+				t.Fatalf("missing dangling-end provenance: %+v", got)
+			}
+			if got.Motif != tc.wantMotif || math.Abs(got.DeltaHkcal-tc.wantDH) > 1e-12 || math.Abs(got.DeltaG37kcal-tc.wantDG37) > 1e-12 {
+				t.Fatalf("unexpected parameter: got %+v want DH=%g DG=%g motif=%s", got, tc.wantDH, tc.wantDG37, tc.wantMotif)
+			}
+		})
+	}
+
+	mapped, ok := LookupTemplateDanglingEndParameter("primer-3p", 'G', 'A', 'T')
+	if !ok || mapped.Key.StrandEnd != DanglingEndStrand5Prime || mapped.Motif != "GT/A" || math.Abs(mapped.DeltaG37kcal-0.48) > 1e-12 {
+		t.Fatalf("unexpected primer-3p target-dangling mapping: ok=%v param=%+v", ok, mapped)
+	}
+	mapped, ok = LookupTemplateDanglingEndParameter("primer-5p", 'C', 'T', 'A')
+	if !ok || mapped.Key.StrandEnd != DanglingEndStrand3Prime || mapped.Motif != "AC/T" || math.Abs(mapped.DeltaG37kcal-0.28) > 1e-12 {
+		t.Fatalf("unexpected primer-5p target-dangling mapping: ok=%v param=%+v", ok, mapped)
 	}
 }
 

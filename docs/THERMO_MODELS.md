@@ -18,11 +18,11 @@ still require calibration or additional chemistry-specific parameters.
 
 ## Thermodynamic implementation modes
 
-| Mode               | Purpose                                                               | Notes                                                                                                                    |
-| ------------------ | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `legacy-heuristic` | Historical score path                                                 | Maintained for backward compatibility. Scores are not directly comparable with NN modes.                                 |
-| `nn-duplex-v1`     | Primer-template nearest-neighbor duplex ranking                       | Uses runtime conditions, salt model, primer concentration, IUPAC thermo policy, and explicit mismatch source/parameter-set metadata. |
-| `nn-structure-v1`  | `nn-duplex-v1` plus primer hairpin/self-dimer/cross-dimer competition | Uses the current secondary-structure evaluator and reports structure policy/model metadata.                              |
+| Mode               | Purpose                                                               | Notes                                                                                                                                                                                                                      |
+| ------------------ | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `legacy-heuristic` | Historical score path                                                 | Maintained for backward compatibility. Scores are not directly comparable with NN modes.                                                                                                                                   |
+| `nn-duplex-v1`     | Primer-template nearest-neighbor duplex ranking                       | Uses runtime conditions, salt model, primer concentration, IUPAC thermo policy, explicit mismatch source/parameter-set metadata, and SantaLucia-Hicks 2004 terminal dangling-end terms when template flanks are available. |
+| `nn-structure-v1`  | `nn-duplex-v1` plus primer hairpin/self-dimer/cross-dimer competition | Uses the current secondary-structure evaluator and reports structure policy/model metadata.                                                                                                                                |
 
 ## Structure model labels
 
@@ -109,6 +109,7 @@ Thermodynamic outputs should expose when approximate paths were used. The most
 important labels are:
 
 - mismatch policy, source labels, parameter sets, citations, and fallback counts,
+- terminal mismatch and template dangling-end fields,
 - structure policy/model,
 - salt model and free/effective ion concentrations,
 - IUPAC policy and expansion/capping status,
@@ -135,17 +136,21 @@ The current thermodynamic implementation is intentionally transparent about thes
 limits:
 
 1. Curated mismatch triplets are complete for isolated internal single-base
-   A/C/G/T DNA/DNA mismatches in Watson-Crick flanking contexts. Fallback terms
-   remain possible for terminal mismatches, tandem/clustered mismatches, target
-   `N`, degenerate/IUPAC-expanded edge cases, and modified-probe chemistry.
-2. `owczarzy08` uses a practical mixed-salt/free-Mg approximation, not a full
+   A/C/G/T DNA/DNA mismatches in Watson-Crick flanking contexts. Terminal
+   target/template dangling ends next to Watson-Crick closing pairs use the
+   SantaLucia-Hicks 2004 Table 3 DNA/DNA parameter set when flanking bases are
+   available.
+2. Fallback terms remain possible for terminal mismatches, tandem/clustered
+   mismatches, target `N`, degenerate/IUPAC-expanded edge cases, and
+   modified-probe chemistry.
+3. `owczarzy08` uses a practical mixed-salt/free-Mg approximation, not a full
    activity-coefficient chemistry model.
-3. `nn-stem-loop-v2` is not a complete secondary-structure dynamic-programming
+4. `nn-stem-loop-v2` is not a complete secondary-structure dynamic-programming
    engine.
-4. PCR and gel score profiles are empirical rankers, not full amplification
+5. PCR and gel score profiles are empirical rankers, not full amplification
    kinetics.
-5. Modified probe chemistries such as MGB require opt-in calibration.
-6. Scores from different thermo modes or score profiles should not be compared
+6. Modified probe chemistries such as MGB require opt-in calibration.
+7. Scores from different thermo modes or score profiles should not be compared
    as if they were on one universal physical scale.
 
 ## Release checklist

@@ -9,6 +9,8 @@
 **ipcr** is a fast, streaming, IUPAC-aware in-silico PCR toolkit for large (including .gzipped) references.
 It finds amplicons from primer pairs under a mismatch model with a **3′ terminal window**, supports **internal probes**, **nested PCR**, **multiplex panels**, circular templates, and emits **TSV**, **FASTA**, **JSON**, or **JSONL**.
 
+`ipcr-thermo` provides nearest-neighbor-informed ranking with explicit approximation metadata. It is a thermodynamically informed in-silico PCR ranker, not a complete PCR kinetics simulator. See [Thermodynamic models, score profiles, and release claims](./docs/THERMO_MODELS.md).
+
 ---
 
 - **Fast & parallel**: multi-threaded seeded scanner with per-hit verification.
@@ -17,6 +19,7 @@ It finds amplicons from primer pairs under a mismatch model with a **3′ termin
 - **Pretty mode**: readable ASCII alignment blocks.
 - **Deterministic**: `--sort` gives stable order; JSON/JSONL use versioned, stable wire schemas.
 - **Good UX**: cancelable I/O (Ctrl-C → exit 130), consistent warnings (gated by `--quiet`), clear validation errors.
+- **Transparent thermo modes**: NN models, score profiles, salt/DNTp conditions, IUPAC expansion, structure, and probe terms are exposed as output metadata when enabled.
 
 ---
 
@@ -28,7 +31,7 @@ It finds amplicons from primer pairs under a mismatch model with a **3′ termin
 | `ipcr-probe`     | ipcr + **internal probe** annotation & filtering | qPCR/TaqMan-style assays   |
 | `ipcr-nested`    | **Nested PCR**: outer amplicon + inner scan      | Two-round/nested assays    |
 | `ipcr-multiplex` | Panels from TSV or **pooled inline** primers     | Screens / large panels     |
-| `ipcr-thermo`    | Thermodynamically-informed scoring & ranking     | Ranking / assay robustness |
+| `ipcr-thermo`    | Thermodynamically informed scoring & ranking     | Ranking / assay robustness |
 
 ---
 
@@ -137,7 +140,7 @@ ipcr-multiplex \
 }
 ```
 
-### Thermodynamically-informed :
+### Thermodynamically informed ranking:
 
 ```bash
 # With multiplex primer pool described by Xiong (2017); DOI: 10.3389/fmicb.2017.00420
@@ -157,6 +160,25 @@ Salmonella-Enteritidis	NZ_CP025559.1	O1+O2	1853303	1854185	882	revcomp	0	0	-137.
 ```
 
 ---
+
+## Thermodynamic scoring scope
+
+`ipcr-thermo` has multiple thermodynamic implementation modes and empirical score profiles. Use the mode/profile labels in output metadata rather than treating all scores as one universal scale.
+
+Common modes and profiles:
+
+| Setting            | Meaning                                                  |
+| ------------------ | -------------------------------------------------------- |
+| `legacy-heuristic` | Historical compatibility path.                           |
+| `nn-duplex-v1`     | Nearest-neighbor primer-template duplex scoring.         |
+| `nn-structure-v1`  | NN duplex scoring plus primer hairpin/dimer competition. |
+| `binding`          | Primer-template binding rank.                            |
+| `pcr`              | Binding plus extension and length proxy.                 |
+| `gel`              | PCR proxy plus band-mass proxy.                          |
+
+The `pcr` and `gel` profiles are useful empirical rankers, but they are not full polymerase kinetics or quantitative gel-intensity models. Modified probes such as MGB probes are not fully calibrated; use `--probe-score-mode annotate` or `--probe-thermo=false` unless a calibrated modifier model is available.
+
+See [docs/THERMO_MODELS.md](./docs/THERMO_MODELS.md) for the model matrix and fallback labels, and [docs/THERMO_RELEASE_CHECKLIST.md](./docs/THERMO_RELEASE_CHECKLIST.md) for release/smoke-test guidance.
 
 ## Inputs
 

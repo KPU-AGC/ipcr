@@ -10,12 +10,13 @@ import (
 	"ipcr-core/engine"
 	"ipcr-core/oligo"
 	"ipcr-core/primer"
-	"ipcr-core/thermoaddons"
+	"ipcr-core/thermo"
 	"ipcr/internal/appcore"
 	"ipcr/internal/clibase"
 	"ipcr/internal/cmdutil"
 	"ipcr/internal/common"
 	"ipcr/internal/thermocli"
+	"ipcr/internal/thermomodel"
 	"ipcr/internal/thermovisitors"
 	"ipcr/internal/version"
 	"ipcr/internal/writers"
@@ -105,26 +106,74 @@ func pairsFromOligos(oligs []primer.Oligo, minLen, maxLen int, includeSelf bool)
 	return out
 }
 
+func panelRefsFromOligos(oligs []primer.Oligo) []thermovisitors.PrimerRef {
+	out := make([]thermovisitors.PrimerRef, 0, len(oligs))
+	for _, o := range oligs {
+		out = append(out, thermovisitors.PrimerRef{ID: o.ID, Seq: strings.ToUpper(o.Seq)})
+	}
+	return out
+}
+
+func panelRefsFromPairs(pairs []primer.Pair) []thermovisitors.PrimerRef {
+	out := make([]thermovisitors.PrimerRef, 0, len(pairs)*2)
+	for _, p := range pairs {
+		id := strings.TrimSpace(p.ID)
+		if id == "" {
+			id = "pair"
+		}
+		out = append(out, thermovisitors.PrimerRef{ID: id + ":fwd", Seq: strings.ToUpper(p.Forward)})
+		out = append(out, thermovisitors.PrimerRef{ID: id + ":rev", Seq: strings.ToUpper(p.Reverse)})
+	}
+	return out
+}
+
 // parseMolar: "250nM" → 2.5e-7; "50mM" → 5e-2
 func parseMolar(s string) (float64, error) {
-	return thermoaddons.ParseConc(s)
+	return thermo.ParseConc(s)
+}
+
+func isStrictACGTSeq(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case 'A', 'C', 'G', 'T', 'a', 'c', 'g', 't':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func validateNNPrimers(mode thermomodel.Mode, iupacPolicy string, pairs []primer.Pair) error {
+	if iupacPolicy != thermo.IUPACThermoPolicyStrict {
+		return nil
+	}
+	for _, pair := range pairs {
+		if !isStrictACGTSeq(pair.Forward) || !isStrictACGTSeq(pair.Reverse) {
+			return fmt.Errorf("--thermo-model %s with --iupac-thermo-policy strict requires A/C/G/T primers; pair %q contains degenerate/IUPAC bases", mode, pair.ID)
+		}
+	}
+	return nil
 }
 
 /* ---------- writer (forces NeedSeq + score column + rank-by-score) ---------- */
 
 type thermoWF struct {
-	Format       string
-	Sort         bool
-	Header       bool
-	Pretty       bool
-	IncludeScore bool
-	RankByScore  bool
+	Format        string
+	Sort          bool
+	Header        bool
+	Pretty        bool
+	IncludeScore  bool
+	RankByScore   bool
+	ThermoDetails bool
 }
 
 func (w thermoWF) NeedSites() bool { return false }
 func (w thermoWF) NeedSeq() bool   { return true }
 func (w thermoWF) Start(out io.Writer, bufSize int) (chan<- engine.Product, <-chan error) {
-	return writers.StartProductWriter(out, w.Format, w.Sort, w.Header, w.Pretty, w.IncludeScore, w.RankByScore, bufSize)
+	return writers.StartProductWriterWithThermoDetails(out, w.Format, w.Sort, w.Header, w.Pretty, w.IncludeScore, w.RankByScore, w.ThermoDetails, bufSize)
 }
 
 /* ----------------------------- main app ----------------------------- */
@@ -210,6 +259,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	}
 
 	var pairs []primer.Pair
+	var panelRefs []thermovisitors.PrimerRef
 	if hasOligoMode {
 		var oligs []primer.Oligo
 		if opts.OligosTSV != "" {
@@ -233,6 +283,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 			return 2
 		}
 		pairs = pairsFromOligos(oligs, opts.MinLen, opts.MaxLen, opts.Self)
+		panelRefs = panelRefsFromOligos(oligs)
 		if len(pairs) == 0 {
 			_, _ = fmt.Fprintln(stderr, "error: need ≥2 oligos for pairing (or enable --self)")
 			return 2
@@ -257,11 +308,13 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		if opts.Self {
 			pairs = common.AddSelfPairsUnique(pairs)
 		}
+		panelRefs = panelRefsFromPairs(pairs)
 	}
 
 	// Parse solution conditions (warn and default on errors)
 	naM, errNa := parseMolar(opts.NaSpec)
 	mgM, errMg := parseMolar(opts.MgSpec)
+	dntpM, errDntp := parseMolar(opts.DntpSpec)
 	ctM, errCt := parseMolar(opts.PrimerConcSpec)
 	if errNa != nil {
 		cmdutil.Warnf(stderr, opts.Quiet, "bad --na %q: %v (using 50mM)", opts.NaSpec, errNa)
@@ -271,22 +324,83 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		cmdutil.Warnf(stderr, opts.Quiet, "bad --mg %q: %v (using 3mM)", opts.MgSpec, errMg)
 		mgM = 0.003
 	}
+	if errDntp != nil {
+		cmdutil.Warnf(stderr, opts.Quiet, "bad --dntp %q: %v (using 0mM)", opts.DntpSpec, errDntp)
+		dntpM = 0
+	}
 	if errCt != nil {
 		cmdutil.Warnf(stderr, opts.Quiet, "bad --primer-conc %q: %v (using 250nM)", opts.PrimerConcSpec, errCt)
 		ctM = 2.5e-7
 	}
 
-	// Effective monovalent (optional Owczarzy-lite via env)
-	naEff := thermoaddons.EffectiveMonovalent(naM, mgM)
+	saltModel, err := thermo.ParseSaltModel(opts.SaltModel)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return 2
+	}
+	conditions := thermo.Conditions{
+		AnnealC:      opts.AnnealTempC,
+		NaM:          naM,
+		MgM:          mgM,
+		DntpM:        dntpM,
+		PrimerTotalM: ctM,
+		SaltModel:    saltModel,
+	}
+	naEff := conditions.EffectiveNaM()
+
+	mode, err := thermomodel.Parse(opts.ThermoModel)
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, err)
+		return 2
+	}
+	if !mode.Implemented() {
+		_, _ = fmt.Fprintf(stderr, "--thermo-model %q is reserved for staged rollout but is not implemented yet; use %q\n", mode, thermomodel.LegacyHeuristic)
+		return 2
+	}
+	if mode == thermomodel.LegacyHeuristic && strings.TrimSpace(opts.Probe) != "" && opts.ProbeThermo {
+		// Probe thermodynamics requires NN endpoint details. Preserve legacy behavior
+		// for runs without probes, but make an explicit --probe-thermo request useful
+		// even when the user leaves --thermo-model at its historical default.
+		mode = thermomodel.NNDuplexV1
+	}
+	if mode == thermomodel.NNDuplexV1 || mode == thermomodel.NNStructureV1 {
+		if err := validateNNPrimers(mode, opts.IUPACThermoPolicy, pairs); err != nil {
+			_, _ = fmt.Fprintln(stderr, err)
+			return 2
+		}
+	}
 
 	// Build scorer (visitor)
 	scorer := thermovisitors.Score{
-		AnnealTempC:    opts.AnnealTempC,
-		Na_M:           naEff,
-		PrimerConc_M:   ctM,
-		AllowIndels:    opts.AllowIndel,
-		LengthBiasOn:   false, // reserved; keep behavior stable
-		SingleStranded: opts.SingleStranded,
+		Model:                    mode,
+		Conditions:               conditions,
+		AnnealTempC:              opts.AnnealTempC,
+		Na_M:                     naEff,
+		PrimerConc_M:             ctM,
+		AllowIndels:              opts.AllowIndel,
+		LengthBiasOn:             false, // reserved; keep behavior stable
+		SingleStranded:           opts.SingleStranded,
+		StructHairpin:            opts.StructHairpin,
+		StructDimer:              opts.StructDimer,
+		StructScale:              opts.StructScale,
+		PanelPrimers:             panelRefs,
+		IUPACThermoPolicy:        opts.IUPACThermoPolicy,
+		IUPACThermoMaxExpansions: opts.IUPACThermoMaxExpansions,
+		ScoreProfile:             opts.ScoreProfile,
+		ExtAlpha:                 opts.ExtAlpha,
+		ExtWeight:                opts.ExtWeight,
+		LenKneeBP:                opts.LenKneeBP,
+		LenSteep:                 opts.LenSteep,
+		LenMaxPenC:               opts.LenMaxPenC,
+		BindWeight:               opts.BindWeight,
+		BandMassWeight:           opts.BandMassWeight,
+		ProbeSeq:                 opts.Probe,
+		ProbeName:                opts.ProbeName,
+		ProbeMaxMM:               opts.ProbeMaxMM,
+		ProbeThermo:              opts.ProbeThermo,
+		ProbeScoreMode:           opts.ProbeScoreMode,
+		ProbeMinMarginC:          opts.ProbeMinMarginC,
+		ProbeWeight:              opts.ProbeWeight,
 		// NEW: enable auto-denominator when requested
 		UseAutoDenom: strings.ToLower(opts.DenomMode) == "auto",
 	}
@@ -315,12 +429,13 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	// Writer: always include score; rank-by-score if requested
 	rankByScore := strings.ToLower(opts.Rank) != "coord"
 	wf := thermoWF{
-		Format:       opts.Output,
-		Sort:         true,
-		Header:       opts.Header,
-		Pretty:       opts.Pretty,
-		IncludeScore: true,
-		RankByScore:  rankByScore,
+		Format:        opts.Output,
+		Sort:          true,
+		Header:        opts.Header,
+		Pretty:        opts.Pretty,
+		IncludeScore:  true,
+		RankByScore:   rankByScore,
+		ThermoDetails: opts.ThermoDetails,
 	}
 
 	return appcore.Run[engine.Product](parent, outw, stderr, coreOpts, pairs, scorer.Visit, wf)

@@ -1,0 +1,2 @@
+id	primer	target3to5	anneal_c	na_m	mg_m	dntp_m	primer_total_m	salt_model	tm_c	mismatch_penalty_c	dg_penalty_kcal	mismatch_count	five_prime_count	three_prime_count	terminal_count	fallback_count	triplet_count	policy	tolerance
+internal1	ACGTACGTACGTACGT	TGCATGCCTGCATGCA	60	0.05	0.003	0	2.5e-7	monovalent	39.7251567119435	10.1289600599072	3.97	1	0	0	0	0	1	nn-imperfect-v1-with-triplet-ddg	1e-9

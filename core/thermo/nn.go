@@ -33,7 +33,7 @@ type NNParams struct {
 // SantaLucia & Hicks (2004), Table 1.
 var dimerParams = map[string]NNParams{
 	// Canonical 10
-	"AA/TT": {-7.6, -21.3},
+	"AA/TT": {-7.9, -22.2},
 	"AT/TA": {-7.2, -20.4},
 	"TA/AT": {-7.2, -21.3},
 	"CA/GT": {-8.5, -22.7},
@@ -44,13 +44,13 @@ var dimerParams = map[string]NNParams{
 	"GC/CG": {-9.8, -24.4},
 	"GG/CC": {-8.0, -19.9},
 
-	// Synonym keys (reverse-orientation / swapped forms)
-	"TT/AA": {-7.6, -21.3}, // same as AA/TT
+	// Synonym keys from strand-interchange representations.
+	"TT/AA": {-7.9, -22.2}, // same as AA/TT
 	"CC/GG": {-8.0, -19.9}, // same as GG/CC
-	"AC/TG": {-8.5, -22.7}, // same as CA/GT
-	"TG/AC": {-8.4, -22.4}, // same as GT/CA
-	"AG/TC": {-8.2, -22.2}, // same as GA/CT
-	"TC/AG": {-7.8, -21.0}, // same as CT/GA
+	"AC/TG": {-8.4, -22.4}, // same as GT/CA
+	"TG/AC": {-8.5, -22.7}, // same as CA/GT
+	"AG/TC": {-7.8, -21.0}, // same as CT/GA
+	"TC/AG": {-8.2, -22.2}, // same as GA/CT
 }
 
 // Initiation / terminal / symmetry (1 M Na+).
@@ -62,9 +62,12 @@ var (
 
 // TmInput describes solution and concentration.
 type TmInput struct {
-	CT float64 // total strand conc (mol/L); non-self: formula uses ln(CT/x)
-	Na float64 // monovalent cations (mol/L), e.g. 0.05 for 50 mM
-	X  int     // duplex type: 4 (non-self, default) or 1 (self-compl)
+	CT        float64   // total strand conc (mol/L); non-self: formula uses ln(CT/x)
+	Na        float64   // monovalent cations (mol/L), e.g. 0.05 for 50 mM
+	Mg        float64   // total Mg2+ (mol/L)
+	Dntp      float64   // total dNTP (mol/L), used to estimate free Mg2+
+	SaltModel SaltModel // monovalent | owczarzy-lite | owczarzy08
+	X         int       // duplex type: 4 (non-self, default) or 1 (self-compl)
 }
 
 // Result reports ΔH/ΔS (1M and salt-corrected) and Tm.
@@ -73,6 +76,17 @@ type Result struct {
 	DS_cal  float64 // total ΔS at 1 M (cal/K·mol)
 	DS_Na   float64 // ΔS corrected by [Na+] (cal/K·mol)
 	TmC     float64 // melting temperature (°C)
+}
+
+// DuplexResult reports condition-aware thermodynamic quantities for a perfect
+// Watson-Crick primer-template duplex at the configured annealing temperature.
+type DuplexResult struct {
+	Result
+	AnnealC            float64
+	AnnealMarginC      float64
+	DeltaGAtAnnealKcal float64
+	EffectiveDenomCalK float64
+	SelfComplementary  bool
 }
 
 // Tm computes Tm for primer (5'→3') vs target (3'→5') aligned WC.
@@ -88,8 +102,11 @@ func Tm(primer5to3, target3to5 string, in TmInput) (Result, error) {
 	if in.CT <= 0 {
 		return out, errors.New("Tm: CT must be > 0")
 	}
-	if in.Na <= 0 {
-		return out, errors.New("Tm: [Na+] must be > 0")
+	if in.SaltModel == "" {
+		in.SaltModel = SaltModelMonovalent
+	}
+	if in.Na <= 0 && (in.SaltModel != SaltModelOwczarzy08 || FreeMagnesium(in.Mg, in.Dntp) <= 0) {
+		return out, errors.New("Tm: salt concentration must be > 0")
 	}
 	x := in.X
 	if x != 1 && x != 4 {
@@ -155,16 +172,131 @@ func Tm(primer5to3, target3to5 string, in TmInput) (Result, error) {
 		DS += symmDS
 	}
 
-	// 2) Salt correction: ΔS([Na+]) = ΔS(1M) + 0.368*(N/2)*ln[Na+]; N = 2*n − 2 phosphates.
+	// 2) Salt correction. Monovalent and owczarzy-lite use the historical entropy
+	// correction form. owczarzy08 applies the mixed monovalent/divalent inverse-Tm
+	// correction and back-computes an effective salt-corrected entropy so existing
+	// downstream denominator logic remains consistent.
 	N := float64(2*n - 2)
-	DS_Na := DS + 0.368*(N/2.0)*math.Log(in.Na)
-
-	// 3) Two-state Tm (K), then °C. ΔH in cal/mol.
-	tmK := (DH * 1000.0) / (DS_Na + Rcal*math.Log(in.CT/float64(x)))
+	logConc := Rcal * math.Log(in.CT/float64(x))
+	DS_salt := DS + 0.368*(N/2.0)*math.Log(positiveSalt(in.Na))
+	tmK := (DH * 1000.0) / (DS_salt + logConc)
+	if in.SaltModel == SaltModelOwczarzy08 {
+		tmK, DS_salt = owczarzy08TmK(DH, DS, logConc, p, in)
+	}
 	out.DH_kcal = DH
 	out.DS_cal = DS
-	out.DS_Na = DS_Na
+	out.DS_Na = DS_salt
 	out.TmC = tmK - 273.15
+	return out, nil
+}
+
+func positiveSalt(x float64) float64 {
+	if x <= 0 || math.IsNaN(x) || math.IsInf(x, 0) {
+		return 1e-9
+	}
+	return x
+}
+
+func gcFraction(s string) float64 {
+	if len(s) == 0 {
+		return 0
+	}
+	gc := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case 'G', 'g', 'C', 'c':
+			gc++
+		}
+	}
+	return float64(gc) / float64(len(s))
+}
+
+func owczarzy08TmK(dh, ds, logConc float64, primer string, in TmInput) (float64, float64) {
+	// Start from the 1 M salt two-state temperature, then apply the Owczarzy 2008
+	// mixed-salt correction as an inverse-temperature offset. Concentrations are
+	// stored in mol/L internally; this formula uses mol/L for monovalent and free
+	// Mg terms after dNTP chelation.
+	tm1M := (dh * 1000.0) / (ds + logConc)
+	freeMg := FreeMagnesium(in.Mg, in.Dntp)
+	mon := positiveSalt(in.Na)
+	if freeMg <= 0 {
+		corr := owczarzyMonovalentInverseTmCorrection(mon, primer)
+		tmK := 1.0 / (1.0/tm1M + corr)
+		return tmK, effectiveEntropyFromTm(dh, logConc, tmK, ds, primer, mon)
+	}
+
+	gc := gcFraction(primer)
+	corr := 0.0
+	if mon > 0 {
+		ratio := math.Sqrt(freeMg) / mon
+		if ratio < 0.22 {
+			corr = owczarzyMonovalentInverseTmCorrection(mon, primer)
+			tmK := 1.0 / (1.0/tm1M + corr)
+			return tmK, effectiveEntropyFromTm(dh, logConc, tmK, ds, primer, mon)
+		}
+		corr = owczarzyMagnesiumInverseTmCorrection(freeMg, mon, gc, len(primer), ratio)
+	} else {
+		corr = owczarzyMagnesiumInverseTmCorrection(freeMg, 0, gc, len(primer), math.Inf(1))
+	}
+	tmK := 1.0 / (1.0/tm1M + corr)
+	return tmK, effectiveEntropyFromTm(dh, logConc, tmK, ds, primer, mon)
+}
+
+func owczarzyMonovalentInverseTmCorrection(mon float64, primer string) float64 {
+	lnMon := math.Log(positiveSalt(mon))
+	return (4.29*gcFraction(primer)-3.95)*1e-5*lnMon + 9.40e-6*lnMon*lnMon
+}
+
+func owczarzyMagnesiumInverseTmCorrection(mg, mon, gc float64, n int, ratio float64) float64 {
+	lnMg := math.Log(positiveSalt(mg))
+	a, b, c, d := 3.92, -0.911, 6.26, 1.42
+	e, f, g := -48.2, 52.5, 8.31
+	if mon > 0 && ratio < 6.0 {
+		lnMon := math.Log(positiveSalt(mon))
+		sqrtMon := math.Sqrt(positiveSalt(mon))
+		a = 3.92 * (0.843 - 0.352*sqrtMon*lnMon)
+		d = 1.42 * (1.279 - 4.03e-3*lnMon - 8.03e-3*lnMon*lnMon)
+		g = 8.31 * (0.486 - 0.258*lnMon + 5.25e-3*lnMon*lnMon*lnMon)
+	}
+	lengthTerm := 0.0
+	if n > 1 {
+		lengthTerm = (e + f*lnMg + g*lnMg*lnMg) / (2.0 * float64(n-1))
+	}
+	return (a + b*lnMg + gc*(c+d*lnMg) + lengthTerm) * 1e-5
+}
+
+func effectiveEntropyFromTm(dh, logConc, tmK, fallbackDS float64, primer string, mon float64) float64 {
+	if math.IsNaN(tmK) || math.IsInf(tmK, 0) || tmK <= 0 {
+		return fallbackDS + 0.368*(float64(2*len(primer)-2)/2.0)*math.Log(positiveSalt(mon))
+	}
+	return (dh*1000.0)/tmK - logConc
+}
+
+// PerfectDuplex computes nearest-neighbor duplex thermodynamics for a primer
+// (5'→3') aligned to a target strand supplied 3'→5'. Only perfect Watson-Crick
+// A/C/G/T duplexes are accepted. For mismatched duplexes, callers should use
+// this function on the perfect complement and apply an explicit mismatch policy.
+func PerfectDuplex(primer5to3, target3to5 string, cond Conditions) (DuplexResult, error) {
+	var out DuplexResult
+	p := strings.ToUpper(strings.TrimSpace(primer5to3))
+	cond = cond.WithDefaults()
+	cond.SelfComplementary = isSelfCompl(p)
+	in := cond.TmInput()
+
+	res, err := Tm(p, target3to5, in)
+	if err != nil {
+		return out, err
+	}
+	denom := res.DS_Na + Rcal*math.Log(in.CT/float64(in.X))
+	deltaG := res.DH_kcal - (cond.AnnealC+273.15)*denom/1000.0
+	out = DuplexResult{
+		Result:             res,
+		AnnealC:            cond.AnnealC,
+		AnnealMarginC:      res.TmC - cond.AnnealC,
+		DeltaGAtAnnealKcal: deltaG,
+		EffectiveDenomCalK: denom,
+		SelfComplementary:  cond.SelfComplementary,
+	}
 	return out, nil
 }
 

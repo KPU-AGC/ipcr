@@ -112,3 +112,138 @@ func TestThermo_DenomMode_Subtests(t *testing.T) {
 		}
 	})
 }
+
+func TestThermo_LegacyModelGoldenOutput(t *testing.T) {
+	fa := writeFA2(t, "thermo_stage0.fa", ">s\nACGTACAAAAAAGGTACC\n")
+	t.Cleanup(func() { _ = os.Remove(fa) })
+
+	baseArgs := []string{
+		"--forward", "AAGTAC",
+		"--reverse", "GGTACC",
+		"--sequences", fa,
+		"--output", "text",
+		"--sort",
+		"--rank", "score",
+		"--mismatches", "1",
+		"--seed-length", "3",
+		"--terminal-window", "0",
+		"--self=false",
+	}
+
+	want := "source_file\tsequence_id\texperiment_id\tstart\tend\tlength\ttype\tfwd_mm\trev_mm\tfwd_mm_i\trev_mm_i\tscore\n" +
+		"thermo_stage0.fa\ts\tmanual\t0\t18\t18\tforward\t1\t0\t1\t\t-18.975\n" +
+		"thermo_stage0.fa\ts\tmanual\t11\t18\t7\tforward\t1\t0\t1\t\t-29.625\n"
+
+	gotDefault := runThermo(t, baseArgs)
+	if gotDefault != want {
+		t.Fatalf("legacy default output changed:\ngot:\n%s\nwant:\n%s", gotDefault, want)
+	}
+
+	gotExplicit := runThermo(t, append(append([]string{}, baseArgs...), "--thermo-model", "legacy-heuristic"))
+	if gotExplicit != want {
+		t.Fatalf("explicit legacy output changed:\ngot:\n%s\nwant:\n%s", gotExplicit, want)
+	}
+}
+
+func TestThermo_NNDuplexModelAcceptedAndTemperatureAware(t *testing.T) {
+	fa := writeFA2(t, "thermo_nn_duplex.fa", ">s\nACGTACGTACGTACGTACGTAAAAAAACGTACGTACGTACGTACGT\n")
+	t.Cleanup(func() { _ = os.Remove(fa) })
+
+	baseArgs := []string{
+		"--forward", "ACGTACGTACGTACGTACGT",
+		"--reverse", "ACGTACGTACGTACGTACGT",
+		"--sequences", fa,
+		"--output", "text",
+		"--rank", "score",
+		"--self=false",
+		"--thermo-model", "nn-duplex-v1",
+		"--iupac-thermo-policy", "strict",
+	}
+
+	lowAnneal := firstScoreFromTSV(t, runThermo(t, append(append([]string{}, baseArgs...), "--anneal-temp", "55")))
+	highAnneal := firstScoreFromTSV(t, runThermo(t, append(append([]string{}, baseArgs...), "--anneal-temp", "70")))
+
+	if !(lowAnneal > highAnneal) {
+		t.Fatalf("expected lower anneal temp to improve NN margin score; 55C=%g 70C=%g", lowAnneal, highAnneal)
+	}
+}
+
+func TestThermo_NNDuplexJSONIncludesThermoComponents(t *testing.T) {
+	fa := writeFA2(t, "thermo_nn_duplex_json.fa", ">s\nACGTACGTACGTACGTACGTAAAAAAACGTACGTACGTACGTACGT\n")
+	t.Cleanup(func() { _ = os.Remove(fa) })
+
+	out := runThermo(t, []string{
+		"--forward", "ACGTACGTACGTACGTACGT",
+		"--reverse", "ACGTACGTACGTACGTACGT",
+		"--sequences", fa,
+		"--output", "json",
+		"--sort",
+		"--self=false",
+		"--thermo-model", "nn-duplex-v1",
+	})
+	for _, want := range []string{`"thermo"`, `"model": "nn-duplex-v1"`, `"anneal_margin_c"`, `"delta_g_at_anneal_kcal"`, `"dangling_end_adjustment_c"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected JSON output to contain %s; got:\n%s", want, out)
+		}
+	}
+}
+
+func TestThermo_NNDuplexModelRejectsDegeneratePrimers(t *testing.T) {
+	fa := writeFA2(t, "thermo_nn_duplex_iupac.fa", ">s\nACGTACAAAAAAGGTACC\n")
+	t.Cleanup(func() { _ = os.Remove(fa) })
+
+	var out, errB bytes.Buffer
+	code := thermoapp.Run([]string{
+		"--forward", "ACGRAC",
+		"--reverse", "GGTACC",
+		"--sequences", fa,
+		"--thermo-model", "nn-duplex-v1",
+		"--iupac-thermo-policy", "strict",
+	}, &out, &errB)
+	if code != 2 {
+		t.Fatalf("expected exit 2 for strict NN IUPAC policy, got %d stdout=%q stderr=%q", code, out.String(), errB.String())
+	}
+	if !strings.Contains(errB.String(), "strict requires A/C/G/T") {
+		t.Fatalf("unexpected stderr: %q", errB.String())
+	}
+}
+
+func rcForIntegration(s string) string {
+	b := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case 'A':
+			b[len(s)-1-i] = 'T'
+		case 'C':
+			b[len(s)-1-i] = 'G'
+		case 'G':
+			b[len(s)-1-i] = 'C'
+		case 'T':
+			b[len(s)-1-i] = 'A'
+		default:
+			b[len(s)-1-i] = 'N'
+		}
+	}
+	return string(b)
+}
+
+func TestThermo_NNStructureModelAcceptedAndReportsDimers(t *testing.T) {
+	fwd := "GCGCGCGC"
+	rev := "GCGCGCGC"
+	fa := writeFA2(t, "thermo_structure_model.fa", ">s\n"+fwd+"AAAA"+rcForIntegration(rev)+"\n")
+	t.Cleanup(func() { _ = os.Remove(fa) })
+
+	out := runThermo(t, []string{
+		"--forward", fwd,
+		"--reverse", rev,
+		"--sequences", fa,
+		"--output", "json",
+		"--self=false",
+		"--thermo-model", "nn-structure-v1",
+	})
+	for _, want := range []string{`"model": "nn-structure-v1"`, `"structure_penalty_c"`, `"cross_dimer"`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expected JSON output to contain %s; got:\n%s", want, out)
+		}
+	}
+}

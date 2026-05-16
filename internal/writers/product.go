@@ -9,13 +9,14 @@ import (
 )
 
 type productArgs struct {
-	Sort        bool
-	Header      bool
-	Pretty      bool
-	Opt         pretty.Options
-	Scores      bool // NEW: include 'score' in TSV
-	RankByScore bool // NEW: prefer score sort over coord
-	In          <-chan engine.Product
+	Sort          bool
+	Header        bool
+	Pretty        bool
+	Opt           pretty.Options
+	Scores        bool // NEW: include 'score' in TSV
+	RankByScore   bool // NEW: prefer score sort over coord
+	ThermoDetails bool // append compact NN thermodynamic diagnostics in text/TSV
+	In            <-chan engine.Product
 }
 
 func drainProducts(ch <-chan engine.Product) []engine.Product {
@@ -81,19 +82,25 @@ func init() {
 			if args.Scores {
 				h += "\tscore" // <- assignOp fix (was: h = h + "\tscore")
 			}
+			if args.ThermoDetails {
+				h += "\t" + output.ThermoDetailsTSVHeader
+			}
 			_, err := io.WriteString(w, h+"\n")
 			return err
 		}
 
 		writeRow := func(p engine.Product) error {
-			if args.Scores {
-				if _, err := io.WriteString(w, output.FormatRowTSVWithScore(p)+"\n"); err != nil {
-					return err
-				}
-			} else {
-				if _, err := io.WriteString(w, output.FormatBaseRowTSV(p)+"\n"); err != nil {
-					return err
-				}
+			row := output.FormatBaseRowTSV(p)
+			switch {
+			case args.Scores && args.ThermoDetails:
+				row = output.FormatRowTSVWithScoreAndThermoDetails(p)
+			case args.Scores:
+				row = output.FormatRowTSVWithScore(p)
+			case args.ThermoDetails:
+				row = output.FormatRowTSVWithThermoDetails(p)
+			}
+			if _, err := io.WriteString(w, row+"\n"); err != nil {
+				return err
 			}
 			if args.Pretty {
 				if _, err := io.WriteString(w, pretty.RenderProductWithOptions(p, args.Opt)); err != nil {
@@ -137,10 +144,18 @@ func init() {
 
 // Public API (updated to carry scores & rank-by-score)
 func StartProductWriter(out io.Writer, format string, sort, header, prettyMode, includeScore, rankByScore bool, bufSize int) (chan<- engine.Product, <-chan error) {
-	return StartProductWriterWithPrettyOptions(out, format, sort, header, prettyMode, includeScore, rankByScore, pretty.DefaultOptions, bufSize)
+	return StartProductWriterWithThermoDetails(out, format, sort, header, prettyMode, includeScore, rankByScore, false, bufSize)
+}
+
+func StartProductWriterWithThermoDetails(out io.Writer, format string, sort, header, prettyMode, includeScore, rankByScore, thermoDetails bool, bufSize int) (chan<- engine.Product, <-chan error) {
+	return StartProductWriterWithPrettyOptionsAndThermoDetails(out, format, sort, header, prettyMode, includeScore, rankByScore, thermoDetails, pretty.DefaultOptions, bufSize)
 }
 
 func StartProductWriterWithPrettyOptions(out io.Writer, format string, sort, header, prettyMode, includeScore, rankByScore bool, popt pretty.Options, bufSize int) (chan<- engine.Product, <-chan error) {
+	return StartProductWriterWithPrettyOptionsAndThermoDetails(out, format, sort, header, prettyMode, includeScore, rankByScore, false, popt, bufSize)
+}
+
+func StartProductWriterWithPrettyOptionsAndThermoDetails(out io.Writer, format string, sort, header, prettyMode, includeScore, rankByScore, thermoDetails bool, popt pretty.Options, bufSize int) (chan<- engine.Product, <-chan error) {
 	if bufSize <= 0 {
 		bufSize = 64
 	}
@@ -148,13 +163,14 @@ func StartProductWriterWithPrettyOptions(out io.Writer, format string, sort, hea
 	errCh := make(chan error, 1)
 	go func() {
 		err := WriteProduct(format, out, productArgs{
-			Sort:        sort,
-			Header:      header,
-			Pretty:      prettyMode,
-			Opt:         popt,
-			Scores:      includeScore,
-			RankByScore: rankByScore,
-			In:          in,
+			Sort:          sort,
+			Header:        header,
+			Pretty:        prettyMode,
+			Opt:           popt,
+			Scores:        includeScore,
+			RankByScore:   rankByScore,
+			ThermoDetails: thermoDetails,
+			In:            in,
 		})
 		errCh <- err
 	}()

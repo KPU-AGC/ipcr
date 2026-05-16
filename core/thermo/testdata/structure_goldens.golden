@@ -1,0 +1,3 @@
+id	kind	mode	seq_a	seq_b	tm_c	dg_kcal	stem_len	loop_len	bulge_count	internal_loop_count	tolerance
+hairpin_v2	hairpin	hairpin	GCGCGTTTTCGCGC		56.2369388901	0.426391392832	5	4	0	0	1e-9
+cross_v2	cross-dimer	cross	AAAACGCGCGCGCGCG	TTTTCGCGCGCGCGCG	59.9950301859	0.00167676854828	12	0	0	0	1e-9

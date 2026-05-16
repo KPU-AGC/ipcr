@@ -22,8 +22,9 @@ func BestHit(amplicon, probe string, maxMM int) Hit {
 	prbB := []byte(prb)
 	rcB := primer.RevComp(prbB)
 
-	// Exact match fast-path
-	if maxMM == 0 {
+	// Exact match fast-path. Keep it only for strict A/C/G/T probes; degenerate
+	// probes must go through the IUPAC-aware matcher even when maxMM is zero.
+	if maxMM == 0 && isStrictACGT(prb) {
 		if i := strings.Index(amp, prb); i >= 0 {
 			return Hit{Found: true, Strand: "+", Pos: i, MM: 0, Site: amp[i : i+len(prb)]}
 		}
@@ -67,4 +68,18 @@ func BestHit(amplicon, probe string, maxMM int) Hit {
 		selectBest(bestLocal.Pos, bestLocal.Mismatches, "-", len(rcB))
 	}
 	return best
+}
+
+func isStrictACGT(s string) bool {
+	if s == "" {
+		return false
+	}
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case 'A', 'C', 'G', 'T':
+		default:
+			return false
+		}
+	}
+	return true
 }

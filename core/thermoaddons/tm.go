@@ -2,7 +2,7 @@ package thermoaddons
 
 import (
 	"errors"
-	"math"
+	"ipcr-core/thermo"
 	"strings"
 )
 
@@ -11,37 +11,69 @@ func TmNearestNeighbor(primer5to3 string, cond Conditions) (tmC, dH, dS float64,
 	if len(s) < 2 {
 		return 0, 0, 0, errors.New("sequence too short")
 	}
-	dH = initDH
-	dS = initDS
-	for i := 0; i < len(s)-1; i++ {
-		dh, okH := nnDH[s[i:i+2]]
-		ds, okS := nnDS[s[i:i+2]]
-		if !okH || !okS {
-			return 0, 0, 0, errors.New("invalid base (need A/C/G/T)")
-		}
-		dH += dh
-		dS += ds
+	target3to5, ok := complement3to5(s)
+	if !ok {
+		return 0, 0, 0, errors.New("invalid base (need A/C/G/T)")
 	}
-	if cond.SelfComplementary {
-		dS += symmetryDS
-	}
-	naEff := EffectiveMonovalent(cond.NaM, cond.MgM)
-	if naEff <= 0 {
-		naEff = 1e-6
-	}
-	dS += 0.368 * float64(len(s)-1) * math.Log(naEff)
 
-	ct := math.Max(cond.PrimerTotalM, 1e-12)
-	cfactor := 4.0
-	if cond.SelfComplementary {
-		cfactor = 1.0
+	cond = cond.WithDefaults()
+	if cond.SaltModel == "" {
+		cond.SaltModel = thermo.SaltModelMonovalent
 	}
-	den := dS + Rcal*math.Log(ct/cfactor)
-	tmK := (dH*1000.0)/den + 273.15
-	return tmK - 273.15, dH, dS, nil
+	if isSelfComplementary(s) {
+		cond.SelfComplementary = true
+	}
+	res, err := thermo.Tm(s, target3to5, cond.TmInput())
+	if err != nil {
+		return 0, 0, 0, err
+	}
+	return res.TmC, res.DH_kcal, res.DS_Na, nil
 }
 
 func DeltaGAt(dHkcal, dScal, tempC float64) float64 {
 	tK := tempC + 273.15
 	return dHkcal - (tK * dScal / 1000.0)
+}
+
+func complement3to5(s string) (string, bool) {
+	out := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case 'A':
+			out[i] = 'T'
+		case 'C':
+			out[i] = 'G'
+		case 'G':
+			out[i] = 'C'
+		case 'T':
+			out[i] = 'A'
+		default:
+			return "", false
+		}
+	}
+	return string(out), true
+}
+
+func reverseComplement(s string) (string, bool) {
+	out := make([]byte, len(s))
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case 'A':
+			out[len(s)-1-i] = 'T'
+		case 'C':
+			out[len(s)-1-i] = 'G'
+		case 'G':
+			out[len(s)-1-i] = 'C'
+		case 'T':
+			out[len(s)-1-i] = 'A'
+		default:
+			return "", false
+		}
+	}
+	return string(out), true
+}
+
+func isSelfComplementary(s string) bool {
+	rc, ok := reverseComplement(s)
+	return ok && rc == s
 }

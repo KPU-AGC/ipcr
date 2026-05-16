@@ -82,12 +82,12 @@ func TestTm_InputValidation(t *testing.T) {
 			t.Fatalf("expected CT>0 error, got: %v", err)
 		}
 	})
-	t.Run("[Na+] must be > 0", func(t *testing.T) {
+	t.Run("salt must be > 0", func(t *testing.T) {
 		in := newInp()
 		in.Na = 0
 		_, err := Tm("AA", "TT", in)
-		if err == nil || !strings.Contains(err.Error(), "[Na+] must be > 0") {
-			t.Fatalf("expected [Na+]>0 error, got: %v", err)
+		if err == nil || !strings.Contains(err.Error(), "salt concentration must be > 0") {
+			t.Fatalf("expected salt concentration error, got: %v", err)
 		}
 	})
 	t.Run("non-ACGT target", func(t *testing.T) {
@@ -211,5 +211,86 @@ func TestTm_Orientation_MustBe3to5WC(t *testing.T) {
 	_, err := Tm(primer, targetWrong, in)
 	if err == nil || !strings.Contains(err.Error(), "non-WC pair at pos") {
 		t.Fatalf("expected non-WC error for wrong orientation, got: %v", err)
+	}
+}
+
+func TestNNParams_AATTCanonicalSnapshot(t *testing.T) {
+	got, ok := dimerParams["AA/TT"]
+	if !ok {
+		t.Fatal("missing AA/TT nearest-neighbor parameter")
+	}
+	if got.DH != -7.9 || got.DS != -22.2 {
+		t.Fatalf("AA/TT parameters drifted: got ΔH=%g ΔS=%g, want -7.9/-22.2", got.DH, got.DS)
+	}
+	syn, ok := dimerParams["TT/AA"]
+	if !ok {
+		t.Fatal("missing TT/AA nearest-neighbor synonym")
+	}
+	if syn != got {
+		t.Fatalf("TT/AA synonym drifted: got %+v, want %+v", syn, got)
+	}
+}
+
+func TestPerfectDuplexReportsAnnealMarginAndDeltaG(t *testing.T) {
+	primer := strings.ToUpper("ACGTACGTACGTACGTACGT")
+	cond := DefaultConditions()
+	cond.AnnealC = 60
+
+	res, err := PerfectDuplex(primer, comp(primer), cond)
+	if err != nil {
+		t.Fatalf("PerfectDuplex returned error: %v", err)
+	}
+	if math.Abs(res.AnnealMarginC-(res.TmC-cond.AnnealC)) > 1e-9 {
+		t.Fatalf("margin mismatch: got %g want %g", res.AnnealMarginC, res.TmC-cond.AnnealC)
+	}
+	if res.EffectiveDenomCalK == 0 || math.IsNaN(res.DeltaGAtAnnealKcal) {
+		t.Fatalf("invalid thermodynamic components: %+v", res)
+	}
+}
+
+func TestPerfectDuplexRejectsMismatch(t *testing.T) {
+	primer := strings.ToUpper("ACGTACGTACGT")
+	target := []byte(comp(primer))
+	target[3] = 'A'
+	if target[3] == comp(primer)[3] {
+		target[3] = 'C'
+	}
+	_, err := PerfectDuplex(primer, string(target), DefaultConditions())
+	if err == nil || !strings.Contains(err.Error(), "non-WC pair") {
+		t.Fatalf("expected non-WC rejection, got %v", err)
+	}
+}
+
+func TestTm_Owczarzy08MixedSaltAndDNTPEffect(t *testing.T) {
+	primer := strings.ToUpper("GGGGCCCCGGGGCCCCGGGGCCCC")
+	target3to5 := comp(primer)
+
+	mono := newInp()
+	mono.Na = 0.05
+	mono.Mg = 0.003
+	mono.SaltModel = SaltModelMonovalent
+	resMono, err := Tm(primer, target3to5, mono)
+	if err != nil {
+		t.Fatalf("monovalent Tm: %v", err)
+	}
+
+	mixed := mono
+	mixed.SaltModel = SaltModelOwczarzy08
+	resMixed, err := Tm(primer, target3to5, mixed)
+	if err != nil {
+		t.Fatalf("owczarzy08 Tm: %v", err)
+	}
+	if math.Abs(resMixed.TmC-resMono.TmC) < 1e-9 {
+		t.Fatalf("expected owczarzy08 to differ from monovalent: mixed=%g mono=%g", resMixed.TmC, resMono.TmC)
+	}
+
+	withDntp := mixed
+	withDntp.Dntp = 0.0025
+	resDntp, err := Tm(primer, target3to5, withDntp)
+	if err != nil {
+		t.Fatalf("owczarzy08+dNTP Tm: %v", err)
+	}
+	if !(resDntp.TmC < resMixed.TmC) {
+		t.Fatalf("expected dNTP chelation to lower mixed-salt Tm: dntp=%g mixed=%g", resDntp.TmC, resMixed.TmC)
 	}
 }

@@ -4,8 +4,10 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"ipcr-core/thermo"
 	"ipcr/internal/clibase"
 	"ipcr/internal/cliutil"
+	"ipcr/internal/thermomodel"
 	"strings"
 )
 
@@ -26,13 +28,22 @@ type Options struct {
 	AnnealTempC    float64
 	NaSpec         string
 	MgSpec         string
+	DntpSpec       string
 	PrimerConcSpec string
+	SaltModel      string
 	AllowIndel     bool
 
 	// NEW: ssDNA mode (BS-PCR)
 	SingleStranded bool
 
-	// NEW: denominator mode for ΔΔG→ΔTm conversion: "fixed" (D=200) or "auto"
+	// Model mode for staged thermodynamic implementations.
+	ThermoModel string
+
+	// Thermodynamic policy for degenerate/IUPAC primers in NN modes.
+	IUPACThermoPolicy        string
+	IUPACThermoMaxExpansions int
+
+	// Denominator mode for ΔΔG→ΔTm conversion: "fixed" (D=200) or "auto".
 	DenomMode string
 
 	// Oligo input
@@ -40,24 +51,30 @@ type Options struct {
 	OligosTSV   string
 
 	// Probe
-	Probe       string
-	ProbeName   string
-	ProbeMaxMM  int
-	ProbeWeight float64
+	Probe           string
+	ProbeName       string
+	ProbeMaxMM      int
+	ProbeWeight     float64
+	ProbeThermo     bool
+	ProbeScoreMode  string
+	ProbeMinMarginC float64
 
 	// Ranking/output (NOTE: score is always included in ipcr-thermo)
-	Rank string
+	Rank          string
+	ThermoDetails bool
+	ScoreProfile  string
 
 	// Thermo addons (thermo-only)
-	ExtAlpha      float64
-	LenKneeBP     int
-	LenSteep      float64
-	LenMaxPenC    float64
-	StructHairpin bool
-	StructDimer   bool
-	StructScale   float64
-	BindWeight    float64
-	ExtWeight     float64
+	ExtAlpha       float64
+	LenKneeBP      int
+	LenSteep       float64
+	LenMaxPenC     float64
+	StructHairpin  bool
+	StructDimer    bool
+	StructScale    float64
+	BindWeight     float64
+	ExtWeight      float64
+	BandMassWeight float64
 }
 
 func NewFlagSet(name string) *flag.FlagSet {
@@ -77,23 +94,32 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintf(out, "      --anneal-temp float    Annealing temperature (°C) [%s]\n", "60")
 		_, _ = fmt.Fprintf(out, "      --na string            Monovalent salt, e.g., 50mM [%s]\n", "50mM")
 		_, _ = fmt.Fprintf(out, "      --mg string            Mg2+, e.g., 3mM [%s]\n", "3mM")
+		_, _ = fmt.Fprintf(out, "      --dntp string          Total dNTP, e.g., 200uM [%s]\n", "0mM")
 		_, _ = fmt.Fprintf(out, "      --primer-conc string   Primer concentration, e.g., 250nM [%s]\n", "250nM")
+		_, _ = fmt.Fprintf(out, "      --salt-model string    Salt model: %s [%s]\n", thermo.KnownSaltModels(), thermo.SaltModelMonovalent)
 		_, _ = fmt.Fprintln(out, "      --allow-indel          Allow a single 1-nt gap (bulge) per primer [false]")
 		_, _ = fmt.Fprintln(out, "      --single-stranded      Treat target as ssDNA (BS-PCR): tiny dangling-end bonus + target-hairpin penalty [false]")
-		// NEW:
+		_, _ = fmt.Fprintf(out, "      --thermo-model string  Scoring model: %s [%s]\n", thermomodel.KnownList(), thermomodel.Default())
+		_, _ = fmt.Fprintln(out, "      --iupac-thermo-policy string  Degenerate-primer NN policy: strict | worst | best | mean | enumerate [worst]")
+		_, _ = fmt.Fprintln(out, "      --iupac-thermo-max-expansions int  Max concrete primer-pair expansions [256]")
 		_, _ = fmt.Fprintf(out, "      --denom string         ΔΔG→ΔTm denominator: fixed | auto [%s]\n", "fixed")
 
 		_, _ = fmt.Fprintln(out, "\nProbe (optional):")
 		_, _ = fmt.Fprintf(out, "      --probe string         Internal probe (5'→3') [%s]\n", "")
 		_, _ = fmt.Fprintf(out, "      --probe-name string    Probe label [%s]\n", "probe")
 		_, _ = fmt.Fprintf(out, "      --probe-max-mm int     Max probe mismatches allowed [%s]\n", "0")
+		_, _ = fmt.Fprintln(out, "      --probe-thermo         Score internal probe thermodynamics when --probe is supplied [true]")
+		_, _ = fmt.Fprintln(out, "      --probe-score-mode string  Probe thermo mode: annotate | gate | blend [gate]")
+		_, _ = fmt.Fprintf(out, "      --probe-min-margin float Minimum probe annealing margin for gate mode (°C) [%s]\n", "0")
 		_, _ = fmt.Fprintf(out, "      --probe-weight float   Blend [0..1]: (1=min of margins) [%s]\n", "1.0")
 
 		_, _ = fmt.Fprintln(out, "\nThermo extensions (scoring only; thermo binary):")
+		_, _ = fmt.Fprintf(out, "      --score-profile string Score profile: binding | pcr | gel [%s]\n", "binding")
 		_, _ = fmt.Fprintf(out, "      --ext-alpha float      Slope for extension prob vs margin [%s]\n", "0.45")
 		_, _ = fmt.Fprintf(out, "      --length-knee-bp int   Soft-knee start (bp) for length bias [%s]\n", "550")
 		_, _ = fmt.Fprintf(out, "      --length-steep float   Soft-knee steepness [%s]\n", "0.003")
 		_, _ = fmt.Fprintf(out, "      --length-max-pen float Max °C-equivalent length penalty [%s]\n", "10")
+		_, _ = fmt.Fprintf(out, "      --band-mass-weight float Gel profile bonus per 2× amplicon mass [%s]\n", "15")
 		_, _ = fmt.Fprintln(out, "      --struct-hairpin       Penalize hairpins [true]")
 		_, _ = fmt.Fprintln(out, "      --struct-dimer         Penalize primer-dimers [true]")
 		_, _ = fmt.Fprintf(out, "      --struct-scale float   Structural penalties scale [%s]\n", "1.0")
@@ -103,6 +129,7 @@ func NewFlagSet(name string) *flag.FlagSet {
 		_, _ = fmt.Fprintln(out, "\nRanking & outputs (thermo):")
 		_, _ = fmt.Fprintln(out, "      score field is always included in outputs (TSV/JSON/JSONL).")
 		_, _ = fmt.Fprintf(out, "      --rank string          Order by: score | coord [%s]\n", "score")
+		_, _ = fmt.Fprintln(out, "      --thermo-details       Add NN thermo component columns to text/TSV output [false]")
 		_, _ = fmt.Fprintln(out, "      (default is score; pass --rank coord to keep coordinate order.)")
 	})
 	return fs
@@ -135,28 +162,38 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.Float64Var(&o.AnnealTempC, "anneal-temp", 60, "annealing temperature (°C)")
 	fs.StringVar(&o.NaSpec, "na", "50mM", "monovalent salt (e.g., 50mM)")
 	fs.StringVar(&o.MgSpec, "mg", "3mM", "Mg2+ (e.g., 3mM)")
+	fs.StringVar(&o.DntpSpec, "dntp", "0mM", "total dNTP concentration (e.g., 200uM)")
 	fs.StringVar(&o.PrimerConcSpec, "primer-conc", "250nM", "primer concentration (e.g., 250nM)")
+	fs.StringVar(&o.SaltModel, "salt-model", thermo.SaltModelMonovalent.String(), "salt model: "+thermo.KnownSaltModels())
 
 	fs.BoolVar(&o.AllowIndel, "allow-indel", false, "allow a single 1-nt gap (bulge) per primer")
 	fs.BoolVar(&o.SingleStranded, "single-stranded", false, "target is ssDNA (BS-PCR mode)")
 
-	// NEW: denom mode
+	fs.StringVar(&o.ThermoModel, "thermo-model", thermomodel.Default().String(), "scoring model: "+thermomodel.KnownList())
+	fs.StringVar(&o.IUPACThermoPolicy, "iupac-thermo-policy", thermo.IUPACThermoPolicyWorst, "degenerate-primer NN policy: strict | worst | best | mean | enumerate")
+	fs.IntVar(&o.IUPACThermoMaxExpansions, "iupac-thermo-max-expansions", 256, "max concrete primer-pair expansions")
 	fs.StringVar(&o.DenomMode, "denom", "fixed", "ΔΔG→ΔTm denominator: fixed | auto")
 
 	fs.StringVar(&o.Probe, "probe", "", "internal probe (5'→3') [optional]")
 	fs.StringVar(&o.ProbeName, "probe-name", "probe", "probe label")
 	fs.IntVar(&o.ProbeMaxMM, "probe-max-mm", 0, "max probe mismatches [0]")
+	fs.BoolVar(&o.ProbeThermo, "probe-thermo", true, "score internal probe thermodynamics when --probe is supplied; implies nn-duplex-v1 when the thermo model is left at legacy default")
+	fs.StringVar(&o.ProbeScoreMode, "probe-score-mode", "gate", "probe thermo mode: annotate | gate | blend")
+	fs.Float64Var(&o.ProbeMinMarginC, "probe-min-margin", 0, "minimum probe annealing margin for gate mode (°C)")
 	fs.Float64Var(&o.ProbeWeight, "probe-weight", 1.0, "blend [0..1]: 1 favors probe strongly")
 
 	fs.StringVar(&o.Rank, "rank", "score", "order by: score | coord")
+	fs.BoolVar(&o.ThermoDetails, "thermo-details", false, "add NN thermo component columns to text/TSV output")
 	fs.BoolVar(&help, "h", false, "show this help [false]")
 	fs.BoolVar(&showExamples, "examples", false, "show quickstart examples and exit [false]")
 
 	// Thermo addons (with defaults)
+	fs.StringVar(&o.ScoreProfile, "score-profile", "binding", "score profile: binding | pcr | gel")
 	fs.Float64Var(&o.ExtAlpha, "ext-alpha", 0.45, "slope for extension prob vs margin")
 	fs.IntVar(&o.LenKneeBP, "length-knee-bp", 550, "soft-knee start (bp)")
 	fs.Float64Var(&o.LenSteep, "length-steep", 0.003, "soft-knee steepness")
 	fs.Float64Var(&o.LenMaxPenC, "length-max-pen", 10, "max length penalty (°C)")
+	fs.Float64Var(&o.BandMassWeight, "band-mass-weight", 15, "gel profile band-mass bonus per 2x amplicon length")
 	fs.BoolVar(&o.StructHairpin, "struct-hairpin", true, "penalize hairpins")
 	fs.BoolVar(&o.StructDimer, "struct-dimer", true, "penalize primer-dimers")
 	fs.Float64Var(&o.StructScale, "struct-scale", 1.0, "scale for structural penalties")
@@ -198,11 +235,64 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	default:
 		return o, fmt.Errorf("--rank must be 'coord' or 'score'")
 	}
-	// NEW: validate denom
+	mode, err := thermomodel.Parse(o.ThermoModel)
+	if err != nil {
+		return o, err
+	}
+	o.ThermoModel = mode.String()
+	if !mode.Implemented() {
+		return o, fmt.Errorf("--thermo-model %q is reserved for staged rollout but is not implemented yet; use %q", mode, thermomodel.LegacyHeuristic)
+	}
+
+	modeSalt, err := thermo.ParseSaltModel(o.SaltModel)
+	if err != nil {
+		return o, err
+	}
+	o.SaltModel = modeSalt.String()
+
+	policy, err := thermo.ParseIUPACThermoPolicy(o.IUPACThermoPolicy)
+	if err != nil {
+		return o, err
+	}
+	o.IUPACThermoPolicy = policy
+	if o.IUPACThermoMaxExpansions < 1 {
+		return o, fmt.Errorf("--iupac-thermo-max-expansions must be >= 1")
+	}
+
 	switch strings.ToLower(o.DenomMode) {
 	case "fixed", "auto":
 	default:
 		return o, fmt.Errorf("--denom must be 'fixed' or 'auto'")
+	}
+	switch strings.ToLower(o.ScoreProfile) {
+	case "binding", "pcr", "gel":
+		o.ScoreProfile = strings.ToLower(o.ScoreProfile)
+	default:
+		return o, fmt.Errorf("--score-profile must be 'binding', 'pcr', or 'gel'")
+	}
+	if o.ExtAlpha < 0 {
+		return o, fmt.Errorf("--ext-alpha must be >= 0")
+	}
+	if o.LenKneeBP < 0 {
+		return o, fmt.Errorf("--length-knee-bp must be >= 0")
+	}
+	if o.LenSteep < 0 {
+		return o, fmt.Errorf("--length-steep must be >= 0")
+	}
+	if o.LenMaxPenC < 0 {
+		return o, fmt.Errorf("--length-max-pen must be >= 0")
+	}
+	if o.BandMassWeight < 0 {
+		return o, fmt.Errorf("--band-mass-weight must be >= 0")
+	}
+	switch strings.ToLower(o.ProbeScoreMode) {
+	case "annotate", "gate", "blend":
+		o.ProbeScoreMode = strings.ToLower(o.ProbeScoreMode)
+	default:
+		return o, fmt.Errorf("--probe-score-mode must be 'annotate', 'gate', or 'blend'")
+	}
+	if o.ProbeMinMarginC < -100 || o.ProbeMinMarginC > 100 {
+		return o, fmt.Errorf("--probe-min-margin must be within [-100,100]")
 	}
 	if o.ProbeWeight < 0 || o.ProbeWeight > 1 {
 		return o, fmt.Errorf("--probe-weight must be in [0,1]")

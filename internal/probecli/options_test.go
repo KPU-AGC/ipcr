@@ -82,3 +82,17 @@ func TestMutualExclusion(t *testing.T) {
 		t.Fatal("expected mutual exclusion error")
 	}
 }
+
+func TestProbeNormalizesLowercaseIUPAC(t *testing.T) {
+	o := mustParse(t, "--forward", "AAA", "--reverse", "TTT", "--probe", " acgtry ", "ref.fa")
+	if o.Probe != "ACGTRY" {
+		t.Fatalf("expected normalized probe, got %q", o.Probe)
+	}
+}
+
+func TestProbeRejectsInvalidBase(t *testing.T) {
+	_, err := ParseArgs(newFS(), []string{"--forward", "AAA", "--reverse", "TTT", "--probe", "ACGX", "ref.fa"})
+	if err == nil {
+		t.Fatal("expected invalid probe error")
+	}
+}

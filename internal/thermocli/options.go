@@ -4,6 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"ipcr-core/oligo"
+	"ipcr-core/primer"
 	"ipcr-core/thermo"
 	"ipcr/internal/clibase"
 	"ipcr/internal/cliutil"
@@ -222,12 +224,35 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	}
 
 	hasOligoMode := len(o.OligoInline) > 0 || o.OligosTSV != ""
+	usingInlinePair := o.Fwd != "" || o.Rev != ""
+	if usingInlinePair {
+		if o.Fwd == "" || o.Rev == "" {
+			return o, fmt.Errorf("--forward and --reverse must be supplied together")
+		}
+		fwd, err := primer.Validate(o.Fwd)
+		if err != nil {
+			return o, fmt.Errorf("--forward: %w", err)
+		}
+		rev, err := primer.Validate(o.Rev)
+		if err != nil {
+			return o, fmt.Errorf("--reverse: %w", err)
+		}
+		o.Fwd = fwd
+		o.Rev = rev
+	}
 	hasPairMode := o.PrimerFile != "" || (o.Fwd != "" && o.Rev != "")
 	if !hasOligoMode && !hasPairMode {
 		return o, fmt.Errorf("provide --oligo/--oligos OR --primers/--forward+--reverse")
 	}
 	if len(o.SeqFiles) == 0 {
 		return o, fmt.Errorf("at least one sequence file is required (positional or --sequences)")
+	}
+	if strings.TrimSpace(o.Probe) != "" {
+		probeSeq, err := oligo.Validate(o.Probe)
+		if err != nil {
+			return o, fmt.Errorf("--probe: %w", err)
+		}
+		o.Probe = probeSeq
 	}
 
 	switch strings.ToLower(o.Rank) {

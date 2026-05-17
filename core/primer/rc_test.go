@@ -33,3 +33,20 @@ func TestRevCompEmpty(t *testing.T) {
 }
 
 // ===
+
+func TestRevCompStrictRejectsUnknownAndLowercase(t *testing.T) {
+	for _, in := range []string{"ACGX", "acgt"} {
+		if _, err := RevCompStrict([]byte(in)); err == nil {
+			t.Fatalf("RevCompStrict(%q) expected an error", in)
+		}
+	}
+}
+
+func TestRevCompPanicsOnUnknown(t *testing.T) {
+	defer func() {
+		if recover() == nil {
+			t.Fatal("expected RevComp to panic on unknown base")
+		}
+	}()
+	_ = RevComp([]byte("ACGX"))
+}

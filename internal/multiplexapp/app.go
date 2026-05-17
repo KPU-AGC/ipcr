@@ -64,6 +64,23 @@ func collectPools(argv []string) (fwds, revs []string) {
 	return common.UniqueUpper(fwds), common.UniqueUpper(revs)
 }
 
+func validatePrimerPool(flagName string, seqs []string) ([]string, error) {
+	seen := make(map[string]struct{}, len(seqs))
+	out := make([]string, 0, len(seqs))
+	for i, seq := range seqs {
+		norm, err := primer.Validate(seq)
+		if err != nil {
+			return nil, fmt.Errorf("%s value %d: %w", flagName, i+1, err)
+		}
+		if _, ok := seen[norm]; ok {
+			continue
+		}
+		seen[norm] = struct{}{}
+		out = append(out, norm)
+	}
+	return out, nil
+}
+
 func expandPairsFromPools(fwds, revs []string, minLen, maxLen int) []primer.Pair {
 	out := make([]primer.Pair, 0, len(fwds)*len(revs))
 	for i, f := range fwds {
@@ -198,7 +215,17 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		if len(rPool) == 0 && opts.Rev != "" {
 			rPool = []string{opts.Rev}
 		}
-		fPool, rPool = common.UniqueUpper(fPool), common.UniqueUpper(rPool)
+		var e error
+		fPool, e = validatePrimerPool("--forward", fPool)
+		if e != nil {
+			_, _ = fmt.Fprintln(stderr, e)
+			return 2
+		}
+		rPool, e = validatePrimerPool("--reverse", rPool)
+		if e != nil {
+			_, _ = fmt.Fprintln(stderr, e)
+			return 2
+		}
 
 		switch {
 		case len(fPool) > 0 && len(rPool) > 0:

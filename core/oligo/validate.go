@@ -60,9 +60,27 @@ func Validate(raw string) (string, error) {
 	return s, nil
 }
 
-// RevComp returns the reverse-complement of an IUPAC sequence.
+// RevComp returns the reverse-complement of an IUPAC sequence. Unknown
+// characters fail loudly instead of being carried through unchanged.
 func RevComp(seq string) string {
-	r := []rune(Normalize(seq))
+	out, err := RevCompStrict(seq)
+	if err != nil {
+		panic(err)
+	}
+	return out
+}
+
+// RevCompStrict returns the reverse-complement of an IUPAC sequence, or an
+// error if the sequence is empty or contains a non-IUPAC DNA character.
+func RevCompStrict(seq string) (string, error) {
+	if Normalize(seq) == "" {
+		return "", nil
+	}
+	s, err := Validate(seq)
+	if err != nil {
+		return "", err
+	}
+	r := []rune(s)
 	for i, j := 0, len(r)-1; i < j; i, j = i+1, j-1 {
 		r[i], r[j] = comp(r[j]), comp(r[i])
 	}
@@ -70,14 +88,14 @@ func RevComp(seq string) string {
 		m := len(r) / 2
 		r[m] = comp(r[m])
 	}
-	return string(r)
+	return string(r), nil
 }
 
 func comp(r rune) rune {
 	if c, ok := complement[r]; ok {
 		return c
 	}
-	return r
+	panic(fmt.Errorf("invalid complement base %q", r))
 }
 
 // Matches reports whether primer base p can bind genome base g (IUPAC-aware).

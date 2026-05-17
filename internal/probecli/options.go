@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"ipcr-core/oligo"
 	"ipcr/internal/clibase"
 	"ipcr/internal/cliutil"
 )
@@ -97,6 +98,11 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	if o.Probe == "" {
 		return o, fmt.Errorf("--probe is required")
 	}
+	probeSeq, err := oligo.Validate(o.Probe)
+	if err != nil {
+		return o, fmt.Errorf("--probe: %w", err)
+	}
+	o.Probe = probeSeq
 
 	// Embed shared options
 	o.Common = c

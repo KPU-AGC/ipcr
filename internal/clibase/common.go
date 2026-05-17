@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"ipcr-core/primer"
 	"ipcr/internal/cliutil"
 	"ipcr/internal/output"
 )
@@ -130,6 +131,18 @@ func Validate(c *Common) error {
 		return errors.New("--forward and --reverse must be supplied together")
 	case !usingFile && !usingInline:
 		return errors.New("provide --primers or --forward/--reverse")
+	}
+	if usingInline {
+		fwd, err := primer.Validate(c.Fwd)
+		if err != nil {
+			return fmt.Errorf("--forward: %w", err)
+		}
+		rev, err := primer.Validate(c.Rev)
+		if err != nil {
+			return fmt.Errorf("--reverse: %w", err)
+		}
+		c.Fwd = fwd
+		c.Rev = rev
 	}
 	if len(c.SeqFiles) == 0 {
 		return errors.New("at least one sequence file is required")

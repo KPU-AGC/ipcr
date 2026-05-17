@@ -40,3 +40,31 @@ func TestLoadTSV_MinOnly_4Fields_OK(t *testing.T) {
 		t.Fatalf("expected min=7 max=0, got min=%d max=%d", ps[0].MinProduct, ps[0].MaxProduct)
 	}
 }
+
+func TestLoadTSVValidatesAndNormalizesPrimers(t *testing.T) {
+	tmp := "tmp_primers_normalized.tsv"
+	if err := os.WriteFile(tmp, []byte("p3 acg try 8 20\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(tmp) }()
+
+	ps, err := LoadTSV(tmp)
+	if err != nil {
+		t.Fatalf("LoadTSV should accept lowercase IUPAC after normalization, got: %v", err)
+	}
+	if len(ps) != 1 || ps[0].Forward != "ACG" || ps[0].Reverse != "TRY" {
+		t.Fatalf("expected normalized primer row, got %+v", ps)
+	}
+}
+
+func TestLoadTSVRejectsInvalidPrimerBase(t *testing.T) {
+	tmp := "tmp_primers_invalid.tsv"
+	if err := os.WriteFile(tmp, []byte("p4 ACG AXT\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Remove(tmp) }()
+
+	if _, err := LoadTSV(tmp); err == nil {
+		t.Fatal("expected invalid primer error")
+	}
+}

@@ -18,7 +18,13 @@ type Hit struct {
 // either strand of amplicon, allowing up to maxMM mismatches.
 func BestHit(amplicon, probe string, maxMM int) Hit {
 	amp := strings.ToUpper(amplicon)
-	prb := strings.ToUpper(probe)
+	if strings.TrimSpace(probe) == "" {
+		return Hit{}
+	}
+	prb, err := Validate(probe)
+	if err != nil {
+		panic(err)
+	}
 	prbB := []byte(prb)
 	rcB := primer.RevComp(prbB)
 

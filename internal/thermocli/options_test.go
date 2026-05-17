@@ -216,3 +216,25 @@ func TestParseArgs_ProbeThermoCanBeDisabled(t *testing.T) {
 		t.Fatalf("unexpected probe options: %+v", opts)
 	}
 }
+
+func TestParseArgs_NormalizesInlinePrimersAndProbe(t *testing.T) {
+	args := []string{"--forward", " acgtry ", "--reverse", "ttt", "--probe", " ggn ", "--sequences", "ref.fa"}
+	opts, err := parseArgsForTest(args...)
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if opts.Fwd != "ACGTRY" || opts.Rev != "TTT" || opts.Probe != "GGN" {
+		t.Fatalf("expected normalized inline sequences, got Fwd=%q Rev=%q Probe=%q", opts.Fwd, opts.Rev, opts.Probe)
+	}
+}
+
+func TestParseArgs_RejectsInvalidInlinePrimerAndProbe(t *testing.T) {
+	_, err := parseArgsForTest("--forward", "ACGX", "--reverse", "TTT", "--sequences", "ref.fa")
+	if err == nil {
+		t.Fatal("expected invalid forward primer error")
+	}
+	_, err = parseArgsForTest("--forward", "ACG", "--reverse", "TTT", "--probe", "ACGX", "--sequences", "ref.fa")
+	if err == nil {
+		t.Fatal("expected invalid probe error")
+	}
+}

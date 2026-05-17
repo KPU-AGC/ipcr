@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"ipcr-core/primer"
 	"ipcr/internal/clibase"
 	"ipcr/internal/cliutil"
 )
@@ -104,6 +105,18 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 		return o, fmt.Errorf("--inner-forward and --inner-reverse must be supplied together")
 	case !usingFile && !usingInline:
 		return o, fmt.Errorf("provide --inner-primers or --inner-forward/--inner-reverse")
+	}
+	if usingInline {
+		fwd, err := primer.Validate(o.InnerFwd)
+		if err != nil {
+			return o, fmt.Errorf("--inner-forward: %w", err)
+		}
+		rev, err := primer.Validate(o.InnerRev)
+		if err != nil {
+			return o, fmt.Errorf("--inner-reverse: %w", err)
+		}
+		o.InnerFwd = fwd
+		o.InnerRev = rev
 	}
 
 	o.Common = c

@@ -29,10 +29,18 @@ func LoadTSV(path string) ([]Pair, error) {
 		if len(f) < 3 || len(f) > 5 {
 			return nil, fmt.Errorf("%s:%d bad field count", path, ln)
 		}
+		fwd, err := Validate(f[1])
+		if err != nil {
+			return nil, fmt.Errorf("%s:%d forward primer: %v", path, ln, err)
+		}
+		rev, err := Validate(f[2])
+		if err != nil {
+			return nil, fmt.Errorf("%s:%d reverse primer: %v", path, ln, err)
+		}
 		p := Pair{
 			ID:      f[0],
-			Forward: strings.ToUpper(f[1]),
-			Reverse: strings.ToUpper(f[2]),
+			Forward: fwd,
+			Reverse: rev,
 		}
 		if len(f) >= 4 {
 			if _, err := fmt.Sscan(f[3], &p.MinProduct); err != nil {

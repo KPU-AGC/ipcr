@@ -155,3 +155,17 @@ func TestGlobNoMatchErrors(t *testing.T) {
 		t.Fatal("expected error on unmatched glob")
 	}
 }
+
+func TestInlinePrimersNormalizeLowercaseIUPAC(t *testing.T) {
+	o := mustParse(t, "--forward", " acgtry ", "--reverse", "ttt", "ref.fa")
+	if o.Fwd != "ACGTRY" || o.Rev != "TTT" {
+		t.Fatalf("expected normalized primers, got Fwd=%q Rev=%q", o.Fwd, o.Rev)
+	}
+}
+
+func TestInlinePrimersRejectInvalidBase(t *testing.T) {
+	_, err := ParseArgs(newFS(), []string{"--forward", "ACGX", "--reverse", "TTT", "ref.fa"})
+	if err == nil {
+		t.Fatal("expected invalid forward primer error")
+	}
+}

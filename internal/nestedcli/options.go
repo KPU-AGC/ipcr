@@ -59,6 +59,7 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 
 	var c clibase.Common
 	noHeader := clibase.Register(fs, &c)
+	fs.StringVar(&c.PrimerFile, "outer-primers", "", "outer primer TSV (alias of --primers)")
 
 	// Inner flags + short aliases (-F/-R/-P for inner)
 	fs.StringVar(&o.InnerPrimerFile, "inner-primers", "", "inner primer TSV")

@@ -20,3 +20,21 @@ func TestSortProductsByScore(t *testing.T) {
 		t.Fatalf("tie-break by coord failed: start got %d then %d", ps[0].Start, ps[1].Start)
 	}
 }
+
+func TestSortProductsTotalOrderUsesSourceAndGlobalChunkCoords(t *testing.T) {
+	ps := []engine.Product{
+		{SourceFile: "b.fa", SequenceID: "s", Start: 0, End: 8, Length: 8, Type: "forward", ExperimentID: "x"},
+		{SourceFile: "a.fa", SequenceID: "s:10-20", Start: 2, End: 8, Length: 6, Type: "forward", ExperimentID: "x"},
+		{SourceFile: "a.fa", SequenceID: "s", Start: 4, End: 10, Length: 6, Type: "forward", ExperimentID: "x"},
+	}
+	SortProducts(ps)
+	if ps[0].SourceFile != "a.fa" || ps[0].SequenceID != "s" || ps[0].Start != 4 {
+		t.Fatalf("expected a.fa global start 4 first, got %+v", ps[0])
+	}
+	if ps[1].SourceFile != "a.fa" || ps[1].SequenceID != "s:10-20" {
+		t.Fatalf("expected chunked a.fa product second by global start, got %+v", ps[1])
+	}
+	if ps[2].SourceFile != "b.fa" {
+		t.Fatalf("expected b.fa product last, got %+v", ps[2])
+	}
+}

@@ -127,3 +127,38 @@ func TestCircularAmplicon(t *testing.T) {
 		t.Errorf("expected product length %d, got %d", expectedLen, prod.Length)
 	}
 }
+
+func TestSeededMismatchSearchCapsSeedToProtectedTerminalWindow(t *testing.T) {
+	seq := []byte("CAGTACAAAAAAGGTACC")
+	pair := primer.Pair{
+		ID:      "seed-mm",
+		Forward: "AAGTAC",
+		Reverse: "GGTACC",
+	}
+
+	eng := New(Config{MaxMM: 1, TerminalWindow: 3, SeedLen: 12, MinLen: 10})
+	hits := eng.Simulate("seq", seq, pair)
+
+	if len(hits) != 1 {
+		t.Fatalf("expected one product with mismatch outside 3' protected seed, got %d: %+v", len(hits), hits)
+	}
+	if hits[0].FwdMM != 1 || len(hits[0].FwdMismatchIdx) != 1 || hits[0].FwdMismatchIdx[0] != 0 {
+		t.Fatalf("expected forward primer mismatch at index 0, got product %+v", hits[0])
+	}
+}
+
+func TestSeededMismatchSearchFallsBackWhenNoProtectedTerminalWindow(t *testing.T) {
+	seq := []byte("CAGTACAAAAAAGGTACC")
+	pair := primer.Pair{
+		ID:      "seed-mm-no-tw",
+		Forward: "AAGTAC",
+		Reverse: "GGTACC",
+	}
+
+	eng := New(Config{MaxMM: 1, TerminalWindow: 0, SeedLen: 12, MinLen: 10})
+	hits := eng.Simulate("seq", seq, pair)
+
+	if len(hits) != 1 {
+		t.Fatalf("expected full-scan fallback to find one product, got %d: %+v", len(hits), hits)
+	}
+}

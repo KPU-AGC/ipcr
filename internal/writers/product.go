@@ -43,13 +43,24 @@ func init() {
 		return output.WriteJSON(w, list)
 	})
 
-	// JSONL streaming
+	// JSONL streaming unless --sort is requested; sorted JSONL is buffered.
 	RegisterProduct(output.FormatJSONL, func(w io.Writer, payload interface{}) error {
 		args := payload.(productArgs)
 		pipe, done := StartProductJSONLWriter(w, 64)
-		// Sorting not applicable in streaming; honor input order.
-		for p := range args.In {
-			pipe <- p
+		if args.Sort {
+			list := drainProducts(args.In)
+			if args.RankByScore {
+				common.SortProductsByScore(list)
+			} else {
+				common.SortProducts(list)
+			}
+			for _, p := range list {
+				pipe <- p
+			}
+		} else {
+			for p := range args.In {
+				pipe <- p
+			}
 		}
 		close(pipe)
 		return <-done

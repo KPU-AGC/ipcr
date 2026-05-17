@@ -114,6 +114,13 @@ func ForEachProduct(
 				if seen.Add(k) { // already seen recently
 					continue
 				}
+				// Present chunked results in reference-global coordinates so --chunk-size does not
+				// change the external coordinate system or sorted order.
+				if ok {
+					p.SequenceID = base
+					p.Start = gs
+					p.End = ge
+				}
 				if err := visit(p); err != nil && cerr == nil {
 					cerr = err
 				}

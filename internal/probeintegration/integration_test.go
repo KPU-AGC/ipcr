@@ -7,15 +7,17 @@ import (
 	"ipcr/internal/probeapp"
 	"ipcr/pkg/api"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
 func write(t *testing.T, fn, data string) string {
 	t.Helper()
-	if err := os.WriteFile(fn, []byte(data), 0o644); err != nil {
-		t.Fatalf("write %s: %v", fn, err)
+	path := filepath.Join(t.TempDir(), fn)
+	if err := os.WriteFile(path, []byte(data), 0o644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
 	}
-	return fn
+	return path
 }
 
 func TestJSONSmoke(t *testing.T) {

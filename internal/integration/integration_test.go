@@ -194,3 +194,32 @@ func trimHead(out string) string {
 	}
 	return b.String()
 }
+
+func TestChunkedRawTextMatchesNonChunkedUnderSort(t *testing.T) {
+	fa := write(t, "chunk_raw.fa", ">s\nACGTACGTACGTACGTACGTACGTACGT\n")
+	defer func() { _ = os.Remove(fa) }()
+
+	runText := func(chunk int) string {
+		var out, errB bytes.Buffer
+		args := []string{
+			"--forward", "ACGTAC", "--reverse", "ACGTAC",
+			"--sequences", fa,
+			"--output", "text", "--sort", "--no-header",
+			"--max-length", "8",
+		}
+		if chunk > 0 {
+			args = append(args, "--chunk-size", fmt.Sprint(chunk))
+		}
+		code := app.Run(args, &out, &errB)
+		if code != 0 {
+			t.Fatalf("exit %d err %s", code, errB.String())
+		}
+		return out.String()
+	}
+
+	noChunk := runText(0)
+	chunked := runText(16)
+	if noChunk != chunked {
+		t.Fatalf("raw chunked output differs from no-chunking\nno-chunk:\n%s\nchunked:\n%s", noChunk, chunked)
+	}
+}

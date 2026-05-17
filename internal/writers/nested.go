@@ -32,17 +32,25 @@ func init() {
 		args := payload.(nestedArgs)
 		list := drainNested(args.In)
 		if args.Sort {
-			sort.Slice(list, func(i, j int) bool { return common.LessProduct(list[i].Product, list[j].Product) })
+			sort.SliceStable(list, func(i, j int) bool { return common.LessProduct(list[i].Product, list[j].Product) })
 		}
 		return nestedoutput.WriteJSON(w, list)
 	})
 
-	// JSONL streaming
+	// JSONL streaming unless --sort is requested; sorted JSONL is buffered.
 	RegisterNested(output.FormatJSONL, func(w io.Writer, payload interface{}) error {
 		args := payload.(nestedArgs)
 		pipe, done := StartNestedJSONLWriter(w, 64)
-		for np := range args.In {
-			pipe <- np
+		if args.Sort {
+			list := drainNested(args.In)
+			sort.SliceStable(list, func(i, j int) bool { return common.LessProduct(list[i].Product, list[j].Product) })
+			for _, np := range list {
+				pipe <- np
+			}
+		} else {
+			for np := range args.In {
+				pipe <- np
+			}
 		}
 		close(pipe)
 		return <-done
@@ -60,7 +68,7 @@ func init() {
 
 		if args.Sort {
 			list := drainNested(args.In)
-			sort.Slice(list, func(i, j int) bool { return common.LessProduct(list[i].Product, list[j].Product) })
+			sort.SliceStable(list, func(i, j int) bool { return common.LessProduct(list[i].Product, list[j].Product) })
 			return nestedoutput.WriteTextWithRenderer(w, list, args.Header, render)
 		}
 		return nestedoutput.StreamTextWithRenderer(w, args.In, args.Header, render)

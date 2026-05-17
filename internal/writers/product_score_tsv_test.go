@@ -1,7 +1,9 @@
 package writers
 
 import (
+	"bufio"
 	"bytes"
+	"encoding/json"
 	"ipcr-core/engine"
 	"strings"
 	"testing"
@@ -88,5 +90,29 @@ func TestProductWriter_TSVThermoDetailsHeaderAndRow(t *testing.T) {
 	}
 	if !strings.Contains(lines[1], "\t1.25\t2.75\t2\tfwd~external") {
 		t.Fatalf("expected panel cross-dimer details, got: %q", lines[1])
+	}
+}
+
+func TestProductWriter_JSONLSortByScore(t *testing.T) {
+	var buf bytes.Buffer
+	in, done := StartProductWriter(&buf, "jsonl", true, true, false, true, true, 4)
+
+	in <- engine.Product{SourceFile: "ref.fa", SequenceID: "s", ExperimentID: "low", Start: 0, End: 10, Length: 10, Type: "forward", Score: 1.5}
+	in <- engine.Product{SourceFile: "ref.fa", SequenceID: "s", ExperimentID: "high", Start: 1, End: 11, Length: 10, Type: "forward", Score: 3.2}
+	close(in)
+	if err := <-done; err != nil {
+		t.Fatalf("writer err: %v", err)
+	}
+
+	sc := bufio.NewScanner(bytes.NewReader(buf.Bytes()))
+	if !sc.Scan() {
+		t.Fatalf("missing first JSONL row: %q", buf.String())
+	}
+	var row map[string]any
+	if err := json.Unmarshal(sc.Bytes(), &row); err != nil {
+		t.Fatalf("bad first JSONL row: %v\n%s", err, sc.Text())
+	}
+	if row["experiment_id"] != "high" {
+		t.Fatalf("expected score-sorted JSONL first row to be high, got %q in output:\n%s", row["experiment_id"], buf.String())
 	}
 }

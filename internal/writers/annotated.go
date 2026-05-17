@@ -32,19 +32,29 @@ func init() {
 		args := payload.(annotatedArgs)
 		list := drainAnnotated(args.In)
 		if args.Sort {
-			sort.Slice(list, func(i, j int) bool {
+			sort.SliceStable(list, func(i, j int) bool {
 				return common.LessProduct(list[i].Product, list[j].Product)
 			})
 		}
 		return probeoutput.WriteJSON(w, list)
 	})
 
-	// JSONL streaming
+	// JSONL streaming unless --sort is requested; sorted JSONL is buffered.
 	RegisterAnnotated(output.FormatJSONL, func(w io.Writer, payload interface{}) error {
 		args := payload.(annotatedArgs)
 		pipe, done := StartAnnotatedJSONLWriter(w, 64)
-		for ap := range args.In {
-			pipe <- ap
+		if args.Sort {
+			list := drainAnnotated(args.In)
+			sort.SliceStable(list, func(i, j int) bool {
+				return common.LessProduct(list[i].Product, list[j].Product)
+			})
+			for _, ap := range list {
+				pipe <- ap
+			}
+		} else {
+			for ap := range args.In {
+				pipe <- ap
+			}
 		}
 		close(pipe)
 		return <-done
@@ -55,7 +65,7 @@ func init() {
 		args := payload.(annotatedArgs)
 		if args.Sort {
 			list := drainAnnotated(args.In)
-			sort.Slice(list, func(i, j int) bool {
+			sort.SliceStable(list, func(i, j int) bool {
 				return common.LessProduct(list[i].Product, list[j].Product)
 			})
 			return probeoutput.WriteFASTA(w, list)
@@ -75,7 +85,7 @@ func init() {
 
 		if args.Sort {
 			list := drainAnnotated(args.In)
-			sort.Slice(list, func(i, j int) bool {
+			sort.SliceStable(list, func(i, j int) bool {
 				return common.LessProduct(list[i].Product, list[j].Product)
 			})
 			return probeoutput.WriteTextWithRenderer(w, list, args.Header, render)

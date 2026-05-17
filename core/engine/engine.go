@@ -52,7 +52,7 @@ func (e *Engine) SimulateBatch(seqID string, seq []byte, pairs []primer.Pair) []
 	}
 
 	// Build seeds (exact A/C/G/T only) and AC automaton
-	seeds, have := BuildSeeds(pairs, e.cfg.SeedLen, e.cfg.TerminalWindow)
+	seeds, have := buildSeeds(pairs, e.cfg.SeedLen, e.cfg.TerminalWindow, e.cfg.MaxMM)
 	nodes, _ := buildAC(seeds)
 
 	per := make([]perPair, len(pairs))

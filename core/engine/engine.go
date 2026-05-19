@@ -47,122 +47,7 @@ type perPair struct {
 // SimulateBatch scans seeds for all pairs in one pass, verifies candidates,
 // then joins per pair to produce Products.
 func (e *Engine) SimulateBatch(seqID string, seq []byte, pairs []primer.Pair) []Product {
-	if len(pairs) == 0 {
-		return nil
-	}
-
-	// Build seeds (exact A/C/G/T only) and AC automaton
-	seeds, have := buildSeeds(pairs, e.cfg.SeedLen, e.cfg.TerminalWindow, e.cfg.MaxMM)
-	nodes, _ := buildAC(seeds)
-
-	per := make([]perPair, len(pairs))
-
-	// Precompute primers once per pair (hoisted RC)
-	fwdABytes := make([][]byte, len(pairs))
-	fwdBBytes := make([][]byte, len(pairs))
-	rcA := make([][]byte, len(pairs))
-	rcB := make([][]byte, len(pairs))
-	for i := range pairs {
-		fwdABytes[i] = []byte(pairs[i].Forward)
-		fwdBBytes[i] = []byte(pairs[i].Reverse)
-		rcA[i] = primer.RevComp(fwdABytes[i])
-		rcB[i] = primer.RevComp(fwdBBytes[i])
-	}
-
-	// per-orientation dedup (start positions)
-	seenA := make([]map[int]struct{}, len(pairs))
-	seenB := make([]map[int]struct{}, len(pairs))
-	seena := make([]map[int]struct{}, len(pairs))
-	seenb := make([]map[int]struct{}, len(pairs))
-	for i := range pairs {
-		seenA[i], seenB[i] = make(map[int]struct{}), make(map[int]struct{})
-		seena[i], seenb[i] = make(map[int]struct{}), make(map[int]struct{})
-	}
-
-	// Verify around seed hits
-	hits := scanAC(seq, nodes, seeds)
-	maxMM := e.cfg.MaxMM
-	tw := e.cfg.TerminalWindow
-
-	for _, h := range hits {
-		s := seeds[h.SeedIdx]
-		switch s.Which {
-		case 'A':
-			// AC reports 'i' as the index of the last byte of the seed.
-			// For a 3'-anchored suffix seed (length = len(s.Pat)), the primer start is:
-			//   i - (len(seed)-1) - (primerLen - len(seed))  ==  i - SeedOffset - (len(seed)-1)
-			start := h.Pos - s.SeedOffset - (len(s.Pat) - 1)
-			if _, dup := seenA[s.PairIdx][start]; dup {
-				break
-			}
-			if m, ok := verifyAt(seq, start, fwdABytes[s.PairIdx], maxMM, 0, tw); ok {
-				seenA[s.PairIdx][start] = struct{}{}
-				if e.cfg.HitCap == 0 || len(per[s.PairIdx].fwdA) < e.cfg.HitCap {
-					per[s.PairIdx].fwdA = append(per[s.PairIdx].fwdA, m)
-				}
-			}
-		case 'B':
-			start := h.Pos - s.SeedOffset - (len(s.Pat) - 1)
-			if _, dup := seenB[s.PairIdx][start]; dup {
-				break
-			}
-			if m, ok := verifyAt(seq, start, fwdBBytes[s.PairIdx], maxMM, 0, tw); ok {
-				seenB[s.PairIdx][start] = struct{}{}
-				if e.cfg.HitCap == 0 || len(per[s.PairIdx].fwdB) < e.cfg.HitCap {
-					per[s.PairIdx].fwdB = append(per[s.PairIdx].fwdB, m)
-				}
-			}
-		case 'a': // rc(A) prefix seed: primer start is i-(len(seed)-1)
-			start := h.Pos - (len(s.Pat) - 1)
-			if _, dup := seena[s.PairIdx][start]; dup {
-				break
-			}
-			if m, ok := verifyAt(seq, start, rcA[s.PairIdx], maxMM, tw, 0); ok {
-				seena[s.PairIdx][start] = struct{}{}
-				if e.cfg.HitCap == 0 || len(per[s.PairIdx].revA) < e.cfg.HitCap {
-					per[s.PairIdx].revA = append(per[s.PairIdx].revA, m)
-				}
-			}
-		case 'b': // rc(B) prefix seed
-			start := h.Pos - (len(s.Pat) - 1)
-			if _, dup := seenb[s.PairIdx][start]; dup {
-				break
-			}
-			if m, ok := verifyAt(seq, start, rcB[s.PairIdx], maxMM, tw, 0); ok {
-				seenb[s.PairIdx][start] = struct{}{}
-				if e.cfg.HitCap == 0 || len(per[s.PairIdx].revB) < e.cfg.HitCap {
-					per[s.PairIdx].revB = append(per[s.PairIdx].revB, m)
-				}
-			}
-		}
-	}
-
-	// Fallback for orientations lacking seeds (ambiguous primers etc.)
-	for i := range pairs {
-		hc := e.cfg.HitCap
-		if !have[i]['A'] {
-			per[i].fwdA = primer.FindMatches(seq, fwdABytes[i], e.cfg.MaxMM, hc, tw)
-		}
-		if !have[i]['B'] {
-			per[i].fwdB = primer.FindMatches(seq, fwdBBytes[i], e.cfg.MaxMM, hc, tw)
-		}
-		if !have[i]['a'] {
-			raw := primer.FindMatches(seq, rcA[i], e.cfg.MaxMM, hc, 0)
-			per[i].revA = filterLeftTW(raw, tw)
-		}
-		if !have[i]['b'] {
-			raw := primer.FindMatches(seq, rcB[i], e.cfg.MaxMM, hc, 0)
-			per[i].revB = filterLeftTW(raw, tw)
-		}
-	}
-
-	// Join per pair
-	var out []Product
-	for i := range pairs {
-		out = append(out, e.joinProducts(seqID, seq, pairs[i],
-			per[i].fwdA, per[i].fwdB, per[i].revA, per[i].revB)...)
-	}
-	return out
+	return e.SimulateCompiled(seqID, seq, e.CompilePanel(pairs))
 }
 
 func filterLeftTW(ms []primer.Match, tw int) []primer.Match {
@@ -182,11 +67,48 @@ outer:
 	return out
 }
 
+func sortMatchesByPos(ms []primer.Match) []primer.Match {
+	if matchesSortedByPos(ms) {
+		return ms
+	}
+	sort.SliceStable(ms, func(i, j int) bool { return ms[i].Pos < ms[j].Pos })
+	return ms
+}
+
+func matchesSortedByPos(ms []primer.Match) bool {
+	for i := 1; i < len(ms); i++ {
+		if ms[i].Pos < ms[i-1].Pos {
+			return false
+		}
+	}
+	return true
+}
+
+func lowerBoundMatchPos(ms []primer.Match, pos int) int {
+	return sort.Search(len(ms), func(i int) bool { return ms[i].Pos >= pos })
+}
+
+func upperBoundMatchPos(ms []primer.Match, pos int) int {
+	return sort.Search(len(ms), func(i int) bool { return ms[i].Pos > pos })
+}
+
 // -------------------------- Join & helpers ----------------------------------
 
 func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 	fwdA, fwdB, revA, revB []primer.Match,
 ) []Product {
+	var out []Product
+	_ = e.forEachJoinedProduct(seqID, seq, p, fwdA, fwdB, revA, revB, func(product Product) error {
+		out = append(out, product)
+		return nil
+	})
+	return out
+}
+
+func (e *Engine) forEachJoinedProduct(seqID string, seq []byte, p primer.Pair,
+	fwdA, fwdB, revA, revB []primer.Match,
+	emit func(Product) error,
+) error {
 	// Resolve product-length bounds (pair overrides engine cfg; 0 = unbounded)
 	minL := p.MinProduct
 	maxL := p.MaxProduct
@@ -213,17 +135,12 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 		return out
 	}
 
-	var out []Product
+	if emit == nil {
+		return nil
+	}
 
 	// --- A (fwd) × rc(B) => "forward"
-	bStarts := make([]int, len(revB))
-	for i, m := range revB {
-		bStarts[i] = m.Pos
-	}
-	if !sort.IntsAreSorted(bStarts) {
-		sort.Ints(bStarts)
-		sort.SliceStable(revB, func(i, j int) bool { return revB[i].Pos < revB[j].Pos })
-	}
+	revB = sortMatchesByPos(revB)
 	for _, ma := range fwdA {
 		last := len(seq) - blen
 		lo := ma.Pos + 1 // strictly to the right
@@ -244,19 +161,13 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 			}
 		}
 		if hi >= lo {
-			iMin := sort.SearchInts(bStarts, lo)
-			iMax := sort.Search(len(bStarts), func(i int) bool { return bStarts[i] > hi }) - 1
-			if iMin < 0 {
-				iMin = 0
-			}
-			if iMax >= len(bStarts) {
-				iMax = len(bStarts) - 1
-			}
+			iMin := lowerBoundMatchPos(revB, lo)
+			iMax := upperBoundMatchPos(revB, hi) - 1
 			if iMin <= iMax {
 				// Descending: farthest-right first (restores legacy test expectations)
 				for j := iMax; j >= iMin; j-- {
-					bStart := bStarts[j]
 					mb := revB[j]
+					bStart := mb.Pos
 					end := bStart + blen
 					length := end - ma.Pos
 					if (minL != 0 && length < minL) || (maxL != 0 && length > maxL) {
@@ -272,7 +183,7 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 							revSite = string(primer.RevComp(seq[bStart : bStart+blen]))
 						}
 					}
-					out = append(out, Product{
+					if err := emit(Product{
 						ExperimentID:   p.ID,
 						SequenceID:     seqID,
 						Start:          ma.Pos,
@@ -287,7 +198,9 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 						RevPrimer:      p.Reverse,
 						FwdSite:        fwdSite,
 						RevSite:        revSite,
-					})
+					}); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -312,20 +225,14 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 				}
 			}
 			if hiWrap >= loWrap {
-				iMinW := sort.SearchInts(bStarts, loWrap)
-				iMaxW := sort.Search(len(bStarts), func(i int) bool { return bStarts[i] > hiWrap }) - 1
-				if iMinW < 0 {
-					iMinW = 0
-				}
-				if iMaxW >= len(bStarts) {
-					iMaxW = len(bStarts) - 1
-				}
+				iMinW := lowerBoundMatchPos(revB, loWrap)
+				iMaxW := upperBoundMatchPos(revB, hiWrap) - 1
 				for j := iMaxW; j >= iMinW; j-- {
-					bStart := bStarts[j]
+					mb := revB[j]
+					bStart := mb.Pos
 					if bStart >= ma.Pos {
 						continue
 					}
-					mb := revB[j]
 					end := bStart + blen
 					length := (len(seq) - ma.Pos) + end
 					if (minL != 0 && length < minL) || (maxL != 0 && length > maxL) {
@@ -341,7 +248,7 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 							revSite = string(primer.RevComp(seq[bStart:end]))
 						}
 					}
-					out = append(out, Product{
+					if err := emit(Product{
 						ExperimentID:   p.ID,
 						SequenceID:     seqID,
 						Start:          ma.Pos,
@@ -356,21 +263,16 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 						RevPrimer:      p.Reverse,
 						FwdSite:        fwdSite,
 						RevSite:        revSite,
-					})
+					}); err != nil {
+						return err
+					}
 				}
 			}
 		}
 	}
 
 	// --- B (fwd) × rc(A) => "revcomp"
-	aStarts := make([]int, len(revA))
-	for i, m := range revA {
-		aStarts[i] = m.Pos
-	}
-	if !sort.IntsAreSorted(aStarts) {
-		sort.Ints(aStarts)
-		sort.SliceStable(revA, func(i, j int) bool { return revA[i].Pos < revA[j].Pos })
-	}
+	revA = sortMatchesByPos(revA)
 	for _, mb := range fwdB {
 		last := len(seq) - alen
 		lo := mb.Pos + 1
@@ -391,18 +293,12 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 			}
 		}
 		if hi >= lo {
-			iMin := sort.SearchInts(aStarts, lo)
-			iMax := sort.Search(len(aStarts), func(i int) bool { return aStarts[i] > hi }) - 1
-			if iMin < 0 {
-				iMin = 0
-			}
-			if iMax >= len(aStarts) {
-				iMax = len(aStarts) - 1
-			}
+			iMin := lowerBoundMatchPos(revA, lo)
+			iMax := upperBoundMatchPos(revA, hi) - 1
 			if iMin <= iMax {
 				for j := iMax; j >= iMin; j-- {
-					aStart := aStarts[j]
 					ma := revA[j]
+					aStart := ma.Pos
 					end := aStart + alen
 					length := end - mb.Pos
 					if (minL != 0 && length < minL) || (maxL != 0 && length > maxL) {
@@ -418,7 +314,7 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 							revSite = string(primer.RevComp(seq[aStart : aStart+alen]))
 						}
 					}
-					out = append(out, Product{
+					if err := emit(Product{
 						ExperimentID:   p.ID,
 						SequenceID:     seqID,
 						Start:          mb.Pos,
@@ -433,7 +329,9 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 						RevPrimer:      p.Forward,
 						FwdSite:        fwdSite,
 						RevSite:        revSite,
-					})
+					}); err != nil {
+						return err
+					}
 				}
 			}
 		}
@@ -457,20 +355,14 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 				}
 			}
 			if hiWrap >= loWrap {
-				iMinW := sort.SearchInts(aStarts, loWrap)
-				iMaxW := sort.Search(len(aStarts), func(i int) bool { return aStarts[i] > hiWrap }) - 1
-				if iMinW < 0 {
-					iMinW = 0
-				}
-				if iMaxW >= len(aStarts) {
-					iMaxW = len(aStarts) - 1
-				}
+				iMinW := lowerBoundMatchPos(revA, loWrap)
+				iMaxW := upperBoundMatchPos(revA, hiWrap) - 1
 				for j := iMaxW; j >= iMinW; j-- {
-					aStart := aStarts[j]
+					ma := revA[j]
+					aStart := ma.Pos
 					if aStart >= mb.Pos {
 						continue
 					}
-					ma := revA[j]
 					end := aStart + alen
 					length := (len(seq) - mb.Pos) + end
 					if (minL != 0 && length < minL) || (maxL != 0 && length > maxL) {
@@ -486,7 +378,7 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 							revSite = string(primer.RevComp(seq[aStart:end]))
 						}
 					}
-					out = append(out, Product{
+					if err := emit(Product{
 						ExperimentID:   p.ID,
 						SequenceID:     seqID,
 						Start:          mb.Pos,
@@ -501,10 +393,12 @@ func (e *Engine) joinProducts(seqID string, seq []byte, p primer.Pair,
 						RevPrimer:      p.Forward,
 						FwdSite:        fwdSite,
 						RevSite:        revSite,
-					})
+					}); err != nil {
+						return err
+					}
 				}
 			}
 		}
 	}
-	return out
+	return nil
 }

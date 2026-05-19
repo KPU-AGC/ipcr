@@ -147,7 +147,7 @@ func TestSeededMismatchSearchCapsSeedToProtectedTerminalWindow(t *testing.T) {
 	}
 }
 
-func TestSeededMismatchSearchFallsBackWhenNoProtectedTerminalWindow(t *testing.T) {
+func TestSeededMismatchSearchUsesApproximateSeedsWithoutProtectedTerminalWindow(t *testing.T) {
 	seq := []byte("CAGTACAAAAAAGGTACC")
 	pair := primer.Pair{
 		ID:      "seed-mm-no-tw",
@@ -156,9 +156,13 @@ func TestSeededMismatchSearchFallsBackWhenNoProtectedTerminalWindow(t *testing.T
 	}
 
 	eng := New(Config{MaxMM: 1, TerminalWindow: 0, SeedLen: 12, MinLen: 10})
-	hits := eng.Simulate("seq", seq, pair)
+	cp := eng.CompilePanel([]primer.Pair{pair})
+	if len(cp.SeedPatterns) == 0 || !compiledHas(cp.Have, 0, 'A') {
+		t.Fatalf("expected approximate seeds for unrestricted mismatch search, seeds=%d have=%v", len(cp.SeedPatterns), cp.Have)
+	}
 
+	hits := eng.Simulate("seq", seq, pair)
 	if len(hits) != 1 {
-		t.Fatalf("expected full-scan fallback to find one product, got %d: %+v", len(hits), hits)
+		t.Fatalf("expected approximate seeded search to find one product, got %d: %+v", len(hits), hits)
 	}
 }

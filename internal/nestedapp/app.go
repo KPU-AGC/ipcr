@@ -78,7 +78,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	}
 
 	if opts.Version {
-		_, _ = fmt.Fprintf(outw, "ipcr version %s (ipcr-nested)\n", version.Version)
+		version.Write(outw, "ipcr-nested")
 		if err := outw.Flush(); writers.IsBrokenPipe(err) {
 			return 0
 		} else if err != nil {

@@ -204,7 +204,7 @@ See [docs/THERMO_MODELS.md](./docs/THERMO_MODELS.md) for the model matrix and fa
   - If `--circular`, chunking is disabled when a positive `--chunk-size` is requested.
   - If the effective max product length is unbounded or `--chunk-size <= effective_max_product_len`, chunking auto-disables with a warning.
 
-- **Seeding**: exact 3′ suffix seeds (default length 12 or primer-length if shorter) for forward primers; rc seeds use 5′ prefixes. Ambiguous primers fall back to full verification. When `--mismatches > 0`, exact seeds are capped to the protected `--terminal-window` so valid mismatched binding sites outside that protected region are still verified. If mismatch-tolerant scanning is requested with the terminal window disabled, exact seeding is disabled and the engine falls back to full verification.
+- **Seeding**: primer panels are compiled once per run into a compact A/C/G/T Aho–Corasick seed automaton. Exact scans use concrete seed patterns; mismatch-tolerant scans use approximate seed neighborhoods and then re-check every candidate with the full primer/IUPAC/terminal-window verifier. Duplicate seed patterns share payloads across primer pairs/orientations. Genome `N` and other non-ACGT bytes reset the automaton; with mismatches enabled, local non-ACGT halos are verified directly so reference `N` remains a hard mismatch without creating seed false negatives. Highly degenerate seed neighborhoods that exceed the expansion cap fall back per orientation. See [Performance validation](./docs/PERFORMANCE.md) for local benchmark commands.
 - **Cancelable I/O**: FASTA scanners honor context; Ctrl-C exits with **130**.
 
 ---

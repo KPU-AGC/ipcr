@@ -21,7 +21,10 @@ func UsageCommon(fs *flag.FlagSet, name string, extra func(out io.Writer, def fu
 		_, _ = fmt.Fprintf(out, "%s – in-silico PCR toolkit\n\n", name)
 		_, _ = fmt.Fprintln(out, "Author:  Erick Samera (erick.samera@kpu.ca)")
 		_, _ = fmt.Fprintln(out, "License: MIT")
-		_, _ = fmt.Fprintf(out, "Version: %s\n\n", version.Version)
+		_, _ = fmt.Fprintf(out, "Version: %s\n", version.Version)
+		_, _ = fmt.Fprintf(out, "Engine: %s\n", version.EngineVersion)
+		_, _ = fmt.Fprintf(out, "Thermo: %s\n", version.ThermoVersion)
+		_, _ = fmt.Fprintf(out, "Output schema: %s\n\n", version.OutputSchemaVersion)
 
 		if extra != nil {
 			extra(out, def)

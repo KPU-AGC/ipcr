@@ -47,7 +47,15 @@ func ForEachProduct(
 		sourceFile string
 	}
 	jobs := make(chan job, cfg.Threads*2)
-	results := make(chan []engine.Product, cfg.Threads*2)
+	results := make(chan engine.Product, cfg.Threads*2)
+
+	compiledSim, useCompiled := sim.(CompiledSimulator)
+	scratchCompiledSim, useScratchCompiled := sim.(ScratchCompiledSimulator)
+	streamingSim, useStreaming := sim.(StreamingCompiledSimulator)
+	var compiledPanel *engine.CompiledPanel
+	if useCompiled {
+		compiledPanel = compiledSim.CompilePanel(pairs)
+	}
 
 	// Workers
 	var wg sync.WaitGroup
@@ -55,6 +63,11 @@ func ForEachProduct(
 	for w := 0; w < cfg.Threads; w++ {
 		go func() {
 			defer wg.Done()
+			var scratch *engine.SimulationScratch
+			if useScratchCompiled {
+				scratch = scratchCompiledSim.NewSimulationScratch(compiledPanel)
+			}
+
 			for {
 				select {
 				case <-ctx.Done():
@@ -63,27 +76,48 @@ func ForEachProduct(
 					if !ok {
 						return
 					}
-					hits := sim.SimulateBatch(j.rec.ID, j.rec.Seq, pairs)
 
-					// Fill sequence and source file
-					if cfg.NeedSeq {
-						for i := range hits {
-							if cfg.Circular && hits[i].Start > hits[i].End {
+					sendProduct := func(p engine.Product) error {
+						if cfg.NeedSeq {
+							if cfg.Circular && p.Start > p.End {
 								seqBytes := j.rec.Seq
-								hits[i].Seq = string(seqBytes[hits[i].Start:]) + string(seqBytes[:hits[i].End])
+								p.Seq = string(seqBytes[p.Start:]) + string(seqBytes[:p.End])
 							} else {
-								hits[i].Seq = string(j.rec.Seq[hits[i].Start:hits[i].End])
+								p.Seq = string(j.rec.Seq[p.Start:p.End])
 							}
 						}
-					}
-					for i := range hits {
-						hits[i].SourceFile = j.sourceFile
+						p.SourceFile = j.sourceFile
+						select {
+						case results <- p:
+							return nil
+						case <-ctx.Done():
+							return ctx.Err()
+						}
 					}
 
-					select {
-					case results <- hits:
-					case <-ctx.Done():
-						return
+					switch {
+					case useStreaming:
+						if err := streamingSim.ForEachCompiledProduct(j.rec.ID, j.rec.Seq, compiledPanel, scratch, sendProduct); err != nil {
+							return
+						}
+					case useScratchCompiled:
+						for _, p := range scratchCompiledSim.SimulateCompiledWithScratch(j.rec.ID, j.rec.Seq, compiledPanel, scratch) {
+							if err := sendProduct(p); err != nil {
+								return
+							}
+						}
+					case useCompiled:
+						for _, p := range compiledSim.SimulateCompiled(j.rec.ID, j.rec.Seq, compiledPanel) {
+							if err := sendProduct(p); err != nil {
+								return
+							}
+						}
+					default:
+						for _, p := range sim.SimulateBatch(j.rec.ID, j.rec.Seq, pairs) {
+							if err := sendProduct(p); err != nil {
+								return
+							}
+						}
 					}
 				}
 			}
@@ -99,31 +133,29 @@ func ForEachProduct(
 	cwg.Add(1)
 	go func() {
 		defer cwg.Done()
-		for hs := range results {
+		for p := range results {
 			if cerr != nil {
 				continue
 			}
-			for _, p := range hs {
-				base, off, ok := common.SplitChunkSuffix(p.SequenceID)
-				if !ok {
-					base = p.SequenceID
-					off = 0
-				}
-				gs, ge := p.Start+off, p.End+off
-				k := Key{Base: base, File: p.SourceFile, Start: gs, End: ge, Type: p.Type, Exp: p.ExperimentID}
-				if seen.Add(k) { // already seen recently
-					continue
-				}
-				// Present chunked results in reference-global coordinates so --chunk-size does not
-				// change the external coordinate system or sorted order.
-				if ok {
-					p.SequenceID = base
-					p.Start = gs
-					p.End = ge
-				}
-				if err := visit(p); err != nil && cerr == nil {
-					cerr = err
-				}
+			base, off, ok := common.SplitChunkSuffix(p.SequenceID)
+			if !ok {
+				base = p.SequenceID
+				off = 0
+			}
+			gs, ge := p.Start+off, p.End+off
+			k := Key{Base: base, File: p.SourceFile, Start: gs, End: ge, Type: p.Type, Exp: p.ExperimentID}
+			if seen.Add(k) { // already seen recently
+				continue
+			}
+			// Present chunked results in reference-global coordinates so --chunk-size does not
+			// change the external coordinate system or sorted order.
+			if ok {
+				p.SequenceID = base
+				p.Start = gs
+				p.End = ge
+			}
+			if err := visit(p); err != nil && cerr == nil {
+				cerr = err
 			}
 		}
 	}()

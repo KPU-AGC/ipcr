@@ -26,7 +26,7 @@ define maybe_echo_skip_race
 endef
 # -----------------------------------------------------------------------------
 
-.PHONY: all build build-race test test-race test-short bench cover fmt vet lint tidy clean
+.PHONY: all build build-race test test-race test-short bench bench-engine cover fmt vet lint tidy clean
 
 all: build
 
@@ -70,8 +70,10 @@ test-short:
 	$(GO) test $(GOFLAGS) $(RACEFLAG) ./... -short -count=1
 
 bench:
-	$(maybe_echo_skip_race)
-	$(GO) test $(GOFLAGS) $(RACEFLAG) ./... -bench=. -run=^$$
+	$(GO) test $(GOFLAGS) ./... -bench=. -run=^$$
+
+bench-engine:
+	cd core && $(GO) test $(GOFLAGS) ./engine -bench='Benchmark(CompilePanel|BuildSeedPatterns|SimulateCompiled)' -run=^$$ -benchmem
 
 cover:
 	$(maybe_echo_skip_race)

@@ -235,7 +235,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 
 	// Version
 	if opts.Version {
-		_, _ = fmt.Fprintf(outw, "ipcr-thermo version %s\n", version.Version)
+		version.Write(outw, "ipcr-thermo")
 		if e := outw.Flush(); writers.IsBrokenPipe(e) {
 			return 0
 		} else if e != nil {

@@ -130,7 +130,7 @@ jobs:
           cd core
           go mod tidy
       - name: Lint (core)
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v8
         env:
           GOWORK: off
           GOTOOLCHAIN: local

@@ -3,9 +3,8 @@ package engine
 
 import (
 	"bytes"
-	"testing"
-
 	"ipcr-core/primer"
+	"testing"
 )
 
 // Minimal simulation: should find one full-length product

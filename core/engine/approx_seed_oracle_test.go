@@ -3,11 +3,10 @@ package engine
 
 import (
 	"fmt"
+	"ipcr-core/primer"
 	"sort"
 	"strings"
 	"testing"
-
-	"ipcr-core/primer"
 )
 
 type productOracleSig struct {

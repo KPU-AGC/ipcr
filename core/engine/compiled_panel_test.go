@@ -3,9 +3,8 @@ package engine
 
 import (
 	"errors"
-	"testing"
-
 	"ipcr-core/primer"
+	"testing"
 )
 
 var errForEachCompiledProductTest = errors.New("stop streaming")

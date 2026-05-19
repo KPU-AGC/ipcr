@@ -2,9 +2,8 @@ package thermoaddons
 
 import (
 	"errors"
-	"strings"
-
 	"ipcr-core/thermo"
+	"strings"
 )
 
 func TmNearestNeighbor(primer5to3 string, cond Conditions) (tmC, dH, dS float64, _ error) {

@@ -2,10 +2,9 @@
 package thermoaddons
 
 import (
+	"ipcr-core/thermo"
 	"os"
 	"strings"
-
-	"ipcr-core/thermo"
 )
 
 // Conditions is kept as a compatibility alias. New thermodynamic code should

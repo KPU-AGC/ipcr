@@ -2,9 +2,8 @@
 package engine
 
 import (
-	"sort"
-
 	"ipcr-core/primer"
+	"sort"
 )
 
 // Config holds PCR simulation parameters.

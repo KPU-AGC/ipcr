@@ -2,9 +2,8 @@
 package thermoaddons
 
 import (
-	"math"
-
 	"ipcr-core/thermo"
+	"math"
 )
 
 // HairpinPenalty returns a bounded °C-equivalent penalty for the strongest

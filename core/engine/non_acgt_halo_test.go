@@ -1,10 +1,9 @@
 package engine
 
 import (
+	"ipcr-core/primer"
 	"reflect"
 	"testing"
-
-	"ipcr-core/primer"
 )
 
 func TestNonACGTRangesTreatLowercaseACGTAsCanonical(t *testing.T) {

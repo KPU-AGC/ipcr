@@ -2,9 +2,8 @@ package engine
 
 import (
 	"errors"
-	"testing"
-
 	"ipcr-core/primer"
+	"testing"
 )
 
 var errForEachJoinedProductTest = errors.New("stop joined product stream")

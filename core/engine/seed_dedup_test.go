@@ -1,9 +1,8 @@
 package engine
 
 import (
-	"testing"
-
 	"ipcr-core/primer"
+	"testing"
 )
 
 func TestBuildSeedsDeduplicatesPatternsAndFansOutPayloads(t *testing.T) {

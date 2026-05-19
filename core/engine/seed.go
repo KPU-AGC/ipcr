@@ -114,30 +114,6 @@ func configuredSeedLen(primerLen, cfg int) int {
 	return cfg
 }
 
-// seedLenFor chooses the legacy exact 3'-anchored seed length. It is retained
-// for callers/tests that need the old length calculation; buildSeeds now uses
-// seed-neighborhood expansion when mismatches are allowed.
-func seedLenFor(primerLen, cfg, terminalWindow, maxMM int) int {
-	sl := configuredSeedLen(primerLen, cfg)
-	if maxMM > 0 && terminalWindow > 0 && sl > terminalWindow {
-		sl = terminalWindow
-	}
-	if sl > primerLen {
-		return primerLen
-	}
-	return sl
-}
-
-func isACGT(b byte) bool { return b == 'A' || b == 'C' || b == 'G' || b == 'T' }
-func isUnambigBytes(p []byte) bool {
-	for _, c := range p {
-		if !isACGT(c) {
-			return false
-		}
-	}
-	return true
-}
-
 // BuildSeeds builds flattened seed payloads for all primer orientations.
 //
 // The return shape is kept for compatibility with older tests/callers. Internal

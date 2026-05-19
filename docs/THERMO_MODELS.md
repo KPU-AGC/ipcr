@@ -20,9 +20,9 @@ still require calibration or additional chemistry-specific parameters.
 
 | Mode               | Purpose                                                               | Notes                                                                                                                                                                                                                      |
 | ------------------ | --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `legacy-heuristic` | Historical score path                                                 | Maintained for backward compatibility. Scores are not directly comparable with NN modes.                                                                                                                                   |
+| `legacy-heuristic` | Historical compatibility path                                         | Maintained for backward compatibility. Scores are not directly comparable with NN modes.                                                                                                                                   |
 | `nn-duplex-v1`     | Primer-template nearest-neighbor duplex ranking                       | Uses runtime conditions, salt model, primer concentration, IUPAC thermo policy, explicit mismatch source/parameter-set metadata, and SantaLucia-Hicks 2004 terminal dangling-end terms when template flanks are available. |
-| `nn-structure-v1`  | `nn-duplex-v1` plus primer hairpin/self-dimer/cross-dimer competition | Uses the current secondary-structure evaluator and reports structure policy/model metadata.                                                                                                                                |
+| `nn-structure-v1`  | `nn-duplex-v1` plus primer hairpin/self-dimer/cross-dimer competition | Default thermo model. Uses the current secondary-structure evaluator and reports structure policy/model metadata.                                                                                                          |
 
 ## Structure model labels
 

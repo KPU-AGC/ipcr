@@ -16,6 +16,20 @@ func writeFA(t *testing.T, name, data string) string {
 	return name
 }
 
+func TestThermo_VersionDoesNotRequireInputs(t *testing.T) {
+	var out, errB bytes.Buffer
+	code := thermoapp.Run([]string{"--version"}, &out, &errB)
+	if code != 0 {
+		t.Fatalf("exit %d err=%s out=%s", code, errB.String(), out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("ipcr-thermo 5.0.0")) {
+		t.Fatalf("expected ipcr-thermo version output, got:\n%s", out.String())
+	}
+	if !bytes.Contains(out.Bytes(), []byte("thermo: nn-structure-v1")) {
+		t.Fatalf("expected nn-structure-v1 component version, got:\n%s", out.String())
+	}
+}
+
 func TestThermo_EndToEnd_TSVWithScore(t *testing.T) {
 	// Tiny FASTA with a simple amplicon.
 	fa := writeFA(t, "thermo_it.fa", ">s\nACGTACAAAAAAGGTACC\n")
@@ -221,7 +235,7 @@ func TestThermo_TerminalMismatchProvenanceAppearsInTSVJSONAndJSONL(t *testing.T)
 	}
 }
 
-func TestThermo_ProbeThermoDefaultModelAutoPromotesToNNDuplex(t *testing.T) {
+func TestThermo_ProbeThermoDefaultModelUsesNNStructure(t *testing.T) {
 	fwd := "GCGCGCGCGCGCGCGCGCGC"
 	rev := "CGCGCGCGCGCGCGCGCGCG"
 	probe := "GCGCGATCGCGATCGCGCGC"
@@ -243,8 +257,8 @@ func TestThermo_ProbeThermoDefaultModelAutoPromotesToNNDuplex(t *testing.T) {
 		t.Fatalf("exit %d err=%s", code, errB.String())
 	}
 	s := out.String()
-	if !bytes.Contains(out.Bytes(), []byte("nn-duplex-v1")) {
-		t.Fatalf("expected implicit nn-duplex-v1 scoring when --probe-thermo is used with default model:\n%s", s)
+	if !bytes.Contains(out.Bytes(), []byte("nn-structure-v1")) {
+		t.Fatalf("expected default nn-structure-v1 scoring when --probe-thermo is used:\n%s", s)
 	}
 	if !bytes.Contains(out.Bytes(), []byte("probe_found")) || !bytes.Contains(out.Bytes(), []byte("\ttrue\tgate\tprobe\t")) {
 		t.Fatalf("expected populated probe thermo detail columns:\n%s", s)

@@ -13,7 +13,7 @@ var Version = "5.0.0"
 
 const (
 	EngineVersion       = "ac-approx-seed-v0.1"
-	ThermoVersion       = "nn-imperfect-v1"
+	ThermoVersion       = "nn-structure-v1"
 	OutputSchemaVersion = "ipcr-jsonl-v1"
 )
 

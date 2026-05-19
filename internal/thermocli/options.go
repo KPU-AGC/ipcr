@@ -179,7 +179,7 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	fs.StringVar(&o.Probe, "probe", "", "internal probe (5'→3') [optional]")
 	fs.StringVar(&o.ProbeName, "probe-name", "probe", "probe label")
 	fs.IntVar(&o.ProbeMaxMM, "probe-max-mm", 0, "max probe mismatches [0]")
-	fs.BoolVar(&o.ProbeThermo, "probe-thermo", true, "score internal probe thermodynamics when --probe is supplied; implies nn-duplex-v1 when the thermo model is left at legacy default")
+	fs.BoolVar(&o.ProbeThermo, "probe-thermo", true, "score internal probe thermodynamics when --probe is supplied")
 	fs.StringVar(&o.ProbeScoreMode, "probe-score-mode", "gate", "probe thermo mode: annotate | gate | blend")
 	fs.Float64Var(&o.ProbeMinMarginC, "probe-min-margin", 0, "minimum probe annealing margin for gate mode (°C)")
 	fs.Float64Var(&o.ProbeWeight, "probe-weight", 1.0, "blend [0..1]: 1 favors probe strongly")
@@ -205,6 +205,9 @@ func ParseArgs(fs *flag.FlagSet, argv []string) (Options, error) {
 	flagArgs, posArgs := cliutil.SplitFlagsAndPositionals(fs, argv)
 	if err := fs.Parse(flagArgs); err != nil {
 		return o, err
+	}
+	if o.Version {
+		return o, nil
 	}
 	if showExamples {
 		return o, clibase.ErrPrintedAndExitOK

@@ -19,13 +19,23 @@ func minimalArgs() []string {
 	return []string{"--forward", "ACGT", "--reverse", "ACGT", "--sequences", "ref.fa"}
 }
 
-func TestParseArgs_DefaultThermoModelIsLegacyHeuristic(t *testing.T) {
+func TestParseArgs_VersionDoesNotRequireInputs(t *testing.T) {
+	opts, err := parseArgsForTest("--version")
+	if err != nil {
+		t.Fatalf("ParseArgs returned error: %v", err)
+	}
+	if !opts.Version {
+		t.Fatal("expected version flag")
+	}
+}
+
+func TestParseArgs_DefaultThermoModelIsNNStructureV1(t *testing.T) {
 	opts, err := parseArgsForTest(minimalArgs()...)
 	if err != nil {
 		t.Fatalf("ParseArgs returned error: %v", err)
 	}
-	if opts.ThermoModel != thermomodel.LegacyHeuristic.String() {
-		t.Fatalf("got model %q, want %q", opts.ThermoModel, thermomodel.LegacyHeuristic)
+	if opts.ThermoModel != thermomodel.NNStructureV1.String() {
+		t.Fatalf("got model %q, want %q", opts.ThermoModel, thermomodel.NNStructureV1)
 	}
 }
 

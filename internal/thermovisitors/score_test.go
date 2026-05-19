@@ -133,7 +133,7 @@ func TestScore_ImprovesWithPerfectEnds(t *testing.T) {
 	}
 }
 
-func TestScore_DefaultModelMatchesExplicitLegacyHeuristic(t *testing.T) {
+func TestScore_DefaultModelMatchesExplicitNNStructure(t *testing.T) {
 	fwd := "ACGTAC"
 	rev := "GGTACC"
 	amp := fwd + "AAAA" + rc5to3(rev)
@@ -148,14 +148,14 @@ func TestScore_DefaultModelMatchesExplicitLegacyHeuristic(t *testing.T) {
 		t.Fatalf("default Visit returned error: %v", err)
 	}
 
-	base.Model = thermomodel.LegacyHeuristic
-	_, gotLegacy, err := base.Visit(p)
+	base.Model = thermomodel.NNStructureV1
+	_, gotExplicit, err := base.Visit(p)
 	if err != nil {
-		t.Fatalf("legacy Visit returned error: %v", err)
+		t.Fatalf("explicit NNStructure Visit returned error: %v", err)
 	}
 
-	if gotDefault.Score != gotLegacy.Score {
-		t.Fatalf("default model changed score: default=%g legacy=%g", gotDefault.Score, gotLegacy.Score)
+	if gotDefault.Score != gotExplicit.Score {
+		t.Fatalf("default model mismatch: default=%g explicit=%g", gotDefault.Score, gotExplicit.Score)
 	}
 }
 

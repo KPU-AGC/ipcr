@@ -2,13 +2,13 @@ package thermomodel
 
 import "testing"
 
-func TestParseDefaultsToLegacyHeuristic(t *testing.T) {
+func TestParseDefaultsToNNStructureV1(t *testing.T) {
 	got, err := Parse("")
 	if err != nil {
 		t.Fatalf("Parse returned error: %v", err)
 	}
-	if got != LegacyHeuristic {
-		t.Fatalf("got %q, want %q", got, LegacyHeuristic)
+	if got != NNStructureV1 {
+		t.Fatalf("got %q, want %q", got, NNStructureV1)
 	}
 }
 

@@ -26,8 +26,8 @@ const (
 	NNStructureV1 Mode = "nn-structure-v1"
 )
 
-// Default returns the behavior-preserving model.
-func Default() Mode { return LegacyHeuristic }
+// Default returns the release-default thermodynamic model.
+func Default() Mode { return NNStructureV1 }
 
 // Parse validates and normalizes a model name.
 func Parse(raw string) (Mode, error) {

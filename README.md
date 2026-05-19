@@ -168,14 +168,14 @@ Salmonella-Enteritidis	NZ_CP025559.1	O1+O2	1853303	1854185	882	revcomp	0	0	-137.
 
 Common modes and profiles:
 
-| Setting            | Meaning                                                  |
-| ------------------ | -------------------------------------------------------- |
-| `legacy-heuristic` | Historical compatibility path.                           |
-| `nn-duplex-v1`     | Nearest-neighbor primer-template duplex scoring.         |
-| `nn-structure-v1`  | NN duplex scoring plus primer hairpin/dimer competition. |
-| `binding`          | Primer-template binding rank.                            |
-| `pcr`              | Binding plus extension and length proxy.                 |
-| `gel`              | PCR proxy plus band-mass proxy.                          |
+| Setting            | Meaning                                                                        |
+| ------------------ | ------------------------------------------------------------------------------ |
+| `legacy-heuristic` | Historical compatibility path; not the default for new releases.               |
+| `nn-duplex-v1`     | Nearest-neighbor primer-template duplex scoring.                               |
+| `nn-structure-v1`  | NN duplex scoring plus primer hairpin/dimer competition. Default thermo model. |
+| `binding`          | Primer-template binding rank.                                                  |
+| `pcr`              | Binding plus extension and length proxy.                                       |
+| `gel`              | PCR proxy plus band-mass proxy.                                                |
 
 The `pcr` and `gel` profiles are useful empirical rankers, but they are not full polymerase kinetics or quantitative gel-intensity models. Modified probes such as MGB probes are not fully calibrated; use `--probe-score-mode annotate` or `--probe-thermo=false` unless a calibrated modifier model is available.
 

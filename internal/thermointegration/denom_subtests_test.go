@@ -72,10 +72,11 @@ func TestThermo_DenomMode_Subtests(t *testing.T) {
 		"--seed-length", "3",
 		"--terminal-window", "0",
 		"--self=false",
+		"--thermo-model", "legacy-heuristic",
 	}
 
 	t.Run("fixed_vs_auto_changes_score", func(t *testing.T) {
-		outFixed := runThermo(t, append([]string{}, baseArgs...)) // default: --denom fixed
+		outFixed := runThermo(t, append([]string{}, baseArgs...)) // legacy + default: --denom fixed
 		sFixed := firstScoreFromTSV(t, outFixed)
 
 		outAuto := runThermo(t, append(append([]string{}, baseArgs...), "--denom", "auto"))
@@ -113,7 +114,7 @@ func TestThermo_DenomMode_Subtests(t *testing.T) {
 	})
 }
 
-func TestThermo_LegacyModelGoldenOutput(t *testing.T) {
+func TestThermo_ExplicitLegacyModelGoldenOutput(t *testing.T) {
 	fa := writeFA2(t, "thermo_stage0.fa", ">s\nACGTACAAAAAAGGTACC\n")
 	t.Cleanup(func() { _ = os.Remove(fa) })
 
@@ -133,11 +134,6 @@ func TestThermo_LegacyModelGoldenOutput(t *testing.T) {
 	want := "source_file\tsequence_id\texperiment_id\tstart\tend\tlength\ttype\tfwd_mm\trev_mm\tfwd_mm_i\trev_mm_i\tscore\n" +
 		"thermo_stage0.fa\ts\tmanual\t0\t18\t18\tforward\t1\t0\t1\t\t-18.975\n" +
 		"thermo_stage0.fa\ts\tmanual\t11\t18\t7\tforward\t1\t0\t1\t\t-29.625\n"
-
-	gotDefault := runThermo(t, baseArgs)
-	if gotDefault != want {
-		t.Fatalf("legacy default output changed:\ngot:\n%s\nwant:\n%s", gotDefault, want)
-	}
 
 	gotExplicit := runThermo(t, append(append([]string{}, baseArgs...), "--thermo-model", "legacy-heuristic"))
 	if gotExplicit != want {

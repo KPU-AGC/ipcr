@@ -148,7 +148,7 @@ func sequenceHasAutomatonReset(seq []byte) bool {
 }
 
 // scanACEach runs the compact automaton over seq and streams seed-pattern hits.
-func scanACEach(seq []byte, automaton Automaton, fn func(endPos int, patternIdx int)) {
+func scanACEach(seq []byte, automaton Automaton, fn func(endPos, patternIdx int)) {
 	if automaton.empty() || fn == nil {
 		return
 	}

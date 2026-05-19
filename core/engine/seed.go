@@ -328,8 +328,8 @@ func enumerateSeedVariants(
 	emitted := 0
 	ok := true
 
-	var walk func(pos int, mm int)
-	walk = func(pos int, mm int) {
+	var walk func(pos, mm int)
+	walk = func(pos, mm int) {
 		if !ok || mm > maxMM {
 			return
 		}

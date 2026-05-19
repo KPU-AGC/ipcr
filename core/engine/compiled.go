@@ -209,7 +209,7 @@ func (e *Engine) ForEachCompiledProduct(seqID string, seq []byte, cp *CompiledPa
 	// Verify around seed hits. If the compiled panel has no seeds, skip the
 	// otherwise pointless automaton pass and go straight to the fallback scanners.
 	if len(cp.SeedPatterns) > 0 && !cp.Automaton.empty() && !forceFallback {
-		scanACEach(seq, cp.Automaton, func(endPos int, patternIdx int) {
+		scanACEach(seq, cp.Automaton, func(endPos, patternIdx int) {
 			pattern := cp.SeedPatterns[patternIdx]
 			// AC reports endPos as the index of the last byte of the seed pattern.
 			// SeedOffset is the seed start inside the full orientation-specific

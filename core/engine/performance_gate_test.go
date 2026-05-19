@@ -1,8 +1,9 @@
 package engine
 
 import (
-	"ipcr-core/primer"
 	"testing"
+
+	"ipcr-core/primer"
 )
 
 func TestApproximateSeedRegressionGates(t *testing.T) {

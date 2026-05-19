@@ -2,8 +2,9 @@ package engine
 
 import (
 	"fmt"
-	"ipcr-core/primer"
 	"testing"
+
+	"ipcr-core/primer"
 )
 
 var (

@@ -51,7 +51,7 @@ func StreamChunksCtx(ctx context.Context, r io.Reader, chunkSize int, circular b
 				IsWrap:   false,
 				IsLast:   false,
 			}
-			if end == len(seq) && !(circular && len(seq) > 0) {
+			if end == len(seq) && (!circular || len(seq) == 0) {
 				ch.IsLast = true
 			}
 			if err := emit(ch); err != nil {
@@ -93,7 +93,8 @@ func StreamChunksCtx(ctx context.Context, r io.Reader, chunkSize int, circular b
 		return nil
 	}
 
-	err := scanFASTALines(ctx, r,
+	err := scanFASTALines(
+		ctx, r,
 		func(header []byte) error {
 			if err := flush(); err != nil {
 				return err

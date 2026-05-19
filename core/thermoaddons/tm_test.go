@@ -1,9 +1,10 @@
 package thermoaddons
 
 import (
-	"ipcr-core/thermo"
 	"math"
 	"testing"
+
+	"ipcr-core/thermo"
 )
 
 func TestTmNearestNeighborDelegatesToCanonicalThermo(t *testing.T) {

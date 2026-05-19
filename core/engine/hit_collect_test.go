@@ -1,8 +1,9 @@
 package engine
 
 import (
-	"ipcr-core/primer"
 	"testing"
+
+	"ipcr-core/primer"
 )
 
 func TestMatchCollectorDeduplicatesAcceptedAndRejectedStarts(t *testing.T) {

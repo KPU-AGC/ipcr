@@ -14,7 +14,7 @@ func TestScanACEachStreamsHitsAndResetsOnNonACGT(t *testing.T) {
 	automaton, _ := buildAC(seeds)
 
 	var got []string
-	scanACEach([]byte("TTACGNCGacgACNG"), automaton, func(endPos int, seedIdx int) {
+	scanACEach([]byte("TTACGNCGacgACNG"), automaton, func(endPos, seedIdx int) {
 		got = append(got, fmt.Sprintf("%d:%d", endPos, seedIdx))
 	})
 

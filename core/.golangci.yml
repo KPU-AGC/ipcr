@@ -1,29 +1,35 @@
+version: "2"
 run:
-  timeout: 5m
   issues-exit-code: 1
   tests: true
-
 linters:
   enable:
-    - errcheck
-    - gofumpt
-    - govet
     - gocritic
     - misspell
     - prealloc
-    - exportloopref
-    # depguard disabled here to avoid false positives on ipcr-core/* imports
-
-linters-settings:
-  gofumpt:
-    extra-rules: true
-  errcheck:
-    exclude-functions:
-      - fmt.Fprint
-      - fmt.Fprintf
-      - fmt.Fprintln
-      - os.Remove
-      - (*bufio.Writer).Flush
-
-issues:
-  exclude-use-default: false
+  settings:
+    errcheck:
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - os.Remove
+        - (*bufio.Writer).Flush
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofumpt
+  settings:
+    gofumpt:
+      extra-rules: true
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

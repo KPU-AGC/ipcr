@@ -269,6 +269,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 	}
 	vis := visitors.PassThrough{}
 	wf := appcore.NewProductWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty, opts.Products, false, false)
+	wf.FastaIDs = opts.FastaIDs
 	return appcore.Run[engine.Product](parent, outw, stderr, coreOpts, pairs, vis.Visit, wf)
 }
 

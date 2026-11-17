@@ -56,6 +56,7 @@ func UsageCommon(fs *flag.FlagSet, name string, extra func(out io.Writer, def fu
 		_, _ = fmt.Fprintf(out, "      --pretty                Pretty ASCII alignment block (text) [%s]\n", def("pretty"))
 		_, _ = fmt.Fprintf(out, "      --sort                  Sort outputs deterministically [%s]\n", def("sort"))
 		_, _ = fmt.Fprintf(out, "      --no-header             Suppress header line [%s]\n", def("no-header"))
+		_, _ = fmt.Fprintf(out, "      --fasta-ids string      FASTA record IDs: experiment ({exp}_{N}) | source ({seq_id}_amp{N}) [%s]\n", def("fasta-ids"))
 		_, _ = fmt.Fprintf(out, "      --no-match-exit-code int  Exit code when no amplicons found [%s]\n", def("no-match-exit-code"))
 
 		_, _ = fmt.Fprintln(out, "\nMiscellaneous:")

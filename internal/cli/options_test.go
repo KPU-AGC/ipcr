@@ -169,3 +169,17 @@ func TestInlinePrimersRejectInvalidBase(t *testing.T) {
 		t.Fatal("expected invalid forward primer error")
 	}
 }
+
+func TestFastaIDsFlag(t *testing.T) {
+	o := mustParse(t, "--forward", "AAA", "--reverse", "TTT", "ref.fa")
+	if o.FastaIDs != "experiment" {
+		t.Errorf("default --fasta-ids = %q, want experiment", o.FastaIDs)
+	}
+	o = mustParse(t, "--forward", "AAA", "--reverse", "TTT", "--fasta-ids", "source", "ref.fa")
+	if o.FastaIDs != "source" {
+		t.Errorf("--fasta-ids = %q, want source", o.FastaIDs)
+	}
+	if _, err := ParseArgs(newFS(), []string{"--forward", "AAA", "--reverse", "TTT", "--fasta-ids", "bogus", "ref.fa"}); err == nil {
+		t.Errorf("expected error for invalid --fasta-ids")
+	}
+}

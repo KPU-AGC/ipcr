@@ -223,3 +223,41 @@ func TestChunkedRawTextMatchesNonChunkedUnderSort(t *testing.T) {
 		t.Fatalf("raw chunked output differs from no-chunking\nno-chunk:\n%s\nchunked:\n%s", noChunk, chunked)
 	}
 }
+
+// A multi-record FASTA run with --fasta-ids source must name every amplicon
+// after the record it came from, numbering per record.
+func TestFASTASourceIDsEndToEnd(t *testing.T) {
+	// seqA holds two copies of the amplicon, seqB one. --max-length keeps the
+	// two seqA copies from also bridging into one long product.
+	const fwd, rev = "ACGTTGCAAGCTAGCTAGGA", "TTGACCGATCGGATCCATGC"
+	amp := fwd + "TTTTT" + "GCATGGATCCGATCGGTCAA" // fwd + spacer + revcomp(rev)
+	fa := write(t, t.TempDir()+"/multi.fa",
+		">seqA description words\n"+"GGGGG"+amp+"GGGGG"+amp+"GGGGG\n"+
+			">seqB\n"+"CCCCC"+amp+"CCCCC\n"+
+			">seqC no hits\nACACACACACACACACACACACAC\n")
+
+	var out, errB bytes.Buffer
+	code := app.Run([]string{
+		"--forward", fwd,
+		"--reverse", rev,
+		"--max-length", "60",
+		"--output", "fasta", "--fasta-ids", "source", "--sort",
+		fa,
+	}, &out, &errB)
+	if code != 0 {
+		t.Fatalf("exit %d, err=%s", code, errB.String())
+	}
+	var ids []string
+	for _, line := range strings.Split(out.String(), "\n") {
+		if strings.HasPrefix(line, ">") {
+			ids = append(ids, strings.Fields(line[1:])[0])
+			if !strings.Contains(line, " experiment=manual ") || !strings.Contains(line, " sequence_id=seq") {
+				t.Errorf("header missing attributes: %q", line)
+			}
+		}
+	}
+	want := []string{"seqA_amp1", "seqA_amp2", "seqB_amp1"}
+	if strings.Join(ids, ",") != strings.Join(want, ",") {
+		t.Fatalf("ids = %v, want %v\n%s", ids, want, out.String())
+	}
+}

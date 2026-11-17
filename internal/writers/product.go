@@ -13,9 +13,10 @@ type productArgs struct {
 	Header        bool
 	Pretty        bool
 	Opt           pretty.Options
-	Scores        bool // NEW: include 'score' in TSV
-	RankByScore   bool // NEW: prefer score sort over coord
-	ThermoDetails bool // append compact NN thermodynamic diagnostics in text/TSV
+	Scores        bool   // NEW: include 'score' in TSV
+	RankByScore   bool   // NEW: prefer score sort over coord
+	ThermoDetails bool   // append compact NN thermodynamic diagnostics in text/TSV
+	FastaIDs      string // --fasta-ids mode for FASTA record IDs ("" = experiment)
 	In            <-chan engine.Product
 }
 
@@ -76,9 +77,9 @@ func init() {
 			} else {
 				common.SortProducts(list)
 			}
-			return output.WriteFASTA(w, list)
+			return output.WriteFASTAWithIDs(w, list, args.FastaIDs)
 		}
-		return output.StreamFASTA(w, args.In)
+		return output.StreamFASTAWithIDs(w, args.In, args.FastaIDs)
 	})
 
 	// TEXT/TSV (+ optional pretty blocks + optional 'score' column)
@@ -167,20 +168,51 @@ func StartProductWriterWithPrettyOptions(out io.Writer, format string, sort, hea
 }
 
 func StartProductWriterWithPrettyOptionsAndThermoDetails(out io.Writer, format string, sort, header, prettyMode, includeScore, rankByScore, thermoDetails bool, popt pretty.Options, bufSize int) (chan<- engine.Product, <-chan error) {
+	return StartProductWriterWithConfig(out, ProductWriterConfig{
+		Format:        format,
+		Sort:          sort,
+		Header:        header,
+		Pretty:        prettyMode,
+		PrettyOptions: popt,
+		IncludeScore:  includeScore,
+		RankByScore:   rankByScore,
+		ThermoDetails: thermoDetails,
+		BufSize:       bufSize,
+	})
+}
+
+// ProductWriterConfig bundles every product-writer option. Prefer it over the
+// positional Start* helpers when adding new options.
+type ProductWriterConfig struct {
+	Format        string
+	Sort          bool
+	Header        bool
+	Pretty        bool
+	PrettyOptions pretty.Options // callers normally pass pretty.DefaultOptions
+	IncludeScore  bool
+	RankByScore   bool
+	ThermoDetails bool
+	FastaIDs      string // output.FastaIDsExperiment (default) or output.FastaIDsSource
+	BufSize       int
+}
+
+func StartProductWriterWithConfig(out io.Writer, cfg ProductWriterConfig) (chan<- engine.Product, <-chan error) {
+	bufSize := cfg.BufSize
 	if bufSize <= 0 {
 		bufSize = 64
 	}
 	in := make(chan engine.Product, bufSize)
 	errCh := make(chan error, 1)
 	go func() {
-		err := WriteProduct(format, out, productArgs{
-			Sort:          sort,
-			Header:        header,
-			Pretty:        prettyMode,
-			Opt:           popt,
-			Scores:        includeScore,
-			RankByScore:   rankByScore,
-			ThermoDetails: thermoDetails,
+		err := WriteProduct(cfg.Format, out, productArgs{
+			Sort:          cfg.Sort,
+			Header:        cfg.Header,
+			Pretty:        cfg.Pretty,
+			Opt:           cfg.PrettyOptions,
+			Scores:        cfg.IncludeScore,
+			RankByScore:   cfg.RankByScore,
+			ThermoDetails: cfg.ThermoDetails,
+			FastaIDs:      cfg.FastaIDs,
 			In:            in,
 		})
 		errCh <- err

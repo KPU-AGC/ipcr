@@ -11,11 +11,12 @@ import (
 )
 
 type annotatedArgs struct {
-	Sort   bool
-	Header bool
-	Pretty bool
-	Opt    pretty.Options
-	In     <-chan probeoutput.AnnotatedProduct
+	Sort     bool
+	Header   bool
+	Pretty   bool
+	Opt      pretty.Options
+	FastaIDs string // --fasta-ids mode for FASTA record IDs ("" = experiment)
+	In       <-chan probeoutput.AnnotatedProduct
 }
 
 func drainAnnotated(ch <-chan probeoutput.AnnotatedProduct) []probeoutput.AnnotatedProduct {
@@ -68,9 +69,9 @@ func init() {
 			sort.SliceStable(list, func(i, j int) bool {
 				return common.LessProduct(list[i].Product, list[j].Product)
 			})
-			return probeoutput.WriteFASTA(w, list)
+			return probeoutput.WriteFASTAWithIDs(w, list, args.FastaIDs)
 		}
-		return probeoutput.StreamFASTA(w, args.In)
+		return probeoutput.StreamFASTAWithIDs(w, args.In, args.FastaIDs)
 	})
 
 	// TEXT/TSV (+ optional pretty blocks)
@@ -100,6 +101,12 @@ func StartAnnotatedWriter(out io.Writer, format string, sort, header, prettyMode
 }
 
 func StartAnnotatedWriterWithPrettyOptions(out io.Writer, format string, sort, header, prettyMode bool, popt pretty.Options, bufSize int) (chan<- probeoutput.AnnotatedProduct, <-chan error) {
+	return StartAnnotatedWriterWithFastaIDs(out, format, sort, header, prettyMode, popt, "", bufSize)
+}
+
+// StartAnnotatedWriterWithFastaIDs is StartAnnotatedWriterWithPrettyOptions
+// plus the --fasta-ids mode used for FASTA record IDs.
+func StartAnnotatedWriterWithFastaIDs(out io.Writer, format string, sort, header, prettyMode bool, popt pretty.Options, fastaIDs string, bufSize int) (chan<- probeoutput.AnnotatedProduct, <-chan error) {
 	if bufSize <= 0 {
 		bufSize = 64
 	}
@@ -107,11 +114,12 @@ func StartAnnotatedWriterWithPrettyOptions(out io.Writer, format string, sort, h
 	errCh := make(chan error, 1)
 	go func() {
 		err := WriteAnnotated(format, out, annotatedArgs{
-			Sort:   sort,
-			Header: header,
-			Pretty: prettyMode,
-			Opt:    popt,
-			In:     in,
+			Sort:     sort,
+			Header:   header,
+			Pretty:   prettyMode,
+			Opt:      popt,
+			FastaIDs: fastaIDs,
+			In:       in,
 		})
 		errCh <- err
 	}()

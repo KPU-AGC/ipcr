@@ -15,6 +15,7 @@ import (
 	"ipcr/internal/clibase"
 	"ipcr/internal/cmdutil"
 	"ipcr/internal/common"
+	"ipcr/internal/pretty"
 	"ipcr/internal/thermocli"
 	"ipcr/internal/thermomodel"
 	"ipcr/internal/thermovisitors"
@@ -168,12 +169,24 @@ type thermoWF struct {
 	IncludeScore  bool
 	RankByScore   bool
 	ThermoDetails bool
+	FastaIDs      string
 }
 
 func (w thermoWF) NeedSites() bool { return false }
 func (w thermoWF) NeedSeq() bool   { return true }
 func (w thermoWF) Start(out io.Writer, bufSize int) (chan<- engine.Product, <-chan error) {
-	return writers.StartProductWriterWithThermoDetails(out, w.Format, w.Sort, w.Header, w.Pretty, w.IncludeScore, w.RankByScore, w.ThermoDetails, bufSize)
+	return writers.StartProductWriterWithConfig(out, writers.ProductWriterConfig{
+		Format:        w.Format,
+		Sort:          w.Sort,
+		Header:        w.Header,
+		Pretty:        w.Pretty,
+		PrettyOptions: pretty.DefaultOptions,
+		IncludeScore:  w.IncludeScore,
+		RankByScore:   w.RankByScore,
+		ThermoDetails: w.ThermoDetails,
+		FastaIDs:      w.FastaIDs,
+		BufSize:       bufSize,
+	})
 }
 
 /* ----------------------------- main app ----------------------------- */
@@ -436,6 +449,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		IncludeScore:  true,
 		RankByScore:   rankByScore,
 		ThermoDetails: opts.ThermoDetails,
+		FastaIDs:      opts.FastaIDs,
 	}
 
 	return appcore.Run[engine.Product](parent, outw, stderr, coreOpts, pairs, scorer.Visit, wf)

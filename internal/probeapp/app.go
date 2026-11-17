@@ -110,6 +110,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		Quiet:     opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
 	}
 	writer := appcore.NewAnnotatedWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty)
+	writer.FastaIDs = opts.FastaIDs
 	visitor := visitors.Probe{
 		Name: opts.ProbeName, Seq: strings.ToUpper(opts.Probe), MaxMM: opts.ProbeMaxMM, Require: opts.RequireProbe,
 	}

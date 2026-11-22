@@ -110,6 +110,7 @@ func RunContext(parent context.Context, argv []string, stdout, stderr io.Writer)
 		Quiet:     opts.Quiet, NoMatchExitCode: opts.NoMatchExitCode,
 	}
 	writer := appcore.NewProductWriterFactory(opts.Output, opts.Sort, opts.Header, opts.Pretty, opts.Products, false, false)
+	writer.FastaIDs = opts.FastaIDs
 	return appcore.Run[engine.Product](parent, stdout, stderr, coreOpts, pairs, visitors.PassThrough{}.Visit, writer)
 }
 

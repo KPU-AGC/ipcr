@@ -40,6 +40,7 @@ type Common struct {
 	Sort            bool
 	Header          bool
 	NoMatchExitCode int
+	FastaIDs        string // FASTA record-ID style: experiment | source
 
 	// Misc
 	Quiet   bool
@@ -97,6 +98,7 @@ func Register(fs *flag.FlagSet, c *Common) *bool {
 	fs.BoolVar(&c.Sort, "sort", false, "sort outputs deterministically [false]")
 	noHeader := false
 	fs.BoolVar(&noHeader, "no-header", false, "suppress header line [false]")
+	fs.StringVar(&c.FastaIDs, "fasta-ids", output.FastaIDsExperiment, "FASTA record IDs: experiment ({exp}_{N}) | source ({seq_id}_amp{N}) [experiment]")
 	// Default is now 0 so “no matches” is not treated as an error unless requested.
 	fs.IntVar(&c.NoMatchExitCode, "no-match-exit-code", 0, "exit code when no amplicons found [0]")
 
@@ -163,6 +165,9 @@ func Validate(c *Common) error {
 	case output.FormatText, output.FormatJSON, output.FormatJSONL, output.FormatFASTA:
 	default:
 		return fmt.Errorf("invalid --output %q", c.Output)
+	}
+	if !output.ValidFastaIDs(c.FastaIDs) {
+		return fmt.Errorf("invalid --fasta-ids %q (want %s or %s)", c.FastaIDs, output.FastaIDsExperiment, output.FastaIDsSource)
 	}
 	if c.TerminalWindow < -1 {
 		return errors.New("--terminal-window must be ≥ -1")

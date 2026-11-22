@@ -216,6 +216,8 @@ See [docs/THERMO_MODELS.md](./docs/THERMO_MODELS.md) for the model matrix and fa
 - `--min-length / --max-length` — product length bounds
 - `--circular` — permit wrap-around amplicons
 - `--output text|json|jsonl|fasta` — choose format; `--sort` for stable order; `--products` to emit sequences in text/json
+- `--fasta-ids experiment|source` — FASTA record IDs. `experiment` (default) keeps `>manual_1`; `source` names each amplicon after the input record it came from, numbered per record (`--sort` makes numbering follow position):
+  `>NC_000913.3_amp2 experiment=manual sequence_id=NC_000913.3 start=… end=… len=… type=forward source_file=…`
 - `--pretty` — ASCII alignment blocks (text)
 - `--self=true|false` — include **single-oligo amplification** (A×rc(A), B×rc(B)) (default **true**)
 
